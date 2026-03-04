@@ -14,3 +14,6 @@ ogn_log.sqlite3-*
 
 # local exports
 samples_rx*.txt
+
+# local exports
+samples_rx_*.txt
