@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.log
+
+# Streamlit
+.streamlit/
+
+# DB SQLite (ne jamais versionner)
+ogn_log.sqlite3
+ogn_log.sqlite3-*
+*.sqlite3
+*.sqlite3-*
