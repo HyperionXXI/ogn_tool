@@ -16,4 +16,10 @@ ogn_log.sqlite3-*
 samples_rx*.txt
 
 # local exports
-samples_rx_*.txt
+samples_rx_*.txt# local backups
+*.bak
+
+# exports
+*.csv
+samples_rx*.txt
+rx_*.csv
