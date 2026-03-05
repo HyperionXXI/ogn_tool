@@ -722,8 +722,9 @@ with tabs[1]:
         df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
 
         df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
-        if len(df_sd) > scatter_max_points:
-            df_sd = df_sd.sample(n=scatter_max_points, random_state=1)
+        max_points = 2000
+        if len(df_sd) > max_points:
+            df_sd = df_sd.sample(n=max_points, random_state=1)
 
         if df_sd.empty:
             st.warning("Aucun point avec dB + lat/lon (donc distance) dans cette fenêtre.")
