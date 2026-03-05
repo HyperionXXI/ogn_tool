@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ogn_tool"
+version = "0.3.0"
+description = "Local OGN/APRS-IS SQLite collector + coverage dashboard"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Florian Keller" }]
+dependencies = [
+  "streamlit>=1.30",
+  "pandas>=2.0",
+  "numpy>=2.0",
+  "matplotlib>=3.8",
+  "folium>=0.17",
+  "streamlit-folium>=0.18",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+ogn-dashboard = "ogn_tool.cli:dashboard"
+ogn-collector = "ogn_tool.cli:collector"
