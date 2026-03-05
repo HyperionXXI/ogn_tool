@@ -20,6 +20,7 @@ import math
 import os
 import re
 import sqlite3
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -144,18 +145,26 @@ def iso_utc(dtobj: dt.datetime) -> str:
 # DB layer
 # ---------------------------
 
-@st.cache_data(ttl=5, show_spinner=False)
-def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
+def _db_meta_raw(db_path: str, query_log: Optional[List[Dict]] = None) -> Tuple[int, Optional[str]]:
     """Return (rows_total, max_ts_utc) from packets table, robust."""
     if not os.path.exists(db_path):
         return 0, None
     con = sqlite3.connect(db_path)
     try:
-        rows_total = con.execute("SELECT COUNT(*) FROM packets").fetchone()[0]
-        max_ts = con.execute("SELECT MAX(ts_utc) FROM packets").fetchone()[0]
-        return int(rows_total), max_ts
+        sql = "SELECT COUNT(*) AS cnt, MAX(ts_utc) AS max_ts FROM packets"
+        t0 = time.perf_counter()
+        row = con.execute(sql).fetchone()
+        dt_ms = (time.perf_counter() - t0) * 1000.0
+        if query_log is not None:
+            query_log.append({"query": "db_meta", "ms": round(dt_ms, 2), "rows": 1})
+        return int(row[0]), row[1]
     finally:
         con.close()
+
+
+@st.cache_data(ttl=5, show_spinner=False)
+def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
+    return _db_meta_raw(db_path)
 
 def optimize_db(db_path: str, vacuum: bool = False) -> None:
     con = sqlite3.connect(db_path, timeout=30)
@@ -170,6 +179,17 @@ def optimize_db(db_path: str, vacuum: bool = False) -> None:
     finally:
         con.close()
 
+def create_indexes(db_path: str) -> None:
+    con = sqlite3.connect(db_path, timeout=30)
+    try:
+        con.execute("PRAGMA journal_mode=WAL;")
+        con.execute("PRAGMA synchronous=NORMAL;")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_ts_dst_igate_qas ON packets(ts_utc DESC, dst, igate, qas);")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_qas_ts ON packets(qas, ts_utc DESC);")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_igate_ts ON packets(igate, ts_utc DESC);")
+        con.commit()
+    finally:
+        con.close()
 
 def _build_where(
     since_iso: str,
@@ -177,6 +197,8 @@ def _build_where(
     station_callsign: str,
     only_heard_by: bool,
     igate_filter: str,
+    source_mode: str,
+    qas_filter: str,
 ) -> Tuple[str, List]:
     # Normalise ts_utc:
     # - si "...Z" => "...+00:00"
@@ -194,23 +216,37 @@ def _build_where(
         where.append("igate = ?")
         params.append(igate_filter.strip())
 
-    if only_heard_by:
-        where.append("(igate = ? OR raw LIKE ?)")
-        params.append(station_callsign)
-        params.append(f"%,{station_callsign}:%")
+    if source_mode == "Heard-by station":
+        if only_heard_by:
+            where.append("(igate = ? OR raw LIKE ?)")
+            params.append(station_callsign)
+            params.append(f"%,{station_callsign}:%")
+    else:
+        # Radio station view: filter by qas token and igate signature
+        qas_filter = qas_filter.strip()
+        if qas_filter:
+            if "*" in qas_filter:
+                where.append("qas LIKE ?")
+                params.append(qas_filter.replace("*", "%"))
+            else:
+                where.append("qas = ?")
+                params.append(qas_filter)
 
     return " AND ".join(where), params
 
 
 @st.cache_data(ttl=5, show_spinner=False)
-def load_packets_window(
+def _load_packets_window_raw(
     db_path: str,
     since_iso: str,
     dst_types: List[str],
     station_callsign: str,
     only_heard_by: bool,
     igate_filter: str,
+    source_mode: str,
+    qas_filter: str,
     limit_rows: int,
+    query_log: Optional[List[Dict]] = None,
 ) -> pd.DataFrame:
     if not os.path.exists(db_path):
         return pd.DataFrame()
@@ -221,6 +257,8 @@ def load_packets_window(
         station_callsign=station_callsign,
         only_heard_by=only_heard_by,
         igate_filter=igate_filter,
+        source_mode=source_mode,
+        qas_filter=qas_filter,
     )
 
     sql = f"""
@@ -235,11 +273,40 @@ def load_packets_window(
 
     con = sqlite3.connect(db_path)
     try:
+        t0 = time.perf_counter()
         df = pd.read_sql_query(sql, con, params=params2)
+        dt_ms = (time.perf_counter() - t0) * 1000.0
+        if query_log is not None:
+            query_log.append({"query": "load_packets_window", "ms": round(dt_ms, 2), "rows": int(len(df))})
     finally:
         con.close()
 
     return df
+
+
+@st.cache_data(ttl=5, show_spinner=False)
+def load_packets_window(
+    db_path: str,
+    since_iso: str,
+    dst_types: List[str],
+    station_callsign: str,
+    only_heard_by: bool,
+    igate_filter: str,
+    source_mode: str,
+    qas_filter: str,
+    limit_rows: int,
+) -> pd.DataFrame:
+    return _load_packets_window_raw(
+        db_path=db_path,
+        since_iso=since_iso,
+        dst_types=dst_types,
+        station_callsign=station_callsign,
+        only_heard_by=only_heard_by,
+        igate_filter=igate_filter,
+        source_mode=source_mode,
+        qas_filter=qas_filter,
+        limit_rows=limit_rows,
+    )
 
 
 # ---------------------------
@@ -295,6 +362,16 @@ with st.sidebar:
     st.markdown("### Fenêtre / filtres")
     hours = st.slider("Fenêtre temporelle (heures)", min_value=1, max_value=48, value=6, step=1)
 
+    if mode in ("Avancé", "Expert"):
+        source_mode = st.selectbox(
+            "Vue radio",
+            options=["Heard-by station", "Radio station view"],
+            index=0,
+            help="Radio station view filtre sur la signature du flux (qas/igate) plutôt que heard-by.",
+        )
+    else:
+        source_mode = "Heard-by station"
+
     dst_types = st.multiselect(
         "Types (dst)",
         options=["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
@@ -306,6 +383,9 @@ with st.sidebar:
         igate_filter = st.text_input("Filtre igate (optionnel)", value="")
 
     only_heard_by = st.checkbox(f"Coverage: uniquement 'heard-by {station_callsign}'", value=True)
+    qas_filter = ""
+    if mode in ("Avancé", "Expert") and source_mode == "Radio station view":
+        qas_filter = st.text_input("Filtre qas (ex: qAC, qA*)", value="")
 
     st.markdown("### Carte")
     basemap_label = st.selectbox("Fond de carte", options=list(BASEMAPS.keys()), index=0)
@@ -319,9 +399,15 @@ with st.sidebar:
     if mode == "Standard":
         limit_rows = 25000
         perf_cache = True
+        map_max_points = 10000
+        scatter_max_points = 10000
+        debug_sql = False
     else:
         limit_rows = st.slider("Max rows (SQL)", min_value=2000, max_value=100000, value=25000, step=1000)
         perf_cache = st.checkbox("Optimisation CPU (cache dérivés)", value=True)
+        map_max_points = st.slider("Max points carte", min_value=2000, max_value=50000, value=10000, step=1000)
+        scatter_max_points = st.slider("Max points scatter", min_value=2000, max_value=50000, value=10000, step=1000)
+        debug_sql = st.checkbox("Debug SQL (timings)", value=False)
 
     st.markdown("### Rafraîchissement")
     if mode == "Standard":
@@ -336,6 +422,7 @@ with st.sidebar:
         safe_opt = st.button("ANALYZE + OPTIMIZE")
         confirm_vacuum = st.checkbox("Je comprends que VACUUM peut bloquer l'écriture", value=False)
         vacuum_opt = st.button("VACUUM (long)", disabled=not confirm_vacuum)
+        create_idx = st.button("Créer indexes")
         if safe_opt:
             with st.spinner("Optimisation en cours..."):
                 try:
@@ -351,6 +438,13 @@ with st.sidebar:
                     st.success("VACUUM terminé.")
                 except Exception as e:
                     st.error(f"Échec VACUUM: {e!r}")
+        if create_idx:
+            with st.spinner("Création des indexes..."):
+                try:
+                    create_indexes(db_path)
+                    st.success("Indexes créés.")
+                except Exception as e:
+                    st.error(f"Échec création indexes: {e!r}")
 
 # Auto refresh
 if do_autorefresh:
@@ -362,7 +456,11 @@ if btn_refresh:
     st.cache_data.clear()
 
 # Header / meta
-rows_total, last_ts = db_meta(db_path)
+query_log: List[Dict] = []
+if debug_sql:
+    rows_total, last_ts = _db_meta_raw(db_path, query_log=query_log)
+else:
+    rows_total, last_ts = db_meta(db_path)
 st.title("OGN / APRS-IS — Dashboard local")
 st.caption("Outil d'analyse radio pour stations OGN / FLARM / FANET")
 
@@ -399,15 +497,31 @@ else:
 since = now_utc() - dt.timedelta(hours=int(hours))
 since_iso = since.isoformat().replace("+00:00", "+00:00")
 
-df = load_packets_window(
-    db_path=db_path,
-    since_iso=since_iso,
-    dst_types=dst_types,
-    station_callsign=station_callsign,
-    only_heard_by=only_heard_by,
-    igate_filter=igate_filter,
-    limit_rows=limit_rows,
-)
+if debug_sql:
+    df = _load_packets_window_raw(
+        db_path=db_path,
+        since_iso=since_iso,
+        dst_types=dst_types,
+        station_callsign=station_callsign,
+        only_heard_by=only_heard_by,
+        igate_filter=igate_filter,
+        source_mode=source_mode,
+        qas_filter=qas_filter,
+        limit_rows=limit_rows,
+        query_log=query_log,
+    )
+else:
+    df = load_packets_window(
+        db_path=db_path,
+        since_iso=since_iso,
+        dst_types=dst_types,
+        station_callsign=station_callsign,
+        only_heard_by=only_heard_by,
+        igate_filter=igate_filter,
+        source_mode=source_mode,
+        qas_filter=qas_filter,
+        limit_rows=limit_rows,
+    )
 
 # Compute derived fields (safe)
 if perf_cache:
@@ -427,7 +541,7 @@ with colC:
     st.metric("Chargés (SQL)", fmt_int(len(df)))
 with colD:
     # If only_heard_by, df already filtered; else show 0 / unknown
-    if only_heard_by:
+    if only_heard_by and source_mode == "Heard-by station":
         st.metric("Après heard-by", fmt_int(len(df)))
     else:
         st.metric("Après heard-by", "—")
@@ -496,6 +610,8 @@ with tabs[0]:
         # Choose coloring
         df_points = df.copy()
         df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
+        if len(df_points) > map_max_points:
+            df_points = df_points.sample(n=map_max_points, random_state=1)
 
         if df_points.empty:
             st.warning("Pas de points avec lat/lon dans cette fenêtre.")
@@ -535,7 +651,7 @@ with tabs[0]:
                 return "#ef4444"
 
             # Add markers (opt: use itertuples for speed)
-            df_head = df_points.head(20000)
+            df_head = df_points
             vals = pd.to_numeric(df_head[key], errors="coerce").to_numpy()
             colors = []
             for val in vals:
@@ -588,6 +704,8 @@ with tabs[1]:
         df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
 
         df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
+        if len(df_sd) > scatter_max_points:
+            df_sd = df_sd.sample(n=scatter_max_points, random_state=1)
 
         if df_sd.empty:
             st.warning("Aucun point avec dB + lat/lon (donc distance) dans cette fenêtre.")
@@ -659,3 +777,10 @@ with tabs[2]:
                 "df_has_latlon": int((df.get("lat", pd.Series(dtype=float)).notna() & df.get("lon", pd.Series(dtype=float)).notna()).sum()) if not df.empty else 0,
             }
         )
+
+    if debug_sql:
+        st.markdown("### SQL timings")
+        if query_log:
+            st.dataframe(pd.DataFrame(query_log), width="stretch", height=240)
+        else:
+            st.write("Aucune requête mesurée (cache).")
