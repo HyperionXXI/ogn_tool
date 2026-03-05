@@ -383,7 +383,7 @@ default_filters = {
     "station_lon": float(ROOF_LON_DEFAULT),
     "hours": 6,
     "source_mode": "Heard-by station",
-    "dst_types": ["OGNFNT", "OGFLR", "OGFLR7"],
+    "dst_types": ["OGNTRK", "OGFLR"],
     "only_local_radio": False,
     "igate_filter": "",
     "only_heard_by": True,
@@ -392,11 +392,11 @@ default_filters = {
     "show_rings": True,
     "rings_km": [10, 25, 50, 100],
     "map_mode": "Points (couleur = distance)",
-    "point_size": 4,
+    "point_size": 3,
     "limit_rows": 25000,
     "perf_cache": True,
-    "map_max_points": 10000,
-    "scatter_max_points": 10000,
+    "map_max_points": 1000,
+    "scatter_max_points": 1000,
     "debug_sql": False,
     "do_autorefresh": False,
 }
@@ -409,118 +409,45 @@ if "last_apply_ts" not in st.session_state:
     st.session_state["last_apply_ts"] = now_utc()
 
 with st.sidebar:
-    st.markdown("## Paramètres")
-    with st.form("filters"):
-        submitted = st.form_submit_button("✅ Appliquer", use_container_width=True)
+    st.subheader("Mode")
+    mode = st.selectbox("Interface", ["Standard", "Avancé", "Expert"], index=["Standard", "Avancé", "Expert"].index(st.session_state["filters_edit"]["mode"]))
 
-        st.subheader("Mode")
-        mode = st.selectbox(
-            "Mode",
-            options=["Standard", "Avancé", "Expert"],
-            index=["Standard", "Avancé", "Expert"].index(st.session_state["filters_edit"]["mode"]),
-        )
-        st.divider()
+    apply_button = st.button("▶ Appliquer les filtres", use_container_width=True)
 
-        st.subheader("Cible")
-        station_callsign = st.text_input("Station callsign", st.session_state["filters_edit"]["station_callsign"])
-        db_path = st.text_input("DB SQLite", st.session_state["filters_edit"]["db_path"])
-        with st.expander("Avancé", expanded=False):
-            station_lat = st.number_input("Station lat", value=float(st.session_state["filters_edit"]["station_lat"]), format="%.6f")
-            station_lon = st.number_input("Station lon", value=float(st.session_state["filters_edit"]["station_lon"]), format="%.6f")
-        st.divider()
+    st.subheader("Station")
+    station_callsign = st.text_input("Callsign", st.session_state["filters_edit"]["station_callsign"])
+    db_path = st.text_input("DB SQLite", st.session_state["filters_edit"]["db_path"])
+    station_lat = st.number_input("Latitude", value=float(st.session_state["filters_edit"]["station_lat"]), format="%.6f")
+    station_lon = st.number_input("Longitude", value=float(st.session_state["filters_edit"]["station_lon"]), format="%.6f")
 
-        st.subheader("Période")
-        hours = st.slider("Fenêtre temporelle (heures)", min_value=1, max_value=72, value=int(st.session_state["filters_edit"]["hours"]), step=1)
-        st.divider()
+    st.subheader("Période")
+    hours = st.slider("Fenêtre temporelle (heures)", 1, 72, int(st.session_state["filters_edit"]["hours"]))
 
-        st.subheader("Données")
-        dst_types = st.multiselect(
-            "Types (dst)",
-            options=["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
-            default=st.session_state["filters_edit"]["dst_types"],
-        )
-        only_local_radio = st.checkbox("Uniquement radio locale (signature du flux)", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
-        only_heard_by = st.checkbox(
-            f"Coverage: uniquement 'heard-by {station_callsign}'",
-            value=bool(st.session_state["filters_edit"]["only_heard_by"]),
-        )
-        igate_filter = st.text_input("Filtre igate (optionnel)", value=st.session_state["filters_edit"]["igate_filter"])
-        basemap_label = st.selectbox(
-            "Fond de carte",
-            options=list(BASEMAPS.keys()),
-            index=list(BASEMAPS.keys()).index(st.session_state["filters_edit"]["basemap_label"]),
-        )
-        show_rings = st.checkbox("Afficher anneaux de portée", value=bool(st.session_state["filters_edit"]["show_rings"]))
-        rings_km = st.multiselect(
-            "Anneaux (km)",
-            options=[5, 10, 25, 50, 75, 100, 150, 200],
-            default=st.session_state["filters_edit"]["rings_km"],
-        )
-        map_mode = st.selectbox(
-            "Mode carte",
-            options=["Points (couleur = distance)", "Points (couleur = dB)"],
-            index=["Points (couleur = distance)", "Points (couleur = dB)"].index(st.session_state["filters_edit"]["map_mode"]),
-        )
-        point_size = st.slider("Taille points (px)", min_value=2, max_value=12, value=int(st.session_state["filters_edit"]["point_size"]), step=1)
-        st.divider()
+    st.subheader("Données")
+    dst_types = st.multiselect("Types", ["OGNTRK", "OGFLR", "OGNEM"], default=st.session_state["filters_edit"]["dst_types"])
+    only_local_radio = st.checkbox("Uniquement radio locale", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
+    only_heard_by = st.checkbox(f"Coverage: uniquement 'heard-by {station_callsign}'", value=bool(st.session_state["filters_edit"]["only_heard_by"]))
+    igate_filter = st.text_input("Filtre igate (optionnel)", value=st.session_state["filters_edit"]["igate_filter"])
 
-        st.subheader("Performance")
-        limit_rows = st.slider("Max rows (SQL)", min_value=2000, max_value=100000, value=int(st.session_state["filters_edit"]["limit_rows"]), step=1000)
-        map_max_points = st.slider("Max points carte", min_value=2000, max_value=50000, value=int(st.session_state["filters_edit"]["map_max_points"]), step=1000)
-        scatter_max_points = st.slider("Max points scatter", min_value=2000, max_value=50000, value=int(st.session_state["filters_edit"]["scatter_max_points"]), step=1000)
-        do_autorefresh = st.checkbox("Auto-refresh (5s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"]))
-        with st.expander("Debug", expanded=False):
-            debug_sql = st.checkbox("Debug SQL (timings)", value=bool(st.session_state["filters_edit"]["debug_sql"]))
-        st.divider()
+    st.subheader("Carte")
+    basemap_label = st.selectbox("Fond de carte", list(BASEMAPS.keys()), index=list(BASEMAPS.keys()).index(st.session_state["filters_edit"]["basemap_label"]))
+    map_mode = st.selectbox("Mode carte", ["Points (couleur = distance)", "Points (couleur = dB)"], index=["Points (couleur = distance)", "Points (couleur = dB)"].index(st.session_state["filters_edit"]["map_mode"]))
+    point_size = st.slider("Taille des points", 1, 10, int(st.session_state["filters_edit"]["point_size"]))
+    show_rings = st.checkbox("Afficher anneaux de portée", value=bool(st.session_state["filters_edit"]["show_rings"]))
+    rings_km = st.multiselect("Anneaux (km)", [5, 10, 25, 50, 75, 100, 150, 200], default=st.session_state["filters_edit"]["rings_km"])
 
-        perf_cache = bool(st.session_state["filters_edit"]["perf_cache"])
+    st.subheader("Performance")
+    limit_rows = st.slider("Max rows SQL", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
+    map_max_points = st.slider("Max points carte", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
+    scatter_max_points = st.slider("Max points scatter", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
+    do_autorefresh = st.checkbox("Auto-refresh (5s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"])) if mode != "Standard" else False
 
-    # Update edit state on every run
-    st.session_state["filters_edit"] = {
-        **st.session_state["filters_edit"],
-        "mode": mode,
-        "db_path": db_path,
-        "station_callsign": station_callsign,
-        "station_lat": float(station_lat) if "station_lat" in locals() else float(st.session_state["filters_edit"]["station_lat"]),
-        "station_lon": float(station_lon) if "station_lon" in locals() else float(st.session_state["filters_edit"]["station_lon"]),
-        "hours": int(hours),
-        "dst_types": list(dst_types),
-        "only_local_radio": bool(only_local_radio),
-        "only_heard_by": bool(only_heard_by),
-        "igate_filter": igate_filter,
-        "limit_rows": int(limit_rows),
-        "map_max_points": int(map_max_points),
-        "scatter_max_points": int(scatter_max_points),
-        "debug_sql": bool(debug_sql),
-        "do_autorefresh": bool(do_autorefresh),
-        "basemap_label": basemap_label,
-        "show_rings": bool(show_rings),
-        "rings_km": list(rings_km),
-        "map_mode": map_mode,
-        "point_size": int(point_size),
-        "perf_cache": bool(perf_cache),
-    }
-
-    if submitted:
-        applied = st.session_state["filters_edit"].copy()
-        if applied["only_local_radio"]:
-            applied["source_mode"] = "Radio station view"
-            if not applied["igate_filter"]:
-                applied["igate_filter"] = applied["station_callsign"]
-            applied["qas_filter"] = "qA*"
-        else:
-            applied["source_mode"] = "Heard-by station"
-            applied["qas_filter"] = ""
-        st.session_state["filters_apply"] = applied
-        st.session_state["last_apply_ts"] = now_utc()
-
-    if st.session_state["filters_apply"]["mode"] == "Expert":
-        st.markdown("### Maintenance DB")
-        st.caption("ANALYZE/OPTIMIZE sont sûrs, VACUUM peut être long et bloquant.")
-        safe_opt = st.button("ANALYZE + OPTIMIZE")
-        confirm_vacuum = st.checkbox("Je comprends que VACUUM peut bloquer l'écriture", value=False)
-        vacuum_opt = st.button("VACUUM (long)", disabled=not confirm_vacuum)
-        create_idx = st.button("Créer indexes")
+    if mode == "Expert":
+        st.subheader("Maintenance DB")
+        debug_sql = st.checkbox("Debug SQL (timings)", value=bool(st.session_state["filters_edit"]["debug_sql"]))
+        safe_opt = st.button("ANALYZE / OPTIMIZE")
+        vacuum_opt = st.button("VACUUM")
+        create_idx = st.button("Créer index")
         if safe_opt:
             with st.spinner("Optimisation en cours..."):
                 try:
@@ -529,7 +456,6 @@ with st.sidebar:
                 except Exception as e:
                     st.error(f"Échec optimisation: {e!r}")
         if vacuum_opt:
-            st.warning("VACUUM peut bloquer l'écriture pendant l'opération.")
             with st.spinner("VACUUM en cours..."):
                 try:
                     optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=True)
@@ -543,6 +469,46 @@ with st.sidebar:
                     st.success("Indexes créés.")
                 except Exception as e:
                     st.error(f"Échec création indexes: {e!r}")
+    else:
+        debug_sql = False
+
+    st.session_state["filters_edit"] = {
+        **st.session_state["filters_edit"],
+        "mode": mode,
+        "db_path": db_path,
+        "station_callsign": station_callsign,
+        "station_lat": float(station_lat),
+        "station_lon": float(station_lon),
+        "hours": int(hours),
+        "dst_types": list(dst_types),
+        "only_local_radio": bool(only_local_radio),
+        "only_heard_by": bool(only_heard_by),
+        "igate_filter": igate_filter,
+        "basemap_label": basemap_label,
+        "map_mode": map_mode,
+        "point_size": int(point_size),
+        "show_rings": bool(show_rings),
+        "rings_km": list(rings_km),
+        "limit_rows": int(limit_rows),
+        "map_max_points": int(map_max_points),
+        "scatter_max_points": int(scatter_max_points),
+        "do_autorefresh": bool(do_autorefresh),
+        "debug_sql": bool(debug_sql),
+        "perf_cache": True,
+    }
+
+    if apply_button:
+        applied = st.session_state["filters_edit"].copy()
+        if applied["only_local_radio"]:
+            applied["source_mode"] = "Radio station view"
+            if not applied.get("igate_filter"):
+                applied["igate_filter"] = applied["station_callsign"]
+            applied["qas_filter"] = "qA*"
+        else:
+            applied["source_mode"] = "Heard-by station"
+            applied["qas_filter"] = ""
+        st.session_state["filters_apply"] = applied
+        st.session_state["last_apply_ts"] = now_utc()
 
 filters_apply = st.session_state["filters_apply"]
 mode = filters_apply["mode"]
@@ -568,7 +534,6 @@ scatter_max_points = filters_apply["scatter_max_points"]
 debug_sql = filters_apply["debug_sql"]
 do_autorefresh = filters_apply["do_autorefresh"]
 btn_refresh = False
-
 # Auto refresh
 if do_autorefresh:
     st.caption("Auto-refresh actif (5s)")
@@ -590,13 +555,6 @@ st.caption("Outil d'analyse radio pour stations OGN / FLARM / FANET")
 sub = f"Station: **{station_callsign}** — ref ({station_lat:.6f}, {station_lon:.6f}) — DB: `{db_path}`"
 st.markdown(sub)
 
-apply_ts = st.session_state.get("last_apply_ts")
-apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
-types_str = ",".join(dst_types) if dst_types else "—"
-st.info(
-    f"Filtres appliqués: Station={station_callsign} | Période={hours}h | Types={types_str} | Mode={mode} "
-    f"— Dernière application: {apply_time}"
-)
 
 # DB freshness banner
 fresh_state = "unknown"
@@ -690,6 +648,14 @@ if df.empty:
 else:
     st.session_state["last_df"] = df
 
+apply_ts = st.session_state.get("last_apply_ts")
+apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
+types_str = "/".join(dst_types) if dst_types else "—"
+st.info(
+    f"Filtres appliqués: Station={station_callsign} | Fenêtre={hours}h | Types={types_str} | Mode={mode} "
+    f"| Paquets analysés={len(df)} — Dernière application: {apply_time}"
+)
+
 # Metrics row
 colA, colB, colC, colD, colE, colF = st.columns([1.1, 1.3, 1.2, 1.1, 1.1, 1.1])
 
@@ -717,7 +683,7 @@ st.divider()
 if limit_rows >= 20000:
     st.caption("Conseil perf: réduisez 'Max rows (SQL)' si l'UI devient lente.")
 
-tabs = st.tabs(["Couverture", "Signal vs Distance", "Debug"])
+tabs = st.tabs(["Carte", "Signal vs Distance", "Analyses radio", "Debug"])
 
 # ---------------------------
 # Couverture tab (map)
@@ -895,6 +861,10 @@ with tabs[1]:
     # Debug tab
     # ---------------------------
 with tabs[2]:
+    st.subheader("Analyses radio")
+    st.info("Section prête pour ajouter 10 analyses radio.")
+
+with tabs[3]:
     st.subheader("Debug")
 
     st.markdown("### Top sources (src)")
