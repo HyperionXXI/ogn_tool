@@ -430,7 +430,7 @@ with st.sidebar:
         st.divider()
 
         st.subheader("Période")
-        hours = st.slider("Fenêtre temporelle (heures)", min_value=1, max_value=48, value=int(st.session_state["filters_edit"]["hours"]), step=1)
+        hours = st.slider("Fenêtre temporelle (heures)", min_value=1, max_value=72, value=int(st.session_state["filters_edit"]["hours"]), step=1)
         st.divider()
 
         st.subheader("Données")
@@ -550,7 +550,7 @@ db_path = filters_apply["db_path"]
 station_callsign = filters_apply["station_callsign"]
 station_lat = filters_apply["station_lat"]
 station_lon = filters_apply["station_lon"]
-hours = filters_apply["hours"]
+hours = max(1, int(filters_apply["hours"]))
 source_mode = filters_apply["source_mode"]
 dst_types = filters_apply["dst_types"]
 igate_filter = filters_apply["igate_filter"]
@@ -683,10 +683,10 @@ else:
 if df.empty:
     last_df = st.session_state.get("last_df")
     if last_df is not None and not last_df.empty:
-        st.warning("Aucune donnée pour ces filtres. Affichage des derniers résultats.")
+        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle. Affichage des derniers résultats.")
         df = last_df
     else:
-        st.info("Aucune donnée dans cette fenêtre / filtres.")
+        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
 else:
     st.session_state["last_df"] = df
 
