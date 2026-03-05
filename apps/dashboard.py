@@ -42,7 +42,7 @@ except Exception as e:  # pragma: no cover
     raise
 
 # Optional profiling (enable with OGN_PROFILE=1)
-_PROFILE_ENABLED = os.getenv("OGN_PROFILE", "0") in ("1", "true", "True") and __name__ == "__main__"
+_PROFILE_ENABLED = os.getenv("OGN_PROFILE", "0") in ("1", "true", "True")
 _PROFILER = cProfile.Profile() if _PROFILE_ENABLED else None
 if _PROFILER:
     _PROFILER.enable()
