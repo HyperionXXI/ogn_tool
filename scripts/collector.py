@@ -27,6 +27,14 @@ import socket
 import sqlite3
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover
+    load_dotenv = None
+
+# Load local .env if present (non-fatal)
+if load_dotenv:
+    load_dotenv()
 
 HOST = os.getenv("OGN_HOST", "glidern5.glidernet.org")
 PORT = int(os.getenv("OGN_PORT", "14580"))

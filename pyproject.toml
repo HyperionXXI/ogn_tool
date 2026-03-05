@@ -16,6 +16,7 @@ dependencies = [
   "matplotlib>=3.8",
   "folium>=0.17",
   "streamlit-folium>=0.18",
+  "python-dotenv>=1.0",
 ]
 
 [tool.setuptools]

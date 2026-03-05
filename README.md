@@ -62,6 +62,29 @@ dashboard.py
 
 ------------------------------------------------------------------------
 
+## Configuration (generic, recommended)
+
+The simplest setup is to define your station settings in a local `.env`
+file at the project root. Both the collector and the dashboard will read it.
+
+Example `.env`:
+
+```
+OGN_USER=CALLSIGN
+OGN_PASS=PASSCODE
+OGN_FILTER=r/LAT/LON/RADIUS_KM
+OGN_DB_PATH=C:\path\to\ogn_log.sqlite3
+OGN_HOST=glidern1.glidernet.org
+OGN_PORT=14580
+```
+
+Notes:
+- `OGN_USER` is your APRS-IS callsign. The dashboard uses it as default station callsign.
+- `OGN_PASS` is the APRS-IS passcode for that callsign.
+- `OGN_FILTER` is strongly recommended to receive data (example: `r/47.33/7.27/300`).
+
+------------------------------------------------------------------------
+
 ## Quickstart
 
 ### 1. Activate the Python environment

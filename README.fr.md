@@ -64,6 +64,30 @@ dashboard.py
 
 ------------------------------------------------------------------------
 
+## Configuration (générique, recommandée)
+
+La configuration la plus simple consiste à définir les paramètres de votre
+station dans un fichier `.env` à la racine du projet. Le collector et le
+dashboard le lisent automatiquement.
+
+Exemple `.env` :
+
+```
+OGN_USER=CALLSIGN
+OGN_PASS=PASSCODE
+OGN_FILTER=r/LAT/LON/RADIUS_KM
+OGN_DB_PATH=C:\path\to\ogn_log.sqlite3
+OGN_HOST=glidern1.glidernet.org
+OGN_PORT=14580
+```
+
+Notes :
+- `OGN_USER` est votre callsign APRS-IS. Le dashboard l'utilise comme indicatif par défaut.
+- `OGN_PASS` est le passcode APRS-IS associé.
+- `OGN_FILTER` est fortement recommandé pour recevoir des données (exemple : `r/47.33/7.27/300`).
+
+------------------------------------------------------------------------
+
 ## Démarrage rapide
 
 ### 1. Activer l'environnement Python
