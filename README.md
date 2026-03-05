@@ -1,3 +1,5 @@
+🇬🇧 English | 🇫🇷 [Version française](README.fr.md)
+
 # ogn_tool --- Local OGN / APRS-IS log explorer
 
 Analyze a local SQLite log database containing OGN/APRS-IS packets and
@@ -37,7 +39,18 @@ The dashboard reads the database path from an environment variable:
 $env:OGN_DB_PATH = "F:\Data\ogn\ogn_log.sqlite3"
 ```
 
-### 3. Run the dashboard
+### 3. Run the collector (Terminal 1)
+
+The collector must run continuously to populate the SQLite database.
+Open a first terminal and start it:
+
+``` powershell
+python .\scripts\collector.py
+```
+
+### 4. Run the dashboard (Terminal 2)
+
+Open a second terminal (same environment) and start the dashboard:
 
 ``` powershell
 streamlit run .\apps\dashboard.py
@@ -51,12 +64,7 @@ http://localhost:8501
 
 ## Collector
 
-Run the collector to populate the SQLite database:
-
-``` powershell
-python .\scripts\collector.py
-```
-
+The collector should run in its own terminal alongside the dashboard.
 If the dashboard reports that the database appears "stale" or "frozen",
 the most common reason is that the collector is not currently running or
 cannot reach the upstream feed.

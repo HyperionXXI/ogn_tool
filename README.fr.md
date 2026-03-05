@@ -1,3 +1,4 @@
+🇫🇷 Français | 🇬🇧 [English version](README.md)
 # ogn_tool --- Exploration locale de logs OGN / APRS-IS
 
 Analyse une base SQLite locale contenant des trames OGN/APRS-IS et
@@ -40,7 +41,18 @@ Le dashboard lit le chemin de la base via une variable d'environnement :
 $env:OGN_DB_PATH = "F:\Data\ogn\ogn_log.sqlite3"
 ```
 
-### 3. Lancer le dashboard
+### 3. Lancer le collector (Terminal 1)
+
+Le collector doit tourner en continu pour alimenter la base SQLite.
+Ouvrez un premier terminal et démarrez-le :
+
+``` powershell
+python .\scripts\collector.py
+```
+
+### 4. Lancer le dashboard (Terminal 2)
+
+Ouvrez un second terminal (même environnement) et démarrez le dashboard :
 
 ``` powershell
 streamlit run .\apps\dashboard.py
@@ -54,12 +66,7 @@ http://localhost:8501
 
 ## Collector
 
-Pour alimenter la base SQLite :
-
-``` powershell
-python .\scripts\collector.py
-```
-
+Le collector doit tourner dans un terminal dédié en parallèle du dashboard.
 Si le dashboard indique que la base semble « figée », la cause la plus
 fréquente est que le collector n'est pas en cours d'exécution ou qu'il
 ne peut pas joindre le flux amont.
