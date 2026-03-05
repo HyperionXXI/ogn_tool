@@ -230,6 +230,40 @@ def load_packets_window(
 
 
 # ---------------------------
+# Derived computations
+# ---------------------------
+
+@st.cache_data(ttl=10, show_spinner=False)
+def compute_features(df: pd.DataFrame, station_lat: float, station_lon: float) -> pd.DataFrame:
+    if df.empty:
+        out = df.copy()
+        out["rx_db"] = pd.Series(dtype=float)
+        out["distance_km"] = pd.Series(dtype=float)
+        return out
+
+    out = df.copy()
+    out["lat"] = pd.to_numeric(safe_col(out, "lat"), errors="coerce")
+    out["lon"] = pd.to_numeric(safe_col(out, "lon"), errors="coerce")
+
+    # Fast vectorized dB parse
+    raw_series = safe_col(out, "raw").astype("string")
+    out["rx_db"] = pd.to_numeric(raw_series.str.extract(RE_DB, expand=False), errors="coerce")
+
+    mask_ll = out["lat"].notna() & out["lon"].notna()
+    if mask_ll.any():
+        out.loc[mask_ll, "distance_km"] = haversine_km(
+            station_lat,
+            station_lon,
+            out.loc[mask_ll, "lat"].to_numpy(),
+            out.loc[mask_ll, "lon"].to_numpy(),
+        )
+    else:
+        out["distance_km"] = pd.Series(dtype=float)
+
+    return out
+
+
+# ---------------------------
 # UI
 # ---------------------------
 
@@ -266,6 +300,7 @@ with st.sidebar:
 
     st.markdown("### Performance")
     limit_rows = st.slider("Max rows (SQL)", min_value=2000, max_value=100000, value=25000, step=1000)
+    perf_cache = st.checkbox("Optimisation CPU (cache dérivés)", value=True)
 
     st.markdown("### Rafraîchissement")
     do_autorefresh = st.checkbox("Auto-refresh (5s)", value=False)
@@ -328,17 +363,11 @@ df = load_packets_window(
 )
 
 # Compute derived fields (safe)
-if not df.empty:
-    # Ensure types
-    df["lat"] = pd.to_numeric(safe_col(df, "lat"), errors="coerce")
-    df["lon"] = pd.to_numeric(safe_col(df, "lon"), errors="coerce")
-    df["rx_db"] = safe_col(df, "raw").apply(parse_db_from_raw)
-    # distance for rows with coords
-    mask_ll = df["lat"].notna() & df["lon"].notna()
-    df.loc[mask_ll, "distance_km"] = haversine_km(station_lat, station_lon, df.loc[mask_ll, "lat"].to_numpy(), df.loc[mask_ll, "lon"].to_numpy())
+if perf_cache:
+    df = compute_features(df, station_lat, station_lon)
 else:
-    df["rx_db"] = []
-    df["distance_km"] = []
+    # fallback: same logic without cache
+    df = compute_features.__wrapped__(df, station_lat, station_lon)  # type: ignore[attr-defined]
 
 # Metrics row
 colA, colB, colC, colD, colE, colF = st.columns([1.1, 1.3, 1.2, 1.1, 1.1, 1.1])
@@ -363,6 +392,9 @@ with colF:
     st.metric("Distance P95 (km)", fmt_float(p95, 1))
 
 st.divider()
+
+if limit_rows >= 20000:
+    st.caption("Conseil perf: réduisez 'Max rows (SQL)' si l'UI devient lente.")
 
 tabs = st.tabs(["Couverture", "Signal vs Distance", "Debug"])
 
@@ -455,19 +487,35 @@ with tabs[0]:
                     return "#eab308"
                 return "#ef4444"
 
-            # Add markers
-            for _, r in df_points.head(20000).iterrows():
-                val = r.get(key, None)
-                c = color_for(float(val)) if val is not None and val == val else "#999999"
+            # Add markers (opt: use itertuples for speed)
+            df_head = df_points.head(20000)
+            vals = pd.to_numeric(df_head[key], errors="coerce").to_numpy()
+            colors = []
+            for val in vals:
+                if val is None or (isinstance(val, float) and math.isnan(val)):
+                    colors.append("#999999")
+                else:
+                    colors.append(color_for(float(val)))
+
+            for (lat, lon, src, dst, igate, ts, val, c) in zip(
+                df_head["lat"].to_numpy(),
+                df_head["lon"].to_numpy(),
+                df_head.get("src", pd.Series([""] * len(df_head))).to_numpy(),
+                df_head.get("dst", pd.Series([""] * len(df_head))).to_numpy(),
+                df_head.get("igate", pd.Series([""] * len(df_head))).to_numpy(),
+                df_head.get("ts_utc", pd.Series([""] * len(df_head))).to_numpy(),
+                vals,
+                colors,
+            ):
                 popup = (
-                    f"src={r.get('src','')}\n"
-                    f"dst={r.get('dst','')}\n"
-                    f"igate={r.get('igate','')}\n"
-                    f"{label}={fmt_float(float(val) if val==val else None, 1)}\n"
-                    f"ts={r.get('ts_utc','')}"
+                    f"src={src}\n"
+                    f"dst={dst}\n"
+                    f"igate={igate}\n"
+                    f"{label}={fmt_float(float(val) if val == val else None, 1)}\n"
+                    f"ts={ts}"
                 )
                 folium.CircleMarker(
-                    location=[float(r["lat"]), float(r["lon"])],
+                    location=[float(lat), float(lon)],
                     radius=float(point_size),
                     weight=1,
                     color=c,
