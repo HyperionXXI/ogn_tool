@@ -16,11 +16,14 @@ Run:
 from __future__ import annotations
 
 import datetime as dt
+import cProfile
+import io
 import math
 import os
 import re
 import sqlite3
 import time
+import pstats
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -37,6 +40,12 @@ try:
 except Exception as e:  # pragma: no cover
     st.error("Dépendance manquante: streamlit-folium / folium. Installe: pip install streamlit-folium folium")
     raise
+
+# Optional profiling (enable with OGN_PROFILE=1)
+_PROFILE_ENABLED = os.getenv("OGN_PROFILE", "0") in ("1", "true", "True") and __name__ == "__main__"
+_PROFILER = cProfile.Profile() if _PROFILE_ENABLED else None
+if _PROFILER:
+    _PROFILER.enable()
 
 # ---------------------------
 # Config & helpers
@@ -797,9 +806,18 @@ with tabs[2]:
             }
         )
 
-    if debug_sql:
-        st.markdown("### SQL timings")
-        if query_log:
-            st.dataframe(pd.DataFrame(query_log), width="stretch", height=240)
-        else:
-            st.write("Aucune requête mesurée (cache).")
+if debug_sql:
+    st.markdown("### SQL timings")
+    if query_log:
+        st.dataframe(pd.DataFrame(query_log), width="stretch", height=240)
+    else:
+        st.write("Aucune requête mesurée (cache).")
+
+if _PROFILER:
+    _PROFILER.disable()
+    st.caption("Profiling actif (résultats affichés dans la console).")
+    _s = io.StringIO()
+    _stats = pstats.Stats(_PROFILER, stream=_s)
+    _stats.sort_stats("cumtime")
+    _stats.print_stats(30)
+    print(_s.getvalue())
