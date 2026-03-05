@@ -157,6 +157,19 @@ def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
     finally:
         con.close()
 
+def optimize_db(db_path: str, vacuum: bool = False) -> None:
+    con = sqlite3.connect(db_path, timeout=30)
+    try:
+        con.execute("PRAGMA journal_mode=WAL;")
+        con.execute("PRAGMA synchronous=NORMAL;")
+        con.execute("ANALYZE;")
+        con.execute("PRAGMA optimize;")
+        if vacuum:
+            con.execute("VACUUM;")
+        con.commit()
+    finally:
+        con.close()
+
 
 def _build_where(
     since_iso: str,
@@ -270,6 +283,8 @@ def compute_features(df: pd.DataFrame, station_lat: float, station_lon: float) -
 with st.sidebar:
     st.markdown("## Paramètres")
 
+    mode = st.selectbox("Mode", options=["Standard", "Avancé", "Expert"], index=0)
+
     db_path = st.text_input("DB SQLite", DB_DEFAULT)
     station_callsign = st.text_input("Station callsign", CALLSIGN_DEFAULT)
 
@@ -286,7 +301,9 @@ with st.sidebar:
         default=["OGNFNT", "OGFLR", "OGFLR7"],
     )
 
-    igate_filter = st.text_input("Filtre igate (optionnel)", value="")
+    igate_filter = ""
+    if mode in ("Avancé", "Expert"):
+        igate_filter = st.text_input("Filtre igate (optionnel)", value="")
 
     only_heard_by = st.checkbox(f"Coverage: uniquement 'heard-by {station_callsign}'", value=True)
 
@@ -299,12 +316,41 @@ with st.sidebar:
     point_size = st.slider("Taille points (px)", min_value=2, max_value=12, value=4, step=1)
 
     st.markdown("### Performance")
-    limit_rows = st.slider("Max rows (SQL)", min_value=2000, max_value=100000, value=25000, step=1000)
-    perf_cache = st.checkbox("Optimisation CPU (cache dérivés)", value=True)
+    if mode == "Standard":
+        limit_rows = 25000
+        perf_cache = True
+    else:
+        limit_rows = st.slider("Max rows (SQL)", min_value=2000, max_value=100000, value=25000, step=1000)
+        perf_cache = st.checkbox("Optimisation CPU (cache dérivés)", value=True)
 
     st.markdown("### Rafraîchissement")
-    do_autorefresh = st.checkbox("Auto-refresh (5s)", value=False)
+    if mode == "Standard":
+        do_autorefresh = False
+    else:
+        do_autorefresh = st.checkbox("Auto-refresh (5s)", value=False)
     btn_refresh = st.button("Refresh maintenant")
+
+    if mode == "Expert":
+        st.markdown("### Maintenance DB")
+        st.caption("ANALYZE/OPTIMIZE sont sûrs, VACUUM peut être long et bloquant.")
+        safe_opt = st.button("ANALYZE + OPTIMIZE")
+        confirm_vacuum = st.checkbox("Je comprends que VACUUM peut bloquer l'écriture", value=False)
+        vacuum_opt = st.button("VACUUM (long)", disabled=not confirm_vacuum)
+        if safe_opt:
+            with st.spinner("Optimisation en cours..."):
+                try:
+                    optimize_db(db_path, vacuum=False)
+                    st.success("Optimisation terminée.")
+                except Exception as e:
+                    st.error(f"Échec optimisation: {e!r}")
+        if vacuum_opt:
+            st.warning("VACUUM peut bloquer l'écriture pendant l'opération.")
+            with st.spinner("VACUUM en cours..."):
+                try:
+                    optimize_db(db_path, vacuum=True)
+                    st.success("VACUUM terminé.")
+                except Exception as e:
+                    st.error(f"Échec VACUUM: {e!r}")
 
 # Auto refresh
 if do_autorefresh:
@@ -318,6 +364,7 @@ if btn_refresh:
 # Header / meta
 rows_total, last_ts = db_meta(db_path)
 st.title("OGN / APRS-IS — Dashboard local")
+st.caption("Outil d'analyse radio pour stations OGN / FLARM / FANET")
 
 sub = f"Station: **{station_callsign}** — ref ({station_lat:.6f}, {station_lon:.6f}) — DB: `{db_path}`"
 st.markdown(sub)
