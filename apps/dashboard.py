@@ -18,6 +18,8 @@ from __future__ import annotations
 import datetime as dt
 import cProfile
 import io
+import hashlib
+import json
 import math
 import os
 import re
@@ -25,7 +27,7 @@ import sqlite3
 import time
 import pstats
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -371,10 +373,59 @@ def compute_features(df: pd.DataFrame, station_lat: float, station_lon: float) -
     return out
 
 
+
+@dataclass(frozen=True)
+class AnalysisContext:
+    applied_filters: Dict[str, Any]
+    filters_hash: str
+    df_packets: pd.DataFrame
+    metrics: Dict[str, Optional[float]]
+
+
+def _filters_hash(filters: Dict[str, Any]) -> str:
+    payload = json.dumps(filters, sort_keys=True, default=str).encode('utf-8')
+    return hashlib.md5(payload).hexdigest()
+
+
+def build_context(filters: Dict[str, Any], query_log: Optional[List[Dict]] = None) -> AnalysisContext:
+    df = _load_packets_window_raw(
+        db_path=filters["db_path"],
+        since_iso=filters["since_iso"],
+        dst_types=filters["dst_types"],
+        station_callsign=filters["station_callsign"],
+        only_heard_by=filters["only_heard_by"],
+        igate_filter=filters["igate_filter"],
+        source_mode=filters["source_mode"],
+        qas_filter=filters["qas_filter"],
+        limit_rows=filters["limit_rows"],
+        query_log=query_log,
+    )
+
+    df = compute_features(df, filters["station_lat"], filters["station_lon"])
+    # alias for readability
+    if "rx_db" in df.columns and "signal_db" not in df.columns:
+        df["signal_db"] = df["rx_db"]
+
+    metrics: Dict[str, Optional[float]] = {
+        "rows_window": int(len(df)) if not df.empty else 0,
+        "max_distance_km": None,
+        "p95_distance_km": None,
+    }
+
+    if not df.empty and "distance_km" in df.columns and df["distance_km"].notna().any():
+        metrics["max_distance_km"] = float(df["distance_km"].max())
+        metrics["p95_distance_km"] = float(np.nanpercentile(df["distance_km"].to_numpy(), 95))
+
+    return AnalysisContext(
+        applied_filters=filters,
+        filters_hash=_filters_hash(filters),
+        df_packets=df,
+        metrics=metrics,
+    )
+
 # ---------------------------
 # UI
 # ---------------------------
-
 default_filters = {
     "mode": "Standard",
     "db_path": DB_DEFAULT,
@@ -383,7 +434,7 @@ default_filters = {
     "station_lon": float(ROOF_LON_DEFAULT),
     "hours": 6,
     "source_mode": "Heard-by station",
-    "dst_types": ["OGNTRK", "OGFLR"],
+    "dst_types": ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
     "only_local_radio": False,
     "igate_filter": "",
     "only_heard_by": True,
@@ -399,6 +450,7 @@ default_filters = {
     "scatter_max_points": 1000,
     "debug_sql": False,
     "do_autorefresh": False,
+    "since_iso": (now_utc() - dt.timedelta(hours=6)).isoformat().replace("+00:00", "+00:00"),
 }
 
 if "filters_apply" not in st.session_state:
@@ -412,7 +464,8 @@ with st.sidebar:
     st.subheader("Mode")
     mode = st.selectbox("Interface", ["Standard", "Avancé", "Expert"], index=["Standard", "Avancé", "Expert"].index(st.session_state["filters_edit"]["mode"]))
 
-    apply_button = st.button("▶ Appliquer les filtres", use_container_width=True)
+    apply_button = st.button("✅ Appliquer", use_container_width=True)
+    do_autorefresh = st.checkbox("Auto-refresh (5s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"])) if mode != "Standard" else False
 
     st.subheader("Station")
     station_callsign = st.text_input("Callsign", st.session_state["filters_edit"]["station_callsign"])
@@ -424,9 +477,10 @@ with st.sidebar:
     hours = st.slider("Fenêtre temporelle (heures)", 1, 72, int(st.session_state["filters_edit"]["hours"]))
 
     st.subheader("Données")
-    dst_types = st.multiselect("Types", ["OGNTRK", "OGFLR", "OGNEM"], default=st.session_state["filters_edit"]["dst_types"])
+    source_mode = st.selectbox("Vue radio", ["Heard-by station", "Radio station view"], index=["Heard-by station", "Radio station view"].index(st.session_state["filters_edit"]["source_mode"]))
+    dst_types = st.multiselect("Types", ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"], default=st.session_state["filters_edit"]["dst_types"])
     only_local_radio = st.checkbox("Uniquement radio locale", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
-    only_heard_by = st.checkbox(f"Coverage: uniquement 'heard-by {station_callsign}'", value=bool(st.session_state["filters_edit"]["only_heard_by"]))
+    only_heard_by = True
     igate_filter = st.text_input("Filtre igate (optionnel)", value=st.session_state["filters_edit"]["igate_filter"])
 
     st.subheader("Carte")
@@ -436,41 +490,46 @@ with st.sidebar:
     show_rings = st.checkbox("Afficher anneaux de portée", value=bool(st.session_state["filters_edit"]["show_rings"]))
     rings_km = st.multiselect("Anneaux (km)", [5, 10, 25, 50, 75, 100, 150, 200], default=st.session_state["filters_edit"]["rings_km"])
 
-    st.subheader("Performance")
-    limit_rows = st.slider("Max rows SQL", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
-    map_max_points = st.slider("Max points carte", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
-    scatter_max_points = st.slider("Max points scatter", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
-    do_autorefresh = st.checkbox("Auto-refresh (5s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"])) if mode != "Standard" else False
+    with st.expander("Réglages avancés", expanded=False) if mode != "Standard" else st.container():
+        if mode != "Standard":
+            st.subheader("Performance")
+            limit_rows = st.slider("Max rows SQL", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
+            map_max_points = st.slider("Max points carte", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
+            scatter_max_points = st.slider("Max points scatter", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
+            debug_sql = st.checkbox("Debug SQL (timings)", value=bool(st.session_state["filters_edit"]["debug_sql"]))
+        else:
+            limit_rows = int(st.session_state["filters_edit"]["limit_rows"])
+            map_max_points = int(st.session_state["filters_edit"]["map_max_points"])
+            scatter_max_points = int(st.session_state["filters_edit"]["scatter_max_points"])
+            debug_sql = False
 
     if mode == "Expert":
-        st.subheader("Maintenance DB")
-        debug_sql = st.checkbox("Debug SQL (timings)", value=bool(st.session_state["filters_edit"]["debug_sql"]))
-        safe_opt = st.button("ANALYZE / OPTIMIZE")
-        vacuum_opt = st.button("VACUUM")
-        create_idx = st.button("Créer index")
-        if safe_opt:
-            with st.spinner("Optimisation en cours..."):
-                try:
-                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=False)
-                    st.success("Optimisation terminée.")
-                except Exception as e:
-                    st.error(f"Échec optimisation: {e!r}")
-        if vacuum_opt:
-            with st.spinner("VACUUM en cours..."):
-                try:
-                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=True)
-                    st.success("VACUUM terminé.")
-                except Exception as e:
-                    st.error(f"Échec VACUUM: {e!r}")
-        if create_idx:
-            with st.spinner("Création des indexes..."):
-                try:
-                    create_indexes(st.session_state["filters_apply"]["db_path"])
-                    st.success("Indexes créés.")
-                except Exception as e:
-                    st.error(f"Échec création indexes: {e!r}")
-    else:
-        debug_sql = False
+        with st.expander("Expert / Maintenance", expanded=False):
+            st.subheader("Maintenance DB")
+            safe_opt = st.button("ANALYZE / OPTIMIZE")
+            vacuum_opt = st.button("VACUUM")
+            create_idx = st.button("Créer index")
+            if safe_opt:
+                with st.spinner("Optimisation en cours..."):
+                    try:
+                        optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=False)
+                        st.success("Optimisation terminée.")
+                    except Exception as e:
+                        st.error(f"Échec optimisation: {e!r}")
+            if vacuum_opt:
+                with st.spinner("VACUUM en cours..."):
+                    try:
+                        optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=True)
+                        st.success("VACUUM terminé.")
+                    except Exception as e:
+                        st.error(f"Échec VACUUM: {e!r}")
+            if create_idx:
+                with st.spinner("Création des indexes..."):
+                    try:
+                        create_indexes(st.session_state["filters_apply"]["db_path"])
+                        st.success("Indexes créés.")
+                    except Exception as e:
+                        st.error(f"Échec création indexes: {e!r}")
 
     st.session_state["filters_edit"] = {
         **st.session_state["filters_edit"],
@@ -480,6 +539,7 @@ with st.sidebar:
         "station_lat": float(station_lat),
         "station_lon": float(station_lon),
         "hours": int(hours),
+        "source_mode": source_mode,
         "dst_types": list(dst_types),
         "only_local_radio": bool(only_local_radio),
         "only_heard_by": bool(only_heard_by),
@@ -494,7 +554,6 @@ with st.sidebar:
         "scatter_max_points": int(scatter_max_points),
         "do_autorefresh": bool(do_autorefresh),
         "debug_sql": bool(debug_sql),
-        "perf_cache": True,
     }
 
     if apply_button:
@@ -507,10 +566,15 @@ with st.sidebar:
         else:
             applied["source_mode"] = "Heard-by station"
             applied["qas_filter"] = ""
+        applied["since_iso"] = (now_utc() - dt.timedelta(hours=int(applied["hours"]))).isoformat().replace("+00:00", "+00:00")
         st.session_state["filters_apply"] = applied
         st.session_state["last_apply_ts"] = now_utc()
 
 filters_apply = st.session_state["filters_apply"]
+if filters_apply["do_autorefresh"]:
+    filters_apply = filters_apply.copy()
+    filters_apply["since_iso"] = (now_utc() - dt.timedelta(hours=int(filters_apply["hours"]))).isoformat().replace("+00:00", "+00:00")
+
 mode = filters_apply["mode"]
 db_path = filters_apply["db_path"]
 station_callsign = filters_apply["station_callsign"]
@@ -534,34 +598,47 @@ scatter_max_points = filters_apply["scatter_max_points"]
 debug_sql = filters_apply["debug_sql"]
 do_autorefresh = filters_apply["do_autorefresh"]
 btn_refresh = False
-# Auto refresh
+
 if do_autorefresh:
     st.caption("Auto-refresh actif (5s)")
     _set_query_ts(str(int(dt.datetime.now().timestamp())))
     _autorefresh(interval_ms=5000, key="autorefresh_5s")
 
-if btn_refresh:
-    st.cache_data.clear()
-
-# Header / meta
 query_log: List[Dict] = []
 if debug_sql:
     rows_total, last_ts = _db_meta_raw(db_path, query_log=query_log)
 else:
     rows_total, last_ts = db_meta(db_path)
+
+# Header KPIs (lightweight)
 st.title("OGN / APRS-IS — Dashboard local")
 st.caption("Outil d'analyse radio pour stations OGN / FLARM / FANET")
 
-sub = f"Station: **{station_callsign}** — ref ({station_lat:.6f}, {station_lon:.6f}) — DB: `{db_path}`"
-st.markdown(sub)
+cols = st.columns(3)
+with cols[0]:
+    st.metric("Rows DB", fmt_int(rows_total))
+with cols[1]:
+    st.metric("Dernier paquet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
+with cols[2]:
+    st.metric("Paquets fenêtre", "…")
 
+apply_ts = st.session_state.get("last_apply_ts")
+apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
+types_str = "/".join(dst_types) if dst_types else "—"
+st.info(f"Filtres appliqués: Station={station_callsign} | Fenêtre={hours}h | Types={types_str} | Mode={mode} — Dernière application: {apply_time}")
 
-# DB freshness banner
+with st.status("Chargement des données", expanded=False) as status:
+    ctx = build_context(filters_apply, query_log=query_log if debug_sql else None)
+    status.update(label="Données chargées", state="complete")
+
+# Update packets window KPI
+cols[2].metric("Paquets fenêtre", fmt_int(ctx.metrics.get("rows_window")))
+
+# Freshness banner
 fresh_state = "unknown"
 age_s = None
 if last_ts:
     try:
-        # last_ts stored as ISO with +00:00
         last_dt = dt.datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
         age_s = (now_utc() - last_dt).total_seconds()
         if age_s <= DB_STALE_WARN_S:
@@ -582,340 +659,149 @@ elif fresh_state == "err":
 else:
     st.info("État DB: inconnu (timestamp non parsable).", icon="ℹ️")
 
-# Load data window
-window_key = (
-    int(hours),
-    tuple(dst_types),
-    igate_filter,
-    bool(only_heard_by),
-    source_mode,
-    qas_filter,
-)
-force_recalc = btn_refresh or do_autorefresh
-if st.session_state.get("window_key") != window_key or force_recalc:
-    since = now_utc() - dt.timedelta(hours=int(hours))
-    since_iso = since.isoformat().replace("+00:00", "+00:00")
-    st.session_state["window_key"] = window_key
-    st.session_state["since_iso"] = since_iso
-else:
-    since_iso = st.session_state.get("since_iso")
-    if not since_iso:
-        since = now_utc() - dt.timedelta(hours=int(hours))
-        since_iso = since.isoformat().replace("+00:00", "+00:00")
-        st.session_state["since_iso"] = since_iso
-
-if debug_sql:
-    df = _load_packets_window_raw(
-        db_path=db_path,
-        since_iso=since_iso,
-        dst_types=dst_types,
-        station_callsign=station_callsign,
-        only_heard_by=only_heard_by,
-        igate_filter=igate_filter,
-        source_mode=source_mode,
-        qas_filter=qas_filter,
-        limit_rows=limit_rows,
-        query_log=query_log,
-    )
-else:
-    df = load_packets_window(
-        db_path=db_path,
-        since_iso=since_iso,
-        dst_types=dst_types,
-        station_callsign=station_callsign,
-        only_heard_by=only_heard_by,
-        igate_filter=igate_filter,
-        source_mode=source_mode,
-        qas_filter=qas_filter,
-        limit_rows=limit_rows,
-    )
-
-# Compute derived fields (safe)
-if perf_cache:
-    df = compute_features(df, station_lat, station_lon)
-else:
-    # fallback: same logic without cache
-    df = compute_features.__wrapped__(df, station_lat, station_lon)  # type: ignore[attr-defined]
-
-# Persist last non-empty results
-if df.empty:
-    last_df = st.session_state.get("last_df")
-    if last_df is not None and not last_df.empty:
-        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle. Affichage des derniers résultats.")
-        df = last_df
-    else:
-        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
-else:
-    st.session_state["last_df"] = df
-
-apply_ts = st.session_state.get("last_apply_ts")
-apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
-types_str = "/".join(dst_types) if dst_types else "—"
-st.info(
-    f"Filtres appliqués: Station={station_callsign} | Fenêtre={hours}h | Types={types_str} | Mode={mode} "
-    f"| Paquets analysés={len(df)} — Dernière application: {apply_time}"
-)
-
-# Metrics row
-colA, colB, colC, colD, colE, colF = st.columns([1.1, 1.3, 1.2, 1.1, 1.1, 1.1])
-
+# Metrics row (from context)
+colA, colB = st.columns(2)
 with colA:
-    st.metric("Rows DB", fmt_int(rows_total))
+    st.metric("Distance max (km)", fmt_float(ctx.metrics.get("max_distance_km"), 1))
 with colB:
-    st.metric("Dernier paquet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
-with colC:
-    st.metric("Chargés (SQL)", fmt_int(len(df)))
-with colD:
-    # If only_heard_by, df already filtered; else show 0 / unknown
-    if only_heard_by and source_mode == "Heard-by station":
-        st.metric("Après heard-by", fmt_int(len(df)))
-    else:
-        st.metric("Après heard-by", "—")
-with colE:
-    max_km = float(df["distance_km"].max()) if "distance_km" in df.columns and df["distance_km"].notna().any() else None
-    st.metric("Distance max (km)", fmt_float(max_km, 1))
-with colF:
-    p95 = float(np.nanpercentile(df["distance_km"].to_numpy(), 95)) if "distance_km" in df.columns and df["distance_km"].notna().any() else None
-    st.metric("Distance P95 (km)", fmt_float(p95, 1))
+    st.metric("Distance P95 (km)", fmt_float(ctx.metrics.get("p95_distance_km"), 1))
 
-st.divider()
-
-if limit_rows >= 20000:
-    st.caption("Conseil perf: réduisez 'Max rows (SQL)' si l'UI devient lente.")
-
+# Tabs
 tabs = st.tabs(["Carte", "Signal vs Distance", "Analyses radio", "Debug"])
 
-# ---------------------------
-# Couverture tab (map)
-# ---------------------------
 with tabs[0]:
-    st.subheader("Carte")
-
-    if df.empty:
-        st.info("Aucune donnée dans cette fenêtre / filtres.")
+    st.caption("Carte de couverture")
+    if ctx.df_packets.empty:
+        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
     else:
-        bm = BASEMAPS[basemap_label]
-        # Center map on station
-        m = folium.Map(
-            location=[station_lat, station_lon],
-            zoom_start=8,
-            tiles=None,  # IMPORTANT: avoid default tiles (which can override)
-            control_scale=True,
-        )
-        folium.TileLayer(
-            tiles=bm.tiles,
-            attr=bm.attr,
-            name=bm.name,
-            control=False,
-        ).add_to(m)
-
-        # Station marker
-        folium.CircleMarker(
-            location=[station_lat, station_lon],
-            radius=7,
-            weight=2,
-            color="#000000",
-            fill=True,
-            fill_opacity=1.0,
-            popup=f"{station_callsign} (ref)",
-        ).add_to(m)
-
-        # Rings
-        if show_rings and rings_km:
-            for rkm in sorted(set(rings_km)):
-                folium.Circle(
-                    location=[station_lat, station_lon],
-                    radius=float(rkm) * 1000.0,
-                    color="#3b82f6",
-                    weight=1,
-                    fill=False,
-                    opacity=0.6,
-                ).add_to(m)
-
-        # Points
-        # Choose coloring
-        df_points = df.copy()
-        df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
-        if len(df_points) > map_max_points:
-            df_points = df_points.sample(n=map_max_points, random_state=1)
-
-        if df_points.empty:
-            st.warning("Pas de points avec lat/lon dans cette fenêtre.")
-        else:
-            # color scale (simple, stable)
-            if map_mode == "Points (couleur = dB)":
-                v = pd.to_numeric(df_points["rx_db"], errors="coerce")
-                vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
-                vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 30.0
-                key = "rx_db"
-                label = "dB"
-            else:
-                v = pd.to_numeric(df_points["distance_km"], errors="coerce")
-                vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
-                vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 50.0
-                key = "distance_km"
-                label = "km"
-
-            def color_for(val: float) -> str:
-                if val is None or (isinstance(val, float) and math.isnan(val)):
-                    return "#999999"
-                # normalize
-                if vmax <= vmin:
-                    t = 0.5
+        with st.spinner("Chargement carte..."):
+            bm = BASEMAPS[basemap_label]
+            m = folium.Map(location=[station_lat, station_lon], zoom_start=8, tiles=None, control_scale=True)
+            folium.TileLayer(tiles=bm.tiles, attr=bm.attr, name=bm.name, control=False).add_to(m)
+            folium.CircleMarker(location=[station_lat, station_lon], radius=7, weight=2, color="#000000", fill=True, fill_opacity=1.0, popup=f"{station_callsign} (ref)").add_to(m)
+            if show_rings and rings_km:
+                for rkm in sorted(set(rings_km)):
+                    folium.Circle(location=[station_lat, station_lon], radius=float(rkm) * 1000.0, color="#3b82f6", weight=1, fill=False, opacity=0.6).add_to(m)
+            df_points = ctx.df_packets.copy()
+            df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
+            if len(df_points) > map_max_points:
+                df_points = df_points.sample(n=map_max_points, random_state=1)
+            if not df_points.empty:
+                if map_mode == "Points (couleur = dB)":
+                    v = pd.to_numeric(df_points["rx_db"], errors="coerce")
+                    vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
+                    vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 30.0
+                    key = "rx_db"
+                    label = "dB"
                 else:
-                    t = (val - vmin) / (vmax - vmin)
-                    t = max(0.0, min(1.0, t))
-                # blue -> cyan -> green -> yellow -> red (stable)
-                if t < 0.25:
-                    return "#2563eb"
-                if t < 0.5:
-                    return "#06b6d4"
-                if t < 0.75:
-                    return "#22c55e"
-                if t < 0.9:
-                    return "#eab308"
-                return "#ef4444"
+                    v = pd.to_numeric(df_points["distance_km"], errors="coerce")
+                    vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
+                    vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 50.0
+                    key = "distance_km"
+                    label = "km"
 
-            # Add markers (opt: use itertuples for speed)
-            df_head = df_points
-            vals = pd.to_numeric(df_head[key], errors="coerce").to_numpy()
-            colors = []
-            for val in vals:
-                if val is None or (isinstance(val, float) and math.isnan(val)):
-                    colors.append("#999999")
-                else:
-                    colors.append(color_for(float(val)))
+                def color_for(val: float) -> str:
+                    if val is None or (isinstance(val, float) and math.isnan(val)):
+                        return "#999999"
+                    if vmax <= vmin:
+                        t = 0.5
+                    else:
+                        t = (val - vmin) / (vmax - vmin)
+                        t = max(0.0, min(1.0, t))
+                    if t < 0.25:
+                        return "#2563eb"
+                    if t < 0.5:
+                        return "#06b6d4"
+                    if t < 0.75:
+                        return "#22c55e"
+                    if t < 0.9:
+                        return "#eab308"
+                    return "#ef4444"
 
-            for (lat, lon, src, dst, igate, ts, val, c) in zip(
-                df_head["lat"].to_numpy(),
-                df_head["lon"].to_numpy(),
-                df_head.get("src", pd.Series([""] * len(df_head))).to_numpy(),
-                df_head.get("dst", pd.Series([""] * len(df_head))).to_numpy(),
-                df_head.get("igate", pd.Series([""] * len(df_head))).to_numpy(),
-                df_head.get("ts_utc", pd.Series([""] * len(df_head))).to_numpy(),
-                vals,
-                colors,
-            ):
-                popup = (
-                    f"src={src}\n"
-                    f"dst={dst}\n"
-                    f"igate={igate}\n"
-                    f"{label}={fmt_float(float(val) if val == val else None, 1)}\n"
-                    f"ts={ts}"
-                )
-                folium.CircleMarker(
-                    location=[float(lat), float(lon)],
-                    radius=float(point_size),
-                    weight=1,
-                    color=c,
-                    fill=True,
-                    fill_opacity=0.75,
-                    popup=popup,
-                ).add_to(m)
+                vals = pd.to_numeric(df_points[key], errors="coerce").to_numpy()
+                colors = []
+                for val in vals:
+                    if val is None or (isinstance(val, float) and math.isnan(val)):
+                        colors.append("#999999")
+                    else:
+                        colors.append(color_for(float(val)))
+                for (lat, lon, src, dst, igate, ts, val, c) in zip(
+                    df_points["lat"].to_numpy(),
+                    df_points["lon"].to_numpy(),
+                    df_points.get("src", pd.Series([""] * len(df_points))).to_numpy(),
+                    df_points.get("dst", pd.Series([""] * len(df_points))).to_numpy(),
+                    df_points.get("igate", pd.Series([""] * len(df_points))).to_numpy(),
+                    df_points.get("ts_utc", pd.Series([""] * len(df_points))).to_numpy(),
+                    vals,
+                    colors,
+                ):
+                    popup = (f"src={src}\n" f"dst={dst}\n" f"igate={igate}\n" f"{label}={fmt_float(float(val) if val == val else None, 1)}\n" f"ts={ts}")
+                    folium.CircleMarker(location=[float(lat), float(lon)], radius=float(point_size), weight=1, color=c, fill=True, fill_opacity=0.75, popup=popup).add_to(m)
+            st_folium(m, width="stretch", height=600)
 
-            st_folium(m, width="stretch", height=520)
-
-    # ---------------------------
-    # Signal vs distance tab
-    # ---------------------------
 with tabs[1]:
-    st.subheader("Signal vs Distance")
-
-    # Need dB + distance
-    if df.empty:
-        st.info("Aucune donnée dans cette fenêtre / filtres.")
+    st.caption("Signal vs distance")
+    if ctx.df_packets.empty:
+        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
     else:
-        df_sd = df.copy()
-        df_sd["rx_db"] = pd.to_numeric(df_sd["rx_db"], errors="coerce")
-        df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
+        with st.spinner("Chargement scatter..."):
+            df_sd = ctx.df_packets.copy()
+            df_sd["rx_db"] = pd.to_numeric(df_sd["rx_db"], errors="coerce")
+            df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
+            df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
+            max_points = min(2000, scatter_max_points)
+            if len(df_sd) > max_points:
+                df_sd = df_sd.sample(n=max_points, random_state=1)
+            if df_sd.empty:
+                st.warning("Aucun point avec dB + distance.")
+            else:
+                import matplotlib.pyplot as plt
+                fig = plt.figure(figsize=(10, 5))
+                plt.scatter(df_sd["distance_km"].to_numpy(), df_sd["rx_db"].to_numpy(), s=14, alpha=0.65)
+                plt.title("RX signal vs distance")
+                plt.xlabel("Distance (km)")
+                plt.ylabel("Signal (dB)")
+                st.pyplot(fig, clear_figure=True, use_container_width=True)
 
-        df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
-        max_points = 2000
-        if len(df_sd) > max_points:
-            df_sd = df_sd.sample(n=max_points, random_state=1)
-
-        if df_sd.empty:
-            st.warning("Aucun point avec dB + lat/lon (donc distance) dans cette fenêtre.")
-        else:
-            import matplotlib.pyplot as plt
-
-            fig = plt.figure()
-            plt.scatter(df_sd["distance_km"].to_numpy(), df_sd["rx_db"].to_numpy(), s=14, alpha=0.65)
-            plt.title("RX signal vs distance")
-            plt.xlabel("Distance (km)")
-            plt.ylabel("Signal (dB)")
-            st.pyplot(fig, clear_figure=True, use_container_width=True)
-
-            # stats row
-            p10 = float(np.nanpercentile(df_sd["rx_db"].to_numpy(), 10))
-            p50 = float(np.nanpercentile(df_sd["rx_db"].to_numpy(), 50))
-            p90 = float(np.nanpercentile(df_sd["rx_db"].to_numpy(), 90))
-            mx = float(np.nanmax(df_sd["rx_db"].to_numpy()))
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("p10", f"{p10:.1f} dB")
-            c2.metric("p50", f"{p50:.1f} dB")
-            c3.metric("p90", f"{p90:.1f} dB")
-            c4.metric("max", f"{mx:.1f} dB")
-
-    # ---------------------------
-    # Debug tab
-    # ---------------------------
 with tabs[2]:
-    st.subheader("Analyses radio")
-    st.info("Section prête pour ajouter 10 analyses radio.")
+    st.caption("Analyses radio (placeholders)")
+    cards = [
+        "Coverage & Range",
+        "Distance histogram",
+        "Signal vs distance quantiles",
+        "Shadow zones",
+        "Top aircraft",
+        "IGate comparison",
+    ]
+    cols = st.columns(2)
+    for i, title in enumerate(cards):
+        with cols[i % 2]:
+            with st.expander(title, expanded=False):
+                st.write("Placeholder — analyse à venir.")
 
 with tabs[3]:
-    st.subheader("Debug")
-
-    st.markdown("### Top sources (src)")
-    if df.empty:
+    st.caption("Debug")
+    if ctx.df_packets.empty:
         st.info("Aucune donnée.")
     else:
-        top_src = df["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
-        st.dataframe(top_src, width="stretch", height=360)
-
-    st.markdown("### Top iGates (igate)")
-    if df.empty or "igate" not in df.columns:
-        st.info("Aucune donnée / colonne 'igate' absente.")
-    else:
-        ig = df["igate"].replace("", np.nan).dropna()
-        top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
-        st.dataframe(top_ig, width="stretch", height=360)
-
-    with st.expander("Échantillon brut (raw)", expanded=False):
-        if df.empty:
-            st.write("—")
-        else:
-            st.dataframe(df[["ts_utc", "src", "dst", "igate", "raw"]].head(50), width="stretch", height=420)
-
+        with st.spinner("Chargement debug..."):
+            top_src = ctx.df_packets["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
+            st.dataframe(top_src, width="stretch", height=360)
+            ig = ctx.df_packets["igate"].replace("", np.nan).dropna()
+            top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
+            st.dataframe(top_ig, width="stretch", height=360)
     with st.expander("Infos pipeline", expanded=False):
-        st.json(
-            {
-                "head": st.session_state.get("_ts", None),
-                "rows_total_db": rows_total,
-                "last_ts": last_ts,
-                "since_iso": since_iso,
-                "hours": hours,
-                "dst_types": dst_types,
-                "only_heard_by": only_heard_by,
-                "igate_filter": igate_filter,
-                "limit_rows": limit_rows,
-                "basemap": basemap_label,
-                "map_mode": map_mode,
-                "show_rings": show_rings,
-                "rings_km": rings_km,
-                "df_loaded": int(len(df)),
-                "df_has_latlon": int((df.get("lat", pd.Series(dtype=float)).notna() & df.get("lon", pd.Series(dtype=float)).notna()).sum()) if not df.empty else 0,
-            }
-        )
-
-    if debug_sql:
-        st.markdown("### SQL timings")
-        if query_log:
-            st.dataframe(pd.DataFrame(query_log), width="stretch", height=240)
-        else:
-            st.write("Aucune requête mesurée (cache).")
-
+        st.json({
+            "rows_total_db": rows_total,
+            "last_ts": last_ts,
+            "since_iso": filters_apply.get("since_iso"),
+            "hours": hours,
+            "dst_types": dst_types,
+            "source_mode": source_mode,
+            "limit_rows": limit_rows,
+        })
+    if debug_sql and query_log:
+        st.dataframe(pd.DataFrame(query_log), width="stretch", height=240)
 if _PROFILER:
     _PROFILER.disable()
     st.caption("Profiling actif (résultats affichés dans la console).")
