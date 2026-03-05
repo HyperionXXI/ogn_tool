@@ -39,7 +39,28 @@ court est fourni plus bas.
 
 ## Chaîne radio complète
 
-Aircraft → 868 MHz → émetteur FLARM / FANET → station sol OGN → Internet → serveurs APRS-IS (flux TCP) → collector.py → base SQLite → dashboard.py
+<pre>
+Aircraft
+   │
+   │ 868 MHz
+   │
+émetteur FLARM / FANET
+   │
+   │
+station sol OGN
+   │
+   │ Internet
+   │
+serveurs APRS-IS
+   │
+   │ flux TCP
+   │
+collector.py
+   │
+base SQLite
+   │
+dashboard.py
+</pre>
 
 ------------------------------------------------------------------------
 
