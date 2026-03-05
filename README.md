@@ -37,28 +37,7 @@ is also provided below.
 
 ## Radio chain (end-to-end)
 
-```
-Aircraft
-   │
-   │ 868 MHz
-   │
-FLARM / FANET transmitter
-   │
-   │
-OGN ground station
-   │
-   │ Internet
-   │
-APRS-IS servers
-   │
-   │ TCP stream
-   │
-collector.py
-   │
-SQLite database
-   │
-dashboard
-```
+Aircraft → 868 MHz → FLARM / FANET transmitter → OGN ground station → Internet → APRS-IS servers (TCP stream) → collector.py → SQLite database → dashboard.py
 
 ------------------------------------------------------------------------
 
