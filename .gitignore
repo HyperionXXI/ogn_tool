@@ -23,3 +23,21 @@ samples_rx_*.txt# local backups
 *.csv
 samples_rx*.txt
 rx_*.csv
+
+# local data
+/data/*.sqlite3
+/data/*.sqlite3-wal
+/data/*.sqlite3-shm
+/data/ogn_log.sqlite3*
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+data/
+*.sqlite
+*.log

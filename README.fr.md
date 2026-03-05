@@ -202,3 +202,18 @@ Causes fréquentes :
 -   la base ne contient pas de trames correspondant aux filtres
     sélectionnés
 -   le collector n'est pas en cours d'exécution
+
+------------------------------------------------------------------------
+
+## Tests
+
+``` sh
+pytest
+pytest tests
+```
+
+------------------------------------------------------------------------
+
+## Données locales
+
+`data/` contient les données locales d'exécution et n'est pas versionné dans git.

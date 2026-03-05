@@ -197,3 +197,18 @@ Common causes:
 -   `OGN_DB_PATH` points to the wrong database file
 -   the database contains no packets matching the selected filters
 -   the collector is not running
+
+------------------------------------------------------------------------
+
+## Tests
+
+``` sh
+pytest
+pytest tests
+```
+
+------------------------------------------------------------------------
+
+## Local data
+
+`data/` contains local runtime data and is not versioned in git.
