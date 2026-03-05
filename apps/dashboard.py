@@ -461,12 +461,7 @@ if "last_apply_ts" not in st.session_state:
     st.session_state["last_apply_ts"] = now_utc()
 
 with st.sidebar:
-    st.subheader("Mode")
-    mode = st.selectbox("Interface", ["Standard", "Avancé", "Expert"], index=["Standard", "Avancé", "Expert"].index(st.session_state["filters_edit"]["mode"]))
-
-    apply_button = st.button("✅ Appliquer", use_container_width=True)
-    do_autorefresh = st.checkbox("Auto-refresh (5s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"])) if mode != "Standard" else False
-
+    current_mode = st.session_state["filters_edit"]["mode"]
     st.subheader("Station")
     station_callsign = st.text_input("Callsign", st.session_state["filters_edit"]["station_callsign"])
     db_path = st.text_input("DB SQLite", st.session_state["filters_edit"]["db_path"])
@@ -479,57 +474,57 @@ with st.sidebar:
     st.subheader("Données")
     source_mode = st.selectbox("Vue radio", ["Heard-by station", "Radio station view"], index=["Heard-by station", "Radio station view"].index(st.session_state["filters_edit"]["source_mode"]))
     dst_types = st.multiselect("Types", ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"], default=st.session_state["filters_edit"]["dst_types"])
+    only_heard_by = st.checkbox("Coverage heard-by", value=bool(st.session_state["filters_edit"]["only_heard_by"]))
     only_local_radio = st.checkbox("Uniquement radio locale", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
-    only_heard_by = True
     igate_filter = st.text_input("Filtre igate (optionnel)", value=st.session_state["filters_edit"]["igate_filter"])
 
-    st.subheader("Carte")
+    apply_button = st.button("▶ Appliquer les filtres", use_container_width=True, type="primary")
+
+    st.subheader("Visualisation")
     basemap_label = st.selectbox("Fond de carte", list(BASEMAPS.keys()), index=list(BASEMAPS.keys()).index(st.session_state["filters_edit"]["basemap_label"]))
     map_mode = st.selectbox("Mode carte", ["Points (couleur = distance)", "Points (couleur = dB)"], index=["Points (couleur = distance)", "Points (couleur = dB)"].index(st.session_state["filters_edit"]["map_mode"]))
     point_size = st.slider("Taille des points", 1, 10, int(st.session_state["filters_edit"]["point_size"]))
     show_rings = st.checkbox("Afficher anneaux de portée", value=bool(st.session_state["filters_edit"]["show_rings"]))
     rings_km = st.multiselect("Anneaux (km)", [5, 10, 25, 50, 75, 100, 150, 200], default=st.session_state["filters_edit"]["rings_km"])
 
-    with st.expander("Réglages avancés", expanded=False) if mode != "Standard" else st.container():
-        if mode != "Standard":
-            st.subheader("Performance")
-            limit_rows = st.slider("Max rows SQL", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
-            map_max_points = st.slider("Max points carte", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
-            scatter_max_points = st.slider("Max points scatter", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
-            debug_sql = st.checkbox("Debug SQL (timings)", value=bool(st.session_state["filters_edit"]["debug_sql"]))
-        else:
-            limit_rows = int(st.session_state["filters_edit"]["limit_rows"])
-            map_max_points = int(st.session_state["filters_edit"]["map_max_points"])
-            scatter_max_points = int(st.session_state["filters_edit"]["scatter_max_points"])
-            debug_sql = False
+    st.subheader("Performance")
+    limit_rows = st.slider("Max rows SQL", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
+    map_max_points = st.slider("Max points carte", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
+    scatter_max_points = st.slider("Max points scatter", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
+    do_autorefresh = st.checkbox("Auto-refresh (5s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"]))
 
-    if mode == "Expert":
-        with st.expander("Expert / Maintenance", expanded=False):
-            st.subheader("Maintenance DB")
-            safe_opt = st.button("ANALYZE / OPTIMIZE")
-            vacuum_opt = st.button("VACUUM")
-            create_idx = st.button("Créer index")
-            if safe_opt:
-                with st.spinner("Optimisation en cours..."):
-                    try:
-                        optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=False)
-                        st.success("Optimisation terminée.")
-                    except Exception as e:
-                        st.error(f"Échec optimisation: {e!r}")
-            if vacuum_opt:
-                with st.spinner("VACUUM en cours..."):
-                    try:
-                        optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=True)
-                        st.success("VACUUM terminé.")
-                    except Exception as e:
-                        st.error(f"Échec VACUUM: {e!r}")
-            if create_idx:
-                with st.spinner("Création des indexes..."):
-                    try:
-                        create_indexes(st.session_state["filters_apply"]["db_path"])
-                        st.success("Indexes créés.")
-                    except Exception as e:
-                        st.error(f"Échec création indexes: {e!r}")
+    if current_mode == "Expert":
+        st.subheader("Maintenance DB")
+        debug_sql = st.checkbox("Debug SQL (timings)", value=bool(st.session_state["filters_edit"]["debug_sql"]))
+        safe_opt = st.button("ANALYZE / OPTIMIZE")
+        vacuum_opt = st.button("VACUUM")
+        create_idx = st.button("Créer index")
+        if safe_opt:
+            with st.spinner("Optimisation en cours..."):
+                try:
+                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=False)
+                    st.success("Optimisation terminée.")
+                except Exception as e:
+                    st.error(f"Échec optimisation: {e!r}")
+        if vacuum_opt:
+            with st.spinner("VACUUM en cours..."):
+                try:
+                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=True)
+                    st.success("VACUUM terminé.")
+                except Exception as e:
+                    st.error(f"Échec VACUUM: {e!r}")
+        if create_idx:
+            with st.spinner("Création des indexes..."):
+                try:
+                    create_indexes(st.session_state["filters_apply"]["db_path"])
+                    st.success("Indexes créés.")
+                except Exception as e:
+                    st.error(f"Échec création indexes: {e!r}")
+    else:
+        debug_sql = False
+
+    st.subheader("Mode")
+    mode = st.selectbox("Interface", ["Standard", "Avancé", "Expert"], index=["Standard", "Avancé", "Expert"].index(st.session_state["filters_edit"]["mode"]))
 
     st.session_state["filters_edit"] = {
         **st.session_state["filters_edit"],
@@ -564,7 +559,6 @@ with st.sidebar:
                 applied["igate_filter"] = applied["station_callsign"]
             applied["qas_filter"] = "qA*"
         else:
-            applied["source_mode"] = "Heard-by station"
             applied["qas_filter"] = ""
         applied["since_iso"] = (now_utc() - dt.timedelta(hours=int(applied["hours"]))).isoformat().replace("+00:00", "+00:00")
         st.session_state["filters_apply"] = applied
@@ -610,29 +604,10 @@ if debug_sql:
 else:
     rows_total, last_ts = db_meta(db_path)
 
-# Header KPIs (lightweight)
+# Title + station summary
 st.title("OGN / APRS-IS — Dashboard local")
 st.caption("Outil d'analyse radio pour stations OGN / FLARM / FANET")
-
-cols = st.columns(3)
-with cols[0]:
-    st.metric("Rows DB", fmt_int(rows_total))
-with cols[1]:
-    st.metric("Dernier paquet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
-with cols[2]:
-    st.metric("Paquets fenêtre", "…")
-
-apply_ts = st.session_state.get("last_apply_ts")
-apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
-types_str = "/".join(dst_types) if dst_types else "—"
-st.info(f"Filtres appliqués: Station={station_callsign} | Fenêtre={hours}h | Types={types_str} | Mode={mode} — Dernière application: {apply_time}")
-
-with st.status("Chargement des données", expanded=False) as status:
-    ctx = build_context(filters_apply, query_log=query_log if debug_sql else None)
-    status.update(label="Données chargées", state="complete")
-
-# Update packets window KPI
-cols[2].metric("Paquets fenêtre", fmt_int(ctx.metrics.get("rows_window")))
+st.markdown(f"Station: **{station_callsign}** — DB: `{db_path}`")
 
 # Freshness banner
 fresh_state = "unknown"
@@ -659,19 +634,46 @@ elif fresh_state == "err":
 else:
     st.info("État DB: inconnu (timestamp non parsable).", icon="ℹ️")
 
+# Header KPIs (lightweight)
+cols = st.columns(3)
+with cols[0]:
+    st.metric("Rows DB", fmt_int(rows_total))
+with cols[1]:
+    st.metric("Dernier paquet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
+with cols[2]:
+    st.metric("Paquets fenêtre", "—")
+
+apply_ts = st.session_state.get("last_apply_ts")
+apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
+types_str = "/".join(dst_types) if dst_types else "—"
+st.info(f"Filtres appliqués: Station={station_callsign} | Fenêtre={hours}h | Types={types_str} | Mode={mode} — Dernière application: {apply_time}")
+
+with st.status("Chargement des données", expanded=False) as status:
+    ctx = build_context(filters_apply, query_log=query_log if debug_sql else None)
+    status.update(label="Données chargées", state="complete")
+
+analysis_context = {
+    "filters": filters_apply,
+    "dataframe": ctx.df_packets,
+    "metrics": ctx.metrics,
+}
+
+# Update packets window KPI
+cols[2].metric("Paquets fenêtre", fmt_int(analysis_context["metrics"].get("rows_window")))
+
 # Metrics row (from context)
 colA, colB = st.columns(2)
 with colA:
-    st.metric("Distance max (km)", fmt_float(ctx.metrics.get("max_distance_km"), 1))
+    st.metric("Distance max (km)", fmt_float(analysis_context["metrics"].get("max_distance_km"), 1))
 with colB:
-    st.metric("Distance P95 (km)", fmt_float(ctx.metrics.get("p95_distance_km"), 1))
+    st.metric("Distance P95 (km)", fmt_float(analysis_context["metrics"].get("p95_distance_km"), 1))
 
 # Tabs
 tabs = st.tabs(["Carte", "Signal vs Distance", "Analyses radio", "Debug"])
 
 with tabs[0]:
     st.caption("Carte de couverture")
-    if ctx.df_packets.empty:
+    if analysis_context["dataframe"].empty:
         st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
     else:
         with st.spinner("Chargement carte..."):
@@ -682,7 +684,7 @@ with tabs[0]:
             if show_rings and rings_km:
                 for rkm in sorted(set(rings_km)):
                     folium.Circle(location=[station_lat, station_lon], radius=float(rkm) * 1000.0, color="#3b82f6", weight=1, fill=False, opacity=0.6).add_to(m)
-            df_points = ctx.df_packets.copy()
+            df_points = analysis_context["dataframe"].copy()
             df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
             if len(df_points) > map_max_points:
                 df_points = df_points.sample(n=map_max_points, random_state=1)
@@ -737,15 +739,15 @@ with tabs[0]:
                 ):
                     popup = (f"src={src}\n" f"dst={dst}\n" f"igate={igate}\n" f"{label}={fmt_float(float(val) if val == val else None, 1)}\n" f"ts={ts}")
                     folium.CircleMarker(location=[float(lat), float(lon)], radius=float(point_size), weight=1, color=c, fill=True, fill_opacity=0.75, popup=popup).add_to(m)
-            st_folium(m, width="stretch", height=600)
+            st_folium(m, width="stretch", height=520)
 
 with tabs[1]:
     st.caption("Signal vs distance")
-    if ctx.df_packets.empty:
+    if analysis_context["dataframe"].empty:
         st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
     else:
         with st.spinner("Chargement scatter..."):
-            df_sd = ctx.df_packets.copy()
+            df_sd = analysis_context["dataframe"].copy()
             df_sd["rx_db"] = pd.to_numeric(df_sd["rx_db"], errors="coerce")
             df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
             df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
@@ -756,7 +758,7 @@ with tabs[1]:
                 st.warning("Aucun point avec dB + distance.")
             else:
                 import matplotlib.pyplot as plt
-                fig = plt.figure(figsize=(10, 5))
+                fig = plt.figure(figsize=(10, 4.8))
                 plt.scatter(df_sd["distance_km"].to_numpy(), df_sd["rx_db"].to_numpy(), s=14, alpha=0.65)
                 plt.title("RX signal vs distance")
                 plt.xlabel("Distance (km)")
@@ -781,13 +783,13 @@ with tabs[2]:
 
 with tabs[3]:
     st.caption("Debug")
-    if ctx.df_packets.empty:
+    if analysis_context["dataframe"].empty:
         st.info("Aucune donnée.")
     else:
         with st.spinner("Chargement debug..."):
-            top_src = ctx.df_packets["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
+            top_src = analysis_context["dataframe"]["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
             st.dataframe(top_src, width="stretch", height=360)
-            ig = ctx.df_packets["igate"].replace("", np.nan).dropna()
+            ig = analysis_context["dataframe"]["igate"].replace("", np.nan).dropna()
             top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
             st.dataframe(top_ig, width="stretch", height=360)
     with st.expander("Infos pipeline", expanded=False):
