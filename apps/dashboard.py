@@ -162,7 +162,7 @@ def _db_meta_raw(db_path: str, query_log: Optional[List[Dict]] = None) -> Tuple[
         con.close()
 
 
-@st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
     return _db_meta_raw(db_path)
 
@@ -284,7 +284,7 @@ def _load_packets_window_raw(
     return df
 
 
-@st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def load_packets_window(
     db_path: str,
     since_iso: str,
@@ -494,8 +494,26 @@ else:
     st.info("État DB: inconnu (timestamp non parsable).", icon="ℹ️")
 
 # Load data window
-since = now_utc() - dt.timedelta(hours=int(hours))
-since_iso = since.isoformat().replace("+00:00", "+00:00")
+window_key = (
+    int(hours),
+    tuple(dst_types),
+    igate_filter,
+    bool(only_heard_by),
+    source_mode,
+    qas_filter,
+)
+force_recalc = btn_refresh or do_autorefresh
+if st.session_state.get("window_key") != window_key or force_recalc:
+    since = now_utc() - dt.timedelta(hours=int(hours))
+    since_iso = since.isoformat().replace("+00:00", "+00:00")
+    st.session_state["window_key"] = window_key
+    st.session_state["since_iso"] = since_iso
+else:
+    since_iso = st.session_state.get("since_iso")
+    if not since_iso:
+        since = now_utc() - dt.timedelta(hours=int(hours))
+        since_iso = since.isoformat().replace("+00:00", "+00:00")
+        st.session_state["since_iso"] = since_iso
 
 if debug_sql:
     df = _load_packets_window_raw(
