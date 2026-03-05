@@ -1,15 +1,15 @@
 🇫🇷 Français | 🇬🇧 [English version](README.md)
 # ogn_tool --- Exploration locale de logs OGN / APRS-IS
 
-ogn_tool est un **outil d'analyse radio** pour stations OGN / FLARM / FANET.
-Il enregistre les trames radio relayées par l’Open Glider Network (OGN)
-dans une base SQLite locale, puis permet d’explorer :
-- la portée radio réelle d’une station
-- les distances de réception et la couverture
+ogn_tool est un **outil d'analyse radio** pour les stations OGN / FLARM / FANET.
+Il permet d'enregistrer les trames radio relayées par le réseau Open Glider Network (OGN)
+dans une base locale et d'explorer :
+- la portée radio réelle d'une station
+- les distances de réception
 - les relations heard-by
-- la couverture dans l’espace sur carte
+- la couverture radio dans l'espace
 
-Il est particulièrement utile pour :
+Le projet est particulièrement utile pour :
 - analyser une station OGN personnelle
 - optimiser une antenne ou un site radio
 - étudier la couverture FLARM / FANET locale
@@ -39,15 +39,28 @@ court est fourni plus bas.
 
 ## Chaîne radio complète
 
+```
 Aircraft
-→ 868 MHz
-→ émetteur FLARM / FANET
-→ station sol OGN
-→ Internet
-→ serveurs APRS-IS (flux TCP)
-→ `collector.py`
-→ base SQLite
-→ `dashboard.py`
+   │
+   │ 868 MHz
+   │
+FLARM / FANET transmitter
+   │
+   │
+OGN ground station
+   │
+   │ Internet
+   │
+APRS-IS servers
+   │
+   │ TCP stream
+   │
+collector.py
+   │
+SQLite database
+   │
+dashboard
+```
 
 ------------------------------------------------------------------------
 
@@ -114,7 +127,7 @@ ne peut pas joindre le flux amont.
 
 ## Glossaire
 
--   **OGN** --- Open Glider Network, réseau communautaire de suivi.
+-   **OGN** --- Open Glider Network, qui relaie les données FLARM/FANET via APRS.
 -   **FLARM** --- système radio anticollision utilisé par les planeurs et parapentes.
 -   **FANET** --- Flying Ad-hoc Network, réseau radio basse puissance pour le parapente.
 -   **APRS** --- Automatic Packet Reporting System, protocole de
