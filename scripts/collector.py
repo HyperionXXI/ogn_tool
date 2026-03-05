@@ -8,11 +8,12 @@ Key points (based on issues observed):
   in the path, e.g.  "...,qAS,FK50887:" -> igate=FK50887.
 
 Env vars:
-  OGN_HOST   default glidern5.glidernet.org
-  OGN_PORT   default 14580
-  OGN_DB     default ogn_log.sqlite3
-  OGN_FILTER default ''
-  OGN_DEBUG  default '0'
+  OGN_HOST     default glidern5.glidernet.org
+  OGN_PORT     default 14580
+  OGN_DB_PATH  preferred SQLite file path
+  OGN_DB       legacy SQLite file path (fallback)
+  OGN_FILTER   default ''
+  OGN_DEBUG    default '0'
 
 This collector stores raw packets and parsed fields useful for analysis.
 """
@@ -29,7 +30,7 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 
 HOST = os.getenv("OGN_HOST", "glidern5.glidernet.org")
 PORT = int(os.getenv("OGN_PORT", "14580"))
-DB_PATH = os.getenv("OGN_DB", "ogn_log.sqlite3")
+DB_PATH = os.getenv("OGN_DB_PATH") or os.getenv("OGN_DB") or "ogn_log.sqlite3"
 FILTER = os.getenv("OGN_FILTER", "")
 DEBUG = os.getenv("OGN_DEBUG", "0") not in ("0", "", "false", "False")
 
@@ -39,6 +40,7 @@ PASSCODE = os.getenv("OGN_PASS", "-1")
 
 SOCKET_TIMEOUT_S = 60
 COMMIT_EVERY = int(os.getenv("OGN_COMMIT_EVERY", "250"))
+SCHEMA_VERSION = 1
 
 # APRS uncompressed position (DDMM.mmN/DDDMM.mmE)
 _POS_RE = re.compile(
@@ -135,6 +137,23 @@ def db_connect(db_path: str) -> sqlite3.Connection:
     con.execute("PRAGMA synchronous=NORMAL;")
     con.execute("PRAGMA temp_store=MEMORY;")
     con.execute("PRAGMA foreign_keys=ON;")
+
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """
+    )
+    con.execute(
+        """
+        INSERT INTO meta (key, value)
+        SELECT 'schema_version', ?
+        WHERE NOT EXISTS (SELECT 1 FROM meta WHERE key = 'schema_version')
+        """,
+        (str(SCHEMA_VERSION),),
+    )
 
     con.execute(
         """

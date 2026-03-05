@@ -1,527 +1,566 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-OGN / APRS-IS — Dashboard local (Courfaivre)
+OGN / APRS-IS — Dashboard local (SQLite)
 
-Focus:
-- Coverage "heard-by FK50887" lisible: points colorés par distance + anneaux + hull (optionnel)
-- Basemaps sans token (CARTO)
-- Refresh stable (auto-refresh optionnel)
-- Performance: fenêtre temporelle + limite points + cache TTL
+Objectifs:
+- UI claire (wide), pas de régression (carte + signal-vs-distance quand data dispo)
+- Robuste: tolère de petites variations de schéma (colonnes absentes)
+- "Coverage" = paquets "heard-by" ta station (igate=FK50887 ou raw contient ",FK50887:")
+- Performance: fenêtre temporelle + limite rows SQL + cache TTL
+
+Run:
+  streamlit run .\dashboard.py
 """
 
 from __future__ import annotations
 
+import datetime as dt
+import math
 import os
 import re
-import math
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple, List
+from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
-import pydeck as pdk
 import streamlit as st
 
+from ogn_tool.config import get_config
+from ogn_tool.db import connect
+
 try:
-    from streamlit_autorefresh import st_autorefresh
-except Exception:
-    st_autorefresh = None
+    from streamlit_folium import st_folium
+    import folium
+except Exception as e:  # pragma: no cover
+    st.error("Dépendance manquante: streamlit-folium / folium. Installe: pip install streamlit-folium folium")
+    raise
 
+# ---------------------------
+# Config & helpers
+# ---------------------------
 
-APP_TITLE = "OGN / APRS-IS — Dashboard local"
+st.set_page_config(
+    page_title="OGN / APRS-IS — Dashboard local",
+    layout="wide",
+)
 
-# Basemaps (WebGL styles) — pas besoin de token Mapbox
-CARTO_POSITRON = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-CARTO_DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
-CARTO_VOYAGER = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
+_config = get_config()
+DB_DEFAULT = str(_config.db_path)
+CALLSIGN_DEFAULT = _config.station_callsign
+# Tu as donné roof exact (Google Maps)
+ROOF_LAT_DEFAULT = 47.33593787391701
+ROOF_LON_DEFAULT = 7.272825467967339
 
-BASEMAPS = {
-    "CARTO Positron (clair)": CARTO_POSITRON,
-    "CARTO Voyager (mix)": CARTO_VOYAGER,
-    "CARTO Dark Matter (sombre)": CARTO_DARK,
-}
+DB_STALE_WARN_S = 90  # warning if last packet older than that
+DB_STALE_ERR_S = 900  # "frozen" if last packet older than that
 
-# Station (par défaut tes coords; surcharge possible via env)
-DEFAULT_STATION_CALL = os.getenv("OGN_STATION", "FK50887").strip() or "FK50887"
-DEFAULT_STATION_LAT = float(os.getenv("OGN_STATION_LAT", "47.33583"))
-DEFAULT_STATION_LON = float(os.getenv("OGN_STATION_LON", "7.273"))
-
-DEFAULT_DB = os.getenv("OGN_DB", "ogn_log.sqlite3")
-
-# Regex "heard-by" dans raw: "... ,qA?,FK50887:" (qAS / qAR / qAO / ...)
-RE_QA_IGATE = re.compile(r",qA[A-Z0-9]{1,2},(?P<igate>[A-Z0-9\-]{3,12}):")
+RE_DB = re.compile(r"(?P<db>\d+(?:\.\d+)?)\s*dB\b")
+RE_COORD = re.compile(r"(?P<lat>\d{2})(?P<latm>\d{2}\.\d{2})(?P<NS>[NS])[/\\](?P<lon>\d{3})(?P<lonm>\d{2}\.\d{2})(?P<EW>[EW])")
 
 
 @dataclass(frozen=True)
-class AppConfig:
-    db_path: str
-    station_call: str
-    station_lat: float
-    station_lon: float
+class Basemap:
+    name: str
+    tiles: str
+    attr: str
 
 
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+BASEMAPS: Dict[str, Basemap] = {
+    "OpenStreetMap (standard)": Basemap(
+        name="OpenStreetMap (standard)",
+        tiles="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attr="© OpenStreetMap contributors",
+    ),
+    "CARTO Positron (clair)": Basemap(
+        name="CARTO Positron (clair)",
+        tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        attr="© CARTO © OpenStreetMap contributors",
+    ),
+    "CARTO Dark Matter (dark)": Basemap(
+        name="CARTO Dark Matter (dark)",
+        tiles="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        attr="© CARTO © OpenStreetMap contributors",
+    ),
+}
 
 
-def haversine_km(lat0: float, lon0: float, lat: float, lon: float) -> float:
-    # WGS84 approx
+def haversine_km(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
+    """Vectorized haversine distance in km."""
     r = 6371.0
-    p0 = math.radians(lat0)
-    p1 = math.radians(lat)
-    dphi = math.radians(lat - lat0)
-    dl = math.radians(lon - lon0)
-    a = math.sin(dphi / 2) ** 2 + math.cos(p0) * math.cos(p1) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
+    lat1r = np.deg2rad(lat1)
+    lon1r = np.deg2rad(lon1)
+    lat2r = np.deg2rad(lat2.astype(float))
+    lon2r = np.deg2rad(lon2.astype(float))
+    dlat = lat2r - lat1r
+    dlon = lon2r - lon1r
+    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1r) * np.cos(lat2r) * np.sin(dlon / 2.0) ** 2
+    c = 2.0 * np.arcsin(np.sqrt(a))
+    return r * c
 
 
-def haversine_vec_km(lat0: float, lon0: float, lats, lons):
-    # vectorisé simple sans numpy obligatoire
-    out = []
-    for la, lo in zip(lats, lons):
-        out.append(haversine_km(lat0, lon0, float(la), float(lo)))
-    return out
+def safe_col(df: pd.DataFrame, col: str, default=None) -> pd.Series:
+    if col in df.columns:
+        return df[col]
+    return pd.Series([default] * len(df), index=df.index)
 
 
-def parse_igate_fallback(raw: str) -> Optional[str]:
-    m = RE_QA_IGATE.search(raw or "")
+def parse_db_from_raw(raw: str) -> Optional[float]:
+    if not isinstance(raw, str):
+        return None
+    m = RE_DB.search(raw)
     if not m:
         return None
-    return m.group("igate")
+    try:
+        return float(m.group("db"))
+    except Exception:
+        return None
 
 
-def circle_polygon(lat0: float, lon0: float, radius_km: float, n: int = 96) -> List[List[float]]:
-    """
-    Retourne un polygone [lon, lat] approximant un cercle (géodésique simplifié).
-    Suffisant pour une visualisation.
-    """
-    coords = []
-    # conversion radiale approx
-    # 1 deg lat ≈ 111 km ; lon ≈ 111*cos(lat)
-    deg_lat = radius_km / 111.0
-    deg_lon = radius_km / (111.0 * max(0.2, abs(math.cos(math.radians(lat0)))))
-
-    for i in range(n):
-        ang = 2 * math.pi * (i / n)
-        lat = lat0 + deg_lat * math.sin(ang)
-        lon = lon0 + deg_lon * math.cos(ang)
-        coords.append([lon, lat])
-    coords.append(coords[0])
-    return coords
+def fmt_int(n: Optional[int]) -> str:
+    if n is None:
+        return "—"
+    return f"{n:,}".replace(",", "'")
 
 
-def convex_hull(points_xy: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
-    """
-    Monotonic chain convex hull.
-    points_xy: list of (x,y) unique-ish.
-    returns hull in CCW order (last not repeated).
-    """
-    pts = sorted(set(points_xy))
-    if len(pts) <= 2:
-        return pts
-
-    def cross(o, a, b):
-        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
-
-    lower = []
-    for p in pts:
-        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
-        lower.append(p)
-
-    upper = []
-    for p in reversed(pts):
-        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
-            upper.pop()
-        upper.append(p)
-
-    return lower[:-1] + upper[:-1]
+def fmt_float(x: Optional[float], nd: int = 1) -> str:
+    if x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x))):
+        return "—"
+    return f"{x:.{nd}f}"
 
 
-@st.cache_resource
-def db_conn(db_path: str) -> sqlite3.Connection:
-    con = sqlite3.connect(db_path, check_same_thread=False)
-    con.row_factory = sqlite3.Row
-    return con
+def now_utc() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
 
 
-def ensure_indexes(con: sqlite3.Connection) -> None:
-    con.execute("CREATE INDEX IF NOT EXISTS ix_packets_ts ON packets(ts_utc)")
-    con.execute("CREATE INDEX IF NOT EXISTS ix_packets_dst_ts ON packets(dst, ts_utc)")
-    con.execute("CREATE INDEX IF NOT EXISTS ix_packets_igate_ts ON packets(igate, ts_utc)")
-    con.execute("CREATE INDEX IF NOT EXISTS ix_packets_src_ts ON packets(src, ts_utc)")
-    con.commit()
+def iso_utc(dtobj: dt.datetime) -> str:
+    if dtobj.tzinfo is None:
+        dtobj = dtobj.replace(tzinfo=dt.timezone.utc)
+    return dtobj.isoformat().replace("+00:00", "Z")
 
 
-@st.cache_data(ttl=2.0)
-def get_db_status(db_path: str):
-    con = db_conn(db_path)
-    row = con.execute("SELECT COUNT(*) AS c, MAX(ts_utc) AS last_ts FROM packets").fetchone()
-    last_ts = row["last_ts"]
-    last_dt = datetime.fromisoformat(last_ts) if last_ts else None
-    return int(row["c"]), last_dt
+# ---------------------------
+# DB layer
+# ---------------------------
+
+@st.cache_data(ttl=5, show_spinner=False)
+def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
+    """Return (rows_total, max_ts_utc) from packets table, robust."""
+    if not os.path.exists(db_path):
+        return 0, None
+    con = sqlite3.connect(db_path)
+    try:
+        rows_total = con.execute("SELECT COUNT(*) FROM packets").fetchone()[0]
+        max_ts = con.execute("SELECT MAX(ts_utc) FROM packets").fetchone()[0]
+        return int(rows_total), max_ts
+    finally:
+        con.close()
 
 
-def time_cut(hours: float) -> str:
-    return (utc_now() - timedelta(hours=float(hours))).isoformat()
-
-
-@st.cache_data(ttl=2.0, show_spinner=False)
-def load_points(
-    db_path: str,
-    tick: int,
-    hours: float,
-    dst_filter: Tuple[str, ...],
+def _build_where(
+    since_iso: str,
+    dst_types: List[str],
+    station_callsign: str,
+    only_heard_by: bool,
     igate_filter: str,
-    limit_rows: int,
-) -> pd.DataFrame:
-    """
-    tick est volontairement un paramètre: il casse le cache lors de l'auto-refresh.
-    """
-    con = db_conn(db_path)
-    cut = time_cut(hours)
+) -> Tuple[str, List]:
+    # Normalise ts_utc:
+    # - si "...Z" => "...+00:00"
+    # Comparaison texte OK si tout est homogène.
+    ts_norm = "(CASE WHEN substr(ts_utc,-1)='Z' THEN substr(ts_utc,1,length(ts_utc)-1)||'+00:00' ELSE ts_utc END)"
 
-    where = ["ts_utc >= ?", "lat IS NOT NULL", "lon IS NOT NULL"]
-    params: List[object] = [cut]
+    where = [f"{ts_norm} >= ?"]
+    params: List = [since_iso]  # since_iso DOIT être en +00:00
 
-    if dst_filter:
-        where.append("dst IN (%s)" % ",".join(["?"] * len(dst_filter)))
-        params.extend(list(dst_filter))
+    if dst_types:
+        where.append("dst IN ({})".format(",".join(["?"] * len(dst_types))))
+        params.extend(dst_types)
 
     if igate_filter.strip():
         where.append("igate = ?")
         params.append(igate_filter.strip())
 
-    sql = f"""
-        SELECT ts_utc, src, dst, igate, qas, lat, lon, raw
-        FROM packets
-        WHERE {' AND '.join(where)}
-        ORDER BY ts_utc DESC
-        LIMIT ?
-    """
-    params.append(int(limit_rows))
-    df = pd.read_sql_query(sql, con, params=params)
-    return df
+    if only_heard_by:
+        where.append("(igate = ? OR raw LIKE ?)")
+        params.append(station_callsign)
+        params.append(f"%,{station_callsign}:%")
+
+    return " AND ".join(where), params
 
 
-def add_effective_igate(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        df["igate_eff"] = pd.Series(dtype=str)
-        return df
-    df = df.copy()
-    df["igate_eff"] = df["igate"].fillna("").astype(str)
-    m = df["igate_eff"].str.len().eq(0)
-    if m.any():
-        df.loc[m, "igate_eff"] = df.loc[m, "raw"].map(lambda s: parse_igate_fallback(str(s)) or "")
-    return df
+@st.cache_data(ttl=5, show_spinner=False)
+def load_packets_window(
+    db_path: str,
+    since_iso: str,
+    dst_types: List[str],
+    station_callsign: str,
+    only_heard_by: bool,
+    igate_filter: str,
+    limit_rows: int,
+) -> pd.DataFrame:
+    if not os.path.exists(db_path):
+        return pd.DataFrame()
 
-
-def color_by_distance_km(d: float) -> List[int]:
-    """
-    Retourne [r,g,b,a] en fonction de la distance.
-    Simple et lisible:
-      proche = vert, moyen = jaune/orange, loin = rouge.
-    """
-    # clamp
-    x = max(0.0, min(120.0, float(d)))
-    if x <= 20:
-        # vert -> jaune
-        t = x / 20.0
-        r = int(40 + 180 * t)
-        g = int(220)
-        b = int(60)
-    elif x <= 60:
-        # jaune -> orange
-        t = (x - 20.0) / 40.0
-        r = int(220)
-        g = int(220 - 90 * t)
-        b = int(60)
-    else:
-        # orange -> rouge
-        t = (x - 60.0) / 60.0
-        r = int(220)
-        g = int(130 - 110 * t)
-        b = int(60 - 40 * t)
-    a = 160
-    return [r, g, b, a]
-
-
-def main():
-    st.set_page_config(page_title=APP_TITLE, layout="wide")
-    st.title(APP_TITLE)
-
-    cfg = AppConfig(
-        db_path=DEFAULT_DB,
-        station_call=DEFAULT_STATION_CALL,
-        station_lat=DEFAULT_STATION_LAT,
-        station_lon=DEFAULT_STATION_LON,
-    )
-
-    # Sidebar
-    st.sidebar.header("Paramètres")
-
-    db_path = st.sidebar.text_input("DB SQLite", value=cfg.db_path)
-    station_call = st.sidebar.text_input("Station callsign", value=cfg.station_call)
-    station_lat = st.sidebar.number_input("Station lat", value=float(cfg.station_lat), format="%.6f")
-    station_lon = st.sidebar.number_input("Station lon", value=float(cfg.station_lon), format="%.6f")
-
-    basemap_name = st.sidebar.selectbox("Fond de carte", list(BASEMAPS.keys()), index=0)
-    map_style = BASEMAPS[basemap_name]
-
-    hours = st.sidebar.slider("Fenêtre temporelle (heures)", min_value=0.5, max_value=48.0, value=6.0, step=0.5)
-
-    dst_opts = ["OGNFNT", "OGFLR", "OGFLR7", "OGADSB", "OGADSL", "OGNSKY", "OGNAVI", "OGNDVS", "APRS"]
-    dst_filter = st.sidebar.multiselect("Types (dst)", options=dst_opts, default=["OGNFNT", "OGFLR", "OGFLR7"])
-    igate_filter = st.sidebar.text_input("Filtre igate (optionnel)", value="")
-
-    only_heard_by = st.sidebar.checkbox(
-        f"Coverage: uniquement 'heard-by {station_call}'",
-        value=True,
-    )
-
-    show_rings = st.sidebar.checkbox("Afficher anneaux de portée", value=True)
-    rings_km = st.sidebar.multiselect("Anneaux (km)", options=[5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200], default=[10, 25, 50, 100])
-
-    show_hull = st.sidebar.checkbox("Afficher hull (enveloppe) des points coverage", value=False)
-
-    view_mode = st.sidebar.selectbox(
-        "Mode carte",
-        ["Points (couleur = distance)", "Heatmap (densité)", "Hexagon (densité)"],
-        index=0,
-    )
-
-    point_radius_m = st.sidebar.slider("Taille points (m)", min_value=30, max_value=400, value=120, step=10)
-    max_points = st.sidebar.slider("Max points affichés", min_value=200, max_value=20000, value=5000, step=200)
-
-    auto_refresh = st.sidebar.checkbox("Auto-refresh (5s)", value=False)
-    if auto_refresh and st_autorefresh is not None:
-        tick = st_autorefresh(interval=5_000, key="tick")
-    else:
-        # tick stable => cache TTL agit
-        tick = int(st.session_state.get("manual_tick", 0))
-
-    if st.sidebar.button("Refresh maintenant"):
-        st.session_state["manual_tick"] = int(st.session_state.get("manual_tick", 0)) + 1
-        st.rerun()
-
-    # DB status
-    try:
-        con = db_conn(db_path)
-        ensure_indexes(con)
-        total_rows, last_dt = get_db_status(db_path)
-    except Exception as e:
-        st.error(f"Impossible d'ouvrir la DB: {e}")
-        st.stop()
-
-    c1, c2, c3 = st.columns([1, 2, 2])
-    c1.metric("Rows DB", f"{total_rows:,}")
-    c2.metric("Dernier paquet (UTC)", str(last_dt) if last_dt else "—")
-    if last_dt:
-        age_s = (utc_now() - last_dt).total_seconds()
-        if age_s > 15:
-            c3.warning(f"DB potentiellement figée (dernier paquet il y a {age_s:.0f}s)")
-        else:
-            c3.success("DB vivante")
-
-    # Load data
-    limit_rows = min(int(max_points * 3), 200_000)  # garde-fou
-    df = load_points(
-        db_path=db_path,
-        tick=int(tick),
-        hours=float(hours),
-        dst_filter=tuple(dst_filter),
+    where_sql, params = _build_where(
+        since_iso=since_iso,
+        dst_types=dst_types,
+        station_callsign=station_callsign,
+        only_heard_by=only_heard_by,
         igate_filter=igate_filter,
-        limit_rows=limit_rows,
     )
-    df = add_effective_igate(df)
 
-    if df.empty:
-        st.warning("Aucun paquet dans la fenêtre/filtre courant.")
-        # carte quand même: station + anneaux éventuels
-        df_map = pd.DataFrame([], columns=["lat", "lon"])
+    sql = f"""
+    SELECT
+        ts_utc, src, dst, igate, qas, lat, lon, raw
+    FROM packets
+    WHERE {where_sql}
+    ORDER BY ts_utc DESC
+    LIMIT ?
+    """
+    params2 = params + [int(limit_rows)]
+
+    con = sqlite3.connect(db_path)
+    try:
+        df = pd.read_sql_query(sql, con, params=params2)
+    finally:
+        con.close()
+
+    return df
+
+
+# ---------------------------
+# UI
+# ---------------------------
+
+with st.sidebar:
+    st.markdown("## Paramètres")
+
+    db_path = st.text_input("DB SQLite", DB_DEFAULT)
+    station_callsign = st.text_input("Station callsign", CALLSIGN_DEFAULT)
+
+    st.markdown("### Station (référence)")
+    station_lat = st.number_input("Station lat", value=float(ROOF_LAT_DEFAULT), format="%.6f")
+    station_lon = st.number_input("Station lon", value=float(ROOF_LON_DEFAULT), format="%.6f")
+
+    st.markdown("### Fenêtre / filtres")
+    hours = st.slider("Fenêtre temporelle (heures)", min_value=1, max_value=48, value=6, step=1)
+
+    dst_types = st.multiselect(
+        "Types (dst)",
+        options=["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
+        default=["OGNFNT", "OGFLR", "OGFLR7"],
+    )
+
+    igate_filter = st.text_input("Filtre igate (optionnel)", value="")
+
+    only_heard_by = st.checkbox(f"Coverage: uniquement 'heard-by {station_callsign}'", value=True)
+
+    st.markdown("### Carte")
+    basemap_label = st.selectbox("Fond de carte", options=list(BASEMAPS.keys()), index=0)
+    show_rings = st.checkbox("Afficher anneaux de portée", value=True)
+    rings_km = st.multiselect("Anneaux (km)", options=[5, 10, 25, 50, 75, 100, 150, 200], default=[10, 25, 50, 100])
+
+    map_mode = st.selectbox("Mode carte", options=["Points (couleur = distance)", "Points (couleur = dB)"], index=0)
+    point_size = st.slider("Taille points (px)", min_value=2, max_value=12, value=4, step=1)
+
+    st.markdown("### Performance")
+    limit_rows = st.slider("Max rows (SQL)", min_value=2000, max_value=100000, value=25000, step=1000)
+
+    st.markdown("### Rafraîchissement")
+    do_autorefresh = st.checkbox("Auto-refresh (5s)", value=False)
+    btn_refresh = st.button("Refresh maintenant")
+
+# Auto refresh
+if do_autorefresh:
+    st.caption("Auto-refresh actif (5s)")
+    st.experimental_set_query_params(_ts=str(int(dt.datetime.now().timestamp())))
+    st.autorefresh(interval=5000, key="autorefresh_5s")
+
+if btn_refresh:
+    st.cache_data.clear()
+
+# Header / meta
+rows_total, last_ts = db_meta(db_path)
+st.title("OGN / APRS-IS — Dashboard local")
+
+sub = f"Station: **{station_callsign}** — ref ({station_lat:.6f}, {station_lon:.6f}) — DB: `{db_path}`"
+st.markdown(sub)
+
+# DB freshness banner
+fresh_state = "unknown"
+age_s = None
+if last_ts:
+    try:
+        # last_ts stored as ISO with +00:00
+        last_dt = dt.datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
+        age_s = (now_utc() - last_dt).total_seconds()
+        if age_s <= DB_STALE_WARN_S:
+            fresh_state = "ok"
+        elif age_s <= DB_STALE_ERR_S:
+            fresh_state = "warn"
+        else:
+            fresh_state = "err"
+    except Exception:
+        fresh_state = "unknown"
+
+if fresh_state == "ok":
+    st.success("DB vivante", icon="✅")
+elif fresh_state == "warn":
+    st.warning(f"DB potentiellement ralentie (dernier paquet il y a {int(age_s)}s)", icon="⚠️")
+elif fresh_state == "err":
+    st.error(f"DB possiblement figée (dernier paquet il y a {int(age_s)}s)", icon="🧊")
+else:
+    st.info("État DB: inconnu (timestamp non parsable).", icon="ℹ️")
+
+# Load data window
+since = now_utc() - dt.timedelta(hours=int(hours))
+since_iso = since.isoformat().replace("+00:00", "+00:00")
+
+df = load_packets_window(
+    db_path=db_path,
+    since_iso=since_iso,
+    dst_types=dst_types,
+    station_callsign=station_callsign,
+    only_heard_by=only_heard_by,
+    igate_filter=igate_filter,
+    limit_rows=limit_rows,
+)
+
+# Compute derived fields (safe)
+if not df.empty:
+    # Ensure types
+    df["lat"] = pd.to_numeric(safe_col(df, "lat"), errors="coerce")
+    df["lon"] = pd.to_numeric(safe_col(df, "lon"), errors="coerce")
+    df["rx_db"] = safe_col(df, "raw").apply(parse_db_from_raw)
+    # distance for rows with coords
+    mask_ll = df["lat"].notna() & df["lon"].notna()
+    df.loc[mask_ll, "distance_km"] = haversine_km(station_lat, station_lon, df.loc[mask_ll, "lat"].to_numpy(), df.loc[mask_ll, "lon"].to_numpy())
+else:
+    df["rx_db"] = []
+    df["distance_km"] = []
+
+# Metrics row
+colA, colB, colC, colD, colE, colF = st.columns([1.1, 1.3, 1.2, 1.1, 1.1, 1.1])
+
+with colA:
+    st.metric("Rows DB", fmt_int(rows_total))
+with colB:
+    st.metric("Dernier paquet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
+with colC:
+    st.metric("Chargés (SQL)", fmt_int(len(df)))
+with colD:
+    # If only_heard_by, df already filtered; else show 0 / unknown
+    if only_heard_by:
+        st.metric("Après heard-by", fmt_int(len(df)))
     else:
-        df = df.dropna(subset=["lat", "lon"]).copy()
-        # Recent first
-        df = df.sort_values("ts_utc", ascending=False)
+        st.metric("Après heard-by", "—")
+with colE:
+    max_km = float(df["distance_km"].max()) if "distance_km" in df.columns and df["distance_km"].notna().any() else None
+    st.metric("Distance max (km)", fmt_float(max_km, 1))
+with colF:
+    p95 = float(np.nanpercentile(df["distance_km"].to_numpy(), 95)) if "distance_km" in df.columns and df["distance_km"].notna().any() else None
+    st.metric("Distance P95 (km)", fmt_float(p95, 1))
 
-        if only_heard_by:
-            ig = df["igate_eff"].fillna("")
-            mask_igate = (ig == station_call)
+st.divider()
 
-            raw = df["raw"].fillna("")
-            # forme robuste: ",qA?,FK50887:"
-            mask_raw = raw.str.contains(rf",qA[A-Z0-9]{{1,2}},{re.escape(station_call)}:", regex=True)
+tabs = st.tabs(["Couverture", "Signal vs Distance", "Debug"])
 
-            df = df[mask_igate | mask_raw].copy()
-
-        df_map = df.head(int(max_points)).copy()
-
-    # Metrics coverage
-    if not df_map.empty:
-        dists = haversine_vec_km(station_lat, station_lon, df_map["lat"].tolist(), df_map["lon"].tolist())
-        df_map["distance_km"] = dists
-        df_map["color"] = df_map["distance_km"].map(color_by_distance_km)
-        max_d = float(df_map["distance_km"].max())
-        p95 = float(pd.Series(dists).quantile(0.95))
-    else:
-        max_d = 0.0
-        p95 = 0.0
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Paquets (fenêtre)", f"{len(df):,}" if not df.empty else "0")
-    m2.metric("Points affichés", f"{len(df_map):,}")
-    m3.metric("Distance max (km)", f"{max_d:.1f}" if max_d else "—")
-    m4.metric("Distance P95 (km)", f"{p95:.1f}" if p95 else "—")
-
-    # Map layers
+# ---------------------------
+# Couverture tab (map)
+# ---------------------------
+with tabs[0]:
     st.subheader("Carte")
 
-    station_df = pd.DataFrame([{"lat": station_lat, "lon": station_lon, "label": station_call}])
-
-    layers = []
-
-    # Rings
-    if show_rings and rings_km:
-        ring_polys = []
-        for rk in sorted(set(int(x) for x in rings_km)):
-            ring_polys.append(
-                {
-                    "name": f"{rk} km",
-                    "polygon": circle_polygon(station_lat, station_lon, float(rk), n=96),
-                }
-            )
-        layers.append(
-            pdk.Layer(
-                "PolygonLayer",
-                data=ring_polys,
-                get_polygon="polygon",
-                get_fill_color=[0, 0, 0, 0],
-                get_line_color=[60, 120, 220, 140],
-                line_width_min_pixels=1,
-                pickable=True,
-            )
+    if df.empty:
+        st.info("Aucune donnée dans cette fenêtre / filtres.")
+    else:
+        bm = BASEMAPS[basemap_label]
+        # Center map on station
+        m = folium.Map(
+            location=[station_lat, station_lon],
+            zoom_start=8,
+            tiles=None,  # IMPORTANT: avoid default tiles (which can override)
+            control_scale=True,
         )
+        folium.TileLayer(
+            tiles=bm.tiles,
+            attr=bm.attr,
+            name=bm.name,
+            control=False,
+        ).add_to(m)
 
-    # Hull
-    if show_hull and not df_map.empty and len(df_map) >= 6:
-        # projection equirectangulaire locale autour station
-        lat0 = math.radians(station_lat)
-        pts_xy = []
-        for la, lo in zip(df_map["lat"].tolist(), df_map["lon"].tolist()):
-            x = (math.radians(float(lo)) - math.radians(station_lon)) * math.cos(lat0)
-            y = (math.radians(float(la)) - math.radians(station_lat))
-            pts_xy.append((x, y))
-        hull = convex_hull(pts_xy)
-        if len(hull) >= 3:
-            poly = []
-            for x, y in hull:
-                lo = station_lon + math.degrees(x / max(1e-9, math.cos(lat0)))
-                la = station_lat + math.degrees(y)
-                poly.append([lo, la])
-            poly.append(poly[0])
-            hull_df = pd.DataFrame([{"polygon": poly, "name": "Hull coverage"}])
-            layers.append(
-                pdk.Layer(
-                    "PolygonLayer",
-                    data=hull_df,
-                    get_polygon="polygon",
-                    get_fill_color=[255, 140, 0, 35],
-                    get_line_color=[255, 140, 0, 160],
-                    line_width_min_pixels=2,
-                    pickable=True,
-                )
-            )
+        # Station marker
+        folium.CircleMarker(
+            location=[station_lat, station_lon],
+            radius=7,
+            weight=2,
+            color="#000000",
+            fill=True,
+            fill_opacity=1.0,
+            popup=f"{station_callsign} (ref)",
+        ).add_to(m)
 
-    # Main layer
-    if not df_map.empty:
-        if view_mode.startswith("Heatmap"):
-            layers.append(
-                pdk.Layer(
-                    "HeatmapLayer",
-                    data=df_map,
-                    get_position="[lon, lat]",
-                    opacity=0.85,
-                    radiusPixels=45,
-                )
-            )
-        elif view_mode.startswith("Hexagon"):
-            layers.append(
-                pdk.Layer(
-                    "HexagonLayer",
-                    data=df_map,
-                    get_position="[lon, lat]",
-                    radius=1200,
-                    elevation_scale=10,
-                    elevation_range=[0, 1000],
-                    pickable=True,
-                    extruded=False,
-                )
-            )
+        # Rings
+        if show_rings and rings_km:
+            for rkm in sorted(set(rings_km)):
+                folium.Circle(
+                    location=[station_lat, station_lon],
+                    radius=float(rkm) * 1000.0,
+                    color="#3b82f6",
+                    weight=1,
+                    fill=False,
+                    opacity=0.6,
+                ).add_to(m)
+
+        # Points
+        # Choose coloring
+        df_points = df.copy()
+        df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
+
+        if df_points.empty:
+            st.warning("Pas de points avec lat/lon dans cette fenêtre.")
         else:
-            layers.append(
-                pdk.Layer(
-                    "ScatterplotLayer",
-                    data=df_map,
-                    get_position="[lon, lat]",
-                    get_radius=point_radius_m,
-                    get_fill_color="color",
-                    pickable=True,
+            # color scale (simple, stable)
+            if map_mode == "Points (couleur = dB)":
+                v = pd.to_numeric(df_points["rx_db"], errors="coerce")
+                vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
+                vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 30.0
+                key = "rx_db"
+                label = "dB"
+            else:
+                v = pd.to_numeric(df_points["distance_km"], errors="coerce")
+                vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
+                vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 50.0
+                key = "distance_km"
+                label = "km"
+
+            def color_for(val: float) -> str:
+                if val is None or (isinstance(val, float) and math.isnan(val)):
+                    return "#999999"
+                # normalize
+                if vmax <= vmin:
+                    t = 0.5
+                else:
+                    t = (val - vmin) / (vmax - vmin)
+                    t = max(0.0, min(1.0, t))
+                # blue -> cyan -> green -> yellow -> red (stable)
+                if t < 0.25:
+                    return "#2563eb"
+                if t < 0.5:
+                    return "#06b6d4"
+                if t < 0.75:
+                    return "#22c55e"
+                if t < 0.9:
+                    return "#eab308"
+                return "#ef4444"
+
+            # Add markers
+            for _, r in df_points.head(20000).iterrows():
+                val = r.get(key, None)
+                c = color_for(float(val)) if val is not None and val == val else "#999999"
+                popup = (
+                    f"src={r.get('src','')}\n"
+                    f"dst={r.get('dst','')}\n"
+                    f"igate={r.get('igate','')}\n"
+                    f"{label}={fmt_float(float(val) if val==val else None, 1)}\n"
+                    f"ts={r.get('ts_utc','')}"
                 )
-            )
+                folium.CircleMarker(
+                    location=[float(r["lat"]), float(r["lon"])],
+                    radius=float(point_size),
+                    weight=1,
+                    color=c,
+                    fill=True,
+                    fill_opacity=0.75,
+                    popup=popup,
+                ).add_to(m)
 
-    # Station marker (toujours)
-    layers.append(
-        pdk.Layer(
-            "ScatterplotLayer",
-            data=station_df,
-            get_position="[lon, lat]",
-            get_radius=250,
-            get_fill_color=[20, 20, 20, 220],
-            pickable=True,
+            st_folium(m, width="stretch", height=520)
+
+# ---------------------------
+# Signal vs distance tab
+# ---------------------------
+with tabs[1]:
+    st.subheader("Signal vs Distance")
+
+    # Need dB + distance
+    if df.empty:
+        st.info("Aucune donnée dans cette fenêtre / filtres.")
+    else:
+        df_sd = df.copy()
+        df_sd["rx_db"] = pd.to_numeric(df_sd["rx_db"], errors="coerce")
+        df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
+
+        df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
+
+        if df_sd.empty:
+            st.warning("Aucun point avec dB + lat/lon (donc distance) dans cette fenêtre.")
+        else:
+            import matplotlib.pyplot as plt
+
+            fig = plt.figure()
+            plt.scatter(df_sd["distance_km"].to_numpy(), df_sd["rx_db"].to_numpy(), s=14, alpha=0.65)
+            plt.title("RX signal vs distance")
+            plt.xlabel("Distance (km)")
+            plt.ylabel("Signal (dB)")
+            st.pyplot(fig, clear_figure=True, use_container_width=True)
+
+            # stats row
+            p10 = float(np.nanpercentile(df_sd["rx_db"].to_numpy(), 10))
+            p50 = float(np.nanpercentile(df_sd["rx_db"].to_numpy(), 50))
+            p90 = float(np.nanpercentile(df_sd["rx_db"].to_numpy(), 90))
+            mx = float(np.nanmax(df_sd["rx_db"].to_numpy()))
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("p10", f"{p10:.1f} dB")
+            c2.metric("p50", f"{p50:.1f} dB")
+            c3.metric("p90", f"{p90:.1f} dB")
+            c4.metric("max", f"{mx:.1f} dB")
+
+# ---------------------------
+# Debug tab
+# ---------------------------
+with tabs[2]:
+    st.subheader("Debug")
+
+    st.markdown("### Top sources (src)")
+    if df.empty:
+        st.info("Aucune donnée.")
+    else:
+        top_src = df["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
+        st.dataframe(top_src, width="stretch", height=360)
+
+    st.markdown("### Top iGates (igate)")
+    if df.empty or "igate" not in df.columns:
+        st.info("Aucune donnée / colonne 'igate' absente.")
+    else:
+        ig = df["igate"].replace("", np.nan).dropna()
+        top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
+        st.dataframe(top_ig, width="stretch", height=360)
+
+    with st.expander("Échantillon brut (raw)", expanded=False):
+        if df.empty:
+            st.write("—")
+        else:
+            st.dataframe(df[["ts_utc", "src", "dst", "igate", "raw"]].head(50), width="stretch", height=420)
+
+    with st.expander("Infos pipeline", expanded=False):
+        st.json(
+            {
+                "head": st.session_state.get("_ts", None),
+                "rows_total_db": rows_total,
+                "last_ts": last_ts,
+                "since_iso": since_iso,
+                "hours": hours,
+                "dst_types": dst_types,
+                "only_heard_by": only_heard_by,
+                "igate_filter": igate_filter,
+                "limit_rows": limit_rows,
+                "basemap": basemap_label,
+                "map_mode": map_mode,
+                "show_rings": show_rings,
+                "rings_km": rings_km,
+                "df_loaded": int(len(df)),
+                "df_has_latlon": int((df.get("lat", pd.Series(dtype=float)).notna() & df.get("lon", pd.Series(dtype=float)).notna()).sum()) if not df.empty else 0,
+            }
         )
-    )
-
-    # View
-    zoom = 9 if max_d <= 60 else 8
-    view_state = pdk.ViewState(latitude=station_lat, longitude=station_lon, zoom=zoom, pitch=0)
-
-    tooltip = {
-        "text": (
-            "src: {src}\n"
-            "dst: {dst}\n"
-            "igate: {igate_eff}\n"
-            "dist_km: {distance_km}\n"
-            "ts: {ts_utc}"
-        )
-    }
-
-    deck = pdk.Deck(
-        layers=layers,
-        initial_view_state=view_state,
-        map_style=map_style,
-        tooltip=tooltip,
-    )
-
-    st.pydeck_chart(deck, height=520, width="stretch")
-
-    # Tables / debug
-    with st.expander("Top sources / iGates / Debug"):
-        if not df.empty:
-            st.write("Top sources (src)")
-            top_src = df["src"].value_counts().head(20).rename_axis("src").reset_index(name="count")
-            st.dataframe(top_src, width="stretch", height=260)
-
-            st.write("Top iGates (igate_eff)")
-            ig = df["igate_eff"].replace("", pd.NA).dropna()
-            top_ig = ig.value_counts().head(20).rename_axis("igate").reset_index(name="count")
-            st.dataframe(top_ig, width="stretch", height=260)
-
-            st.write("10 lignes récentes (après filtres)")
-            cols = ["ts_utc", "src", "dst", "igate", "igate_eff", "lat", "lon", "raw"]
-            st.dataframe(df_map[cols].head(10), width="stretch")
-
-
-if __name__ == "__main__":
-    main()

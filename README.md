@@ -2,6 +2,19 @@
 
 # ogn_tool --- Local OGN / APRS-IS log explorer
 
+ogn_tool is a **radio analysis tool** for OGN / FLARM / FANET stations.
+It records radio frames relayed by the Open Glider Network (OGN) into a local
+SQLite database, then helps you explore:
+- real-world reception range of a station
+- received distances and coverage
+- heard-by relationships
+- spatial coverage on a map
+
+It is especially useful to:
+- analyze your own OGN station
+- optimize antenna placement or radio site quality
+- study local FLARM / FANET coverage
+
 Analyze a local SQLite log database containing OGN/APRS-IS packets and
 visualize coverage and statistics with a Streamlit dashboard.
 
@@ -19,6 +32,20 @@ is also provided below.
     -   basic health indicators
     -   coverage and distance statistics
     -   map views and filters (time window, packet types, etc.)
+
+------------------------------------------------------------------------
+
+## Radio chain (end-to-end)
+
+Aircraft
+→ 868 MHz
+→ FLARM / FANET transmitter
+→ OGN ground station
+→ Internet
+→ APRS-IS servers (TCP stream)
+→ `collector.py`
+→ SQLite database
+→ `dashboard.py`
 
 ------------------------------------------------------------------------
 
@@ -86,6 +113,8 @@ cannot reach the upstream feed.
 ## Glossary
 
 -   **OGN** --- Open Glider Network, a community-based tracking network.
+-   **FLARM** --- collision-avoidance radio system used by gliders and paragliders.
+-   **FANET** --- Flying Ad-hoc Network, a low-power radio network used in paragliding.
 -   **APRS** --- Automatic Packet Reporting System, a packet
     communication protocol.
 -   **APRS-IS** --- APRS Internet System, APRS data distributed via
