@@ -1034,23 +1034,43 @@ def render_rf_view() -> None:
         else:
             data = result.get("data")
             summary = result.get("summary") or {}
-            if data is None or (hasattr(data, "empty") and data.empty):
-                st.info("No azimuth data available.")
+            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
+                st.info("No data available.")
             else:
-                best_row = None
-                if "max_distance_km" in data and data["max_distance_km"].notna().any():
-                    best_row = data.loc[data["max_distance_km"].idxmax()]
-                c1, c2, c3 = st.columns(3)
+                c1, c2, c3, c4 = st.columns(4)
                 with c1:
                     st.metric("Azimuth bins", fmt_int(summary.get("bins")))
                 with c2:
                     st.metric("Packet total", fmt_int(summary.get("packet_total")))
                 with c3:
-                    best_dist = best_row["max_distance_km"] if best_row is not None else None
-                    st.metric("Max distance (km)", f"{fmt_float(best_dist, 1)}" if best_dist is not None else "—")
-                if best_row is not None and "azimuth_bin" in best_row:
-                    st.caption(f"Best sector: {int(best_row['azimuth_bin']) * int(summary.get('bin_size_deg', 10))}°")
-                st.dataframe(data.head(20), use_container_width=True)
+                    val = summary.get("max_distance_km")
+                    st.metric("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c4:
+                    val = summary.get("anisotropy_ratio")
+                    st.metric("Anisotropy", f"{fmt_float(val, 2)}" if val is not None else "—")
+                best_sector = summary.get("best_sector_deg")
+                worst_sector = summary.get("worst_sector_deg")
+                shadow_flag = summary.get("shadow_suspect")
+                st.caption(
+                    f"Best sector: {fmt_float(best_sector, 0)}° • "
+                    f"Worst sector: {fmt_float(worst_sector, 0)}° • "
+                    f"Shadow suspect: {'yes' if shadow_flag else 'no'}"
+                )
+                st.dataframe(
+                    data[
+                        [
+                            "azimuth_center_deg",
+                            "grid_cells",
+                            "packet_count",
+                            "max_distance_km",
+                            "p95_distance_km",
+                            "best_rssi_db",
+                            "mean_rssi_db",
+                            "sector_score",
+                        ]
+                    ].head(20),
+                    use_container_width=True,
+                )
 
     with section_probability:
         st.subheader("Coverage probability")
