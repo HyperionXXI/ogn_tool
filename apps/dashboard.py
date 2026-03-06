@@ -938,9 +938,30 @@ def render_coverage_view() -> None:
 
     with section_map:
         st.subheader("Coverage map")
-        result = analysis_shadow_map.analyze(df_grid)
+        shadow_ctx = {
+            "packets": get_packets_context().df_packets,
+            "station_callsign": station_callsign,
+            "cell_size_km": 3.0,
+        }
+        result = analysis_shadow_map.analyze(shadow_ctx)
         if not result.get("implemented"):
             st.info("Coverage map not available.\nRequires coverage_grid dataset.")
+        else:
+            summary = result.get("summary") or {}
+            data = result.get("data")
+            st.markdown("**Radio shadow map**")
+            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
+                st.info("No data available.")
+            else:
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    st.metric("Cells", fmt_int(summary.get("cells_total")))
+                with c2:
+                    st.metric("Shadow cells", fmt_int(summary.get("shadow_cells")))
+                with c3:
+                    val = summary.get("coverage_mean")
+                    st.metric("Coverage mean", f"{fmt_float(val, 2)}" if val is not None else "—")
+                st.dataframe(data.head(30), use_container_width=True)
 
     with section_rssi:
         st.subheader("RSSI heatmap")
