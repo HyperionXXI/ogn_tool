@@ -884,371 +884,76 @@ def get_packets_context() -> AnalysisContext:
     return ctx
 
 
-def render_map(title: str, mode: str) -> None:
-    with st.container():
-        st.subheader(title)
-        with st.spinner("Loading map..."):
-            bm = BASEMAPS[basemap_label]
-            m = folium.Map(
-                location=[station_lat, station_lon],
-                zoom_start=8,
-                tiles=None,
-                control_scale=True,
-                prefer_canvas=True,
-            )
-            folium.TileLayer(tiles=bm.tiles, attr=bm.attr, name=bm.name, control=False).add_to(m)
-            folium.CircleMarker(
-                location=[station_lat, station_lon],
-                radius=7,
-                weight=2,
-                color="#000000",
-                fill=True,
-                fill_opacity=1.0,
-                popup=f"{station_callsign} (ref)",
-            ).add_to(m)
-            max_range_km = max_distance_grid
-            max_range_label = fmt_float(max_range_km, 1)
-            folium.Marker(
-                location=[station_lat, station_lon],
-                icon=DivIcon(
-                    icon_size=(200, 36),
-                    icon_anchor=(0, -10),
-                    html=(
-                        '<div style="font-size:12px;color:#111;background:rgba(255,255,255,0.8);'
-                        'padding:2px 6px;border-radius:4px;border:1px solid #ddd;">'
-                        f"Max range: {max_range_label} km</div>"
-                    ),
-                ),
-            ).add_to(m)
-            if show_rings and rings_km:
-                for rkm in sorted(set(rings_km)):
-                    folium.Circle(
-                        location=[station_lat, station_lon],
-                        radius=float(rkm) * 1000.0,
-                        color="#3b82f6",
-                        weight=1,
-                        fill=False,
-                        opacity=0.6,
-                    ).add_to(m)
-            if not use_cov_grid:
-                st.warning("Coverage grid is required for maps. Enable it in filters.")
-                st_folium(m, height=750, use_container_width=True, key=f"map_{mode}_{title}_missing_grid")
-                return
-            df_points = load_coverage_grid(db_path, filters_apply["since_epoch"])
-            if "lat" not in df_points.columns or "lon" not in df_points.columns:
-                st.warning("Coverage grid missing or invalid (lat/lon columns not found).")
-                st_folium(m, height=750, use_container_width=True, key=f"map_{mode}_{title}_missing_cols")
-                return
-            df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
-            if df_points.empty:
-                st.warning("No packets in the selected time window.")
-                st_folium(m, height=750, use_container_width=True, key=f"map_{mode}_{title}_empty")
-                return
-            max_cells_display = min(3000, map_max_points)
-            if len(df_points) > max_cells_display:
-                df_points = df_points.sample(n=max_cells_display, random_state=1)
-            if not df_points.empty:
-                if mode == "Heatmap RSSI":
-                    col_db = "best_rssi_db" if use_cov_grid else "rx_db"
-                    v = pd.to_numeric(df_points.get(col_db, pd.Series(dtype=float)), errors="coerce")
-                    vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else -120.0
-                    vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else -60.0
-                    key = col_db
-                    label = "dB"
-                elif mode == "Heatmap distance":
-                    col_dist = "max_distance_km" if use_cov_grid else "distance_km"
-                    v = pd.to_numeric(df_points.get(col_dist, pd.Series(dtype=float)), errors="coerce")
-                    vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
-                    vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 50.0
-                    key = col_dist
-                    label = "km"
-                elif mode == "Coverage grid":
-                    col_dist = "max_distance_km" if use_cov_grid else "distance_km"
-                    v = pd.to_numeric(df_points.get(col_dist, pd.Series(dtype=float)), errors="coerce")
-                    vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
-                    vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 50.0
-                    key = col_dist
-                    label = "km"
-                else:
-                    col_dist = "distance_km"
-                    v = pd.to_numeric(df_points.get(col_dist, pd.Series(dtype=float)), errors="coerce")
-                    vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
-                    vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 50.0
-                    key = col_dist
-                    label = "km"
-
-                vals = pd.to_numeric(df_points.get(key, pd.Series(dtype=float)), errors="coerce").to_numpy()
-                colors = [
-                    _color_from_value(float(val), vmin, vmax) if val == val else "#999999"
-                    for val in vals
-                ]
-                layer = m
-                if show_cluster:
-                    layer = MarkerCluster().add_to(m)
-                for (lat, lon, src, dst, igate, ts, val, c) in zip(
-                    df_points["lat"].to_numpy(),
-                    df_points["lon"].to_numpy(),
-                    df_points.get("src", pd.Series([""] * len(df_points))).to_numpy(),
-                    df_points.get("dst", pd.Series([""] * len(df_points))).to_numpy(),
-                    df_points.get("igate", pd.Series([""] * len(df_points))).to_numpy(),
-                    df_points.get("ts_utc", pd.Series([""] * len(df_points))).to_numpy(),
-                    vals,
-                    colors,
-                ):
-                    popup = (
-                        f"src={src}\n"
-                        f"dst={dst}\n"
-                        f"igate={igate}\n"
-                        f"{label}={fmt_float(float(val) if val == val else None, 1)}\n"
-                        f"ts={ts}"
-                    )
-                    radius = 4.0 if mode in ("Heatmap RSSI", "Heatmap distance", "Coverage grid") else float(point_size)
-                    folium.CircleMarker(
-                        location=[float(lat), float(lon)],
-                        radius=radius,
-                        weight=1,
-                        color=c,
-                        fill=True,
-                        fill_opacity=0.75,
-                        popup=popup,
-                    ).add_to(layer)
-            st_folium(
-                m,
-                height=750,
-                use_container_width=True,
-                key=f"map_{mode}_{title}".replace(" ", "_").lower(),
-            )
-
-
-def render_scatter() -> None:
-    st.subheader("Received signal strength vs distance")
-    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
-    if df_grid.empty:
-        st.info("No aggregated data available for this window.")
-        return
-    with st.spinner("Loading scatter..."):
-        df_sd = df_grid.copy()
-        df_sd["best_rssi_db"] = pd.to_numeric(df_sd.get("best_rssi_db", np.nan), errors="coerce")
-        df_sd["max_distance_km"] = pd.to_numeric(df_sd.get("max_distance_km", np.nan), errors="coerce")
-        df_sd = df_sd[df_sd["best_rssi_db"].notna() & df_sd["max_distance_km"].notna()]
-        max_points = min(2000, scatter_max_points)
-        if len(df_sd) > max_points:
-            df_sd = df_sd.sample(n=max_points, random_state=1)
-        if df_sd.empty:
-            st.warning("No points with both RSSI and distance.")
-        else:
-            import matplotlib.pyplot as plt
-            plt.style.use("seaborn-v0_8")
-            fig = plt.figure(figsize=(10, 4))
-            plt.scatter(df_sd["max_distance_km"].to_numpy(), df_sd["best_rssi_db"].to_numpy(), s=14, alpha=0.65)
-            plt.title("RSSI vs distance (grid)", fontsize=16)
-            plt.xlabel("Distance (km)")
-            plt.ylabel("Signal (dB)")
-            plt.grid(alpha=0.3)
-            st.pyplot(fig, clear_figure=True, use_container_width=True)
-
-
-def render_histogram() -> None:
-    st.subheader("Distance distribution")
-    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
-    if df_grid.empty:
-        st.info("No aggregated data available for this window.")
-        return
-    with st.spinner("Loading histogram..."):
-        dist = pd.to_numeric(df_grid.get("max_distance_km", pd.Series(dtype=float)), errors="coerce").dropna()
-        if dist.empty:
-            st.warning("No distance data available.")
-        else:
-            import matplotlib.pyplot as plt
-            plt.style.use("seaborn-v0_8")
-            fig = plt.figure(figsize=(10, 4))
-            plt.hist(dist.to_numpy(), bins=40, alpha=0.7)
-            plt.xlabel("Distance (km)")
-            plt.ylabel("Packet count")
-            plt.title("Distance distribution", fontsize=16)
-            plt.grid(alpha=0.3)
-            st.pyplot(fig, clear_figure=True, use_container_width=True)
-
-
-def render_altitude_distance() -> None:
-    st.subheader("Altitude vs distance")
-    st.info("Altitude vs distance requires raw packets. Enable in Debug only.")
-
-
-def render_rf_analysis() -> None:
-    st.subheader("RF azimuth analysis")
-    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
-    if df_grid.empty:
-        st.info("No aggregated data available for this window.")
-        return
-    with st.spinner("Calcul du diagramme RF..."):
-        lat = pd.to_numeric(df_grid["lat"], errors="coerce")
-        lon = pd.to_numeric(df_grid["lon"], errors="coerce")
-        max_dist = pd.to_numeric(df_grid["max_distance_km"], errors="coerce")
-        best_rssi = pd.to_numeric(df_grid.get("best_rssi_db", pd.Series(dtype=float)), errors="coerce")
-        mask = lat.notna() & lon.notna() & max_dist.notna()
-        if not mask.any():
-            st.warning("No valid cells for the diagram.")
-            return
-        lat = lat[mask]
-        lon = lon[mask]
-        max_dist = max_dist[mask]
-        best_rssi = best_rssi[mask]
-
-        stats = compute_azimuth_stats(
-            station_lat=station_lat,
-            station_lon=station_lon,
-            lat=lat.to_numpy(),
-            lon=lon.to_numpy(),
-            max_distance_km=max_dist.to_numpy(),
-            best_rssi_db=best_rssi.to_numpy() if best_rssi.notna().any() else None,
-            packet_count=df_grid.get("packet_count", pd.Series(dtype=float)).to_numpy()
-            if "packet_count" in df_grid.columns
-            else None,
-            bin_size_deg=5.0,
-        )
-
-        import matplotlib.pyplot as plt
-
-        import matplotlib.pyplot as plt
-        plt.style.use("seaborn-v0_8")
-        fig = plt.figure(figsize=(7, 4.2))
-        ax = fig.add_subplot(111, polar=True)
-        ax.plot(stats.angles_rad, stats.max_distance_km, linewidth=2, label="Max")
-        ax.plot(stats.angles_rad, stats.p90_distance_km, linewidth=2, linestyle="--", label="P90")
-        ax.set_theta_zero_location("N")
-        ax.set_theta_direction(-1)
-        ax.set_title("Azimuth range (km) — max & P90")
-        ax.legend(loc="upper right")
-        st.pyplot(fig, clear_figure=True, use_container_width=True)
-
-        if np.isfinite(stats.best_rssi_db).any():
-            fig2 = plt.figure(figsize=(7, 4.2))
-            ax2 = fig2.add_subplot(111, polar=True)
-            ax2.plot(stats.angles_rad, stats.best_rssi_db, linewidth=2, color="#ef4444")
-            ax2.set_theta_zero_location("N")
-            ax2.set_theta_direction(-1)
-            ax2.set_title("Meilleur RSSI par azimut (dB)")
-            st.pyplot(fig2, clear_figure=True, use_container_width=True)
-
-        if np.isfinite(stats.packet_count).any():
-            fig3 = plt.figure(figsize=(7, 4.2))
-            ax3 = fig3.add_subplot(111, polar=True)
-            ax3.plot(stats.angles_rad, stats.packet_count, linewidth=2, color="#22c55e")
-            ax3.set_theta_zero_location("N")
-            ax3.set_theta_direction(-1)
-            ax3.set_title("Traffic density by azimuth (packets)")
-            st.pyplot(fig3, clear_figure=True, use_container_width=True)
-
-
-def render_debug() -> None:
-    st.subheader("Debug")
-    if not raw_packets_mode:
-        st.info("Raw packets are disabled. Enable in Advanced settings.")
-    else:
-        ctx = get_packets_context()
-        if ctx.df_packets.empty:
-            st.info("No data.")
-        else:
-            with st.spinner("Loading debug..."):
-                st.subheader("Raw packets (sample)")
-                cols = ["ts_utc", "src", "dst", "igate", "qas", "raw"]
-                existing_cols = [c for c in cols if c in ctx.df_packets.columns]
-                st.dataframe(ctx.df_packets[existing_cols].head(200), width="stretch", height=320)
-
-                st.subheader("Top sources")
-                top_src = ctx.df_packets["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
-                st.dataframe(top_src, width="stretch", height=240)
-
-                st.subheader("Top IGates")
-                ig = ctx.df_packets["igate"].replace("", np.nan).dropna()
-                top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
-                st.dataframe(top_ig, width="stretch", height=240)
-
-                st.subheader("Dataset stats")
-                st.json({
-                    "rows_window": int(len(ctx.df_packets)),
-                    "columns": list(ctx.df_packets.columns),
-                    "lat_non_null": int(ctx.df_packets["lat"].notna().sum()) if "lat" in ctx.df_packets.columns else 0,
-                    "lon_non_null": int(ctx.df_packets["lon"].notna().sum()) if "lon" in ctx.df_packets.columns else 0,
-                })
-
-    with st.expander("SQL info", expanded=False):
-        st.json({
-            "rows_total_db": rows_total,
-            "last_ts": last_ts,
-            "since_iso": filters_apply.get("since_iso"),
-            "hours": hours,
-            "dst_types": dst_types,
-            "source_mode": source_mode,
-            "limit_rows": limit_rows,
-        })
-    if debug_sql and query_log:
-        st.dataframe(pd.DataFrame(query_log), width="stretch", height=240)
-
-
-def render_coverage_probability() -> None:
-    st.subheader("Coverage probability")
-    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
-    if df_grid.empty:
-        st.warning("Coverage grid is empty. Build it first.")
-        return
-    dist_bins = pd.to_numeric(df_grid.get("max_distance_km", pd.Series(dtype=float)), errors="coerce").to_numpy()
-    pkt_bins = pd.to_numeric(df_grid.get("packet_count", pd.Series(dtype=float)), errors="coerce").to_numpy()
-    centers, probs = compute_distance_probability(dist_bins, pkt_bins, bin_size_km=5.0)
-    if centers.size == 0:
-        st.warning("No probability data available.")
-        return
-    d90 = reliable_distance_km(centers, probs, threshold=0.9)
-    d50 = reliable_distance_km(centers, probs, threshold=0.5)
-    d10 = reliable_distance_km(centers, probs, threshold=0.1)
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.metric("Reliable (90%)", f"{fmt_float(d90, 1)} km" if not math.isnan(d90) else "—")
-    with c2:
-        st.metric("Median (50%)", f"{fmt_float(d50, 1)} km" if not math.isnan(d50) else "—")
-    with c3:
-        st.metric("Fringe (10%)", f"{fmt_float(d10, 1)} km" if not math.isnan(d10) else "—")
-
-    import matplotlib.pyplot as plt
-    plt.style.use("seaborn-v0_8")
-    fig = plt.figure(figsize=(10, 4))
-    ax = fig.add_subplot(111)
-    ax.plot(centers, probs, linewidth=2)
-    ax.set_ylim(0, 1.0)
-    ax.set_xlabel("Distance (km)")
-    ax.set_ylabel("Reception probability")
-    ax.set_title("Coverage probability by distance", fontsize=16)
-    ax.grid(alpha=0.3)
-    ax.axhline(0.9, color="#f59e0b", linestyle="--", linewidth=1)
-    ax.axhline(0.5, color="#22c55e", linestyle="--", linewidth=1)
-    ax.axhline(0.1, color="#ef4444", linestyle="--", linewidth=1)
-    st.pyplot(fig, clear_figure=True, use_container_width=True)
-
-
 def render_coverage_view() -> None:
-    if not coverage_grid_exists(db_path):
-        st.warning("Coverage grid not built. Run build_coverage_grid.py.")
-        st.info("Coverage view disabled until coverage_grid is available.")
-        return
-    st.success("Coverage grid ready")
-    render_map("Coverage map", "Coverage grid")
-    with st.expander("RSSI heatmap", expanded=False):
-        render_map("RSSI heatmap", "Heatmap RSSI")
-    with st.expander("Distance heatmap", expanded=False):
-        render_map("Distance heatmap", "Heatmap distance")
+    section_map = st.container()
+    section_rssi = st.container()
+    section_distance = st.container()
+
+    with section_map:
+        st.subheader("Coverage map")
+        st.info("Feature not implemented yet")
+
+    with section_rssi:
+        st.subheader("RSSI heatmap")
+        st.info("Feature not implemented yet")
+
+    with section_distance:
+        st.subheader("Distance heatmap")
+        st.info("Feature not implemented yet")
 
 
 def render_signal_view() -> None:
-    render_scatter()
-    render_altitude_distance()
-    render_histogram()
+    section_signal = st.container()
+    section_altitude = st.container()
+    section_distribution = st.container()
+
+    with section_signal:
+        st.subheader("Signal vs distance")
+        st.info("Feature not implemented yet")
+
+    with section_altitude:
+        st.subheader("Altitude vs distance")
+        st.info("Feature not implemented yet")
+
+    with section_distribution:
+        st.subheader("Distance distribution")
+        st.info("Feature not implemented yet")
 
 
-def render_rf_diagnostics_view() -> None:
-    render_rf_analysis()
-    render_coverage_probability()
+def render_rf_view() -> None:
+    section_azimuth = st.container()
+    section_probability = st.container()
+    section_range = st.container()
+
+    with section_azimuth:
+        st.subheader("Azimuth radiation")
+        st.info("Feature not implemented yet")
+
+    with section_probability:
+        st.subheader("Coverage probability")
+        st.info("Feature not implemented yet")
+
+    with section_range:
+        st.subheader("Station range estimation")
+        st.info("Feature not implemented yet")
+
+
+def render_debug_view() -> None:
+    section_raw = st.container()
+    section_sql = st.container()
+    section_stats = st.container()
+
+    with section_raw:
+        st.subheader("Raw packets")
+        st.info("Feature not implemented yet")
+
+    with section_sql:
+        st.subheader("SQL info")
+        st.info("Feature not implemented yet")
+
+    with section_stats:
+        st.subheader("Dataset statistics")
+        st.info("Feature not implemented yet")
 
 
 with content_container:
@@ -1257,9 +962,9 @@ with content_container:
     elif view == "Signal":
         render_signal_view()
     elif view == "RF diagnostics":
-        render_rf_diagnostics_view()
+        render_rf_view()
     elif view == "Debug":
-        render_debug()
+        render_debug_view()
 if _PROFILER:
     _PROFILER.disable()
     st.caption("Profiling enabled (results printed to console).")
