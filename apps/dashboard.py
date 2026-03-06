@@ -115,6 +115,8 @@ BASEMAPS: Dict[str, Basemap] = {
     ),
 }
 
+DEFAULT_BASEMAP = "CARTO Positron (clair)"
+
 
 def haversine_km(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
     """Vectorized haversine distance in km."""
