@@ -1259,6 +1259,15 @@ def render_rf_view() -> None:
                     f"Shadow suspect: {'yes' if shadow_flag else 'no'} • "
                     f"Anisotropy: {anisotropy_level or 'n/a'}"
                 )
+                if "azimuth_center_deg" in data.columns and "max_distance_km" in data.columns:
+                    chart = data[["azimuth_center_deg", "max_distance_km"]].copy()
+                    chart = chart.sort_values("azimuth_center_deg")
+                    st.line_chart(
+                        chart,
+                        x="azimuth_center_deg",
+                        y="max_distance_km",
+                        height=240,
+                    )
                 st.dataframe(
                     data[
                         [
