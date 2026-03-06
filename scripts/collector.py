@@ -166,20 +166,27 @@ def db_connect(db_path: str) -> sqlite3.Connection:
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS packets (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            id       INTEGER PRIMARY KEY AUTOINCREMENT,
             ts_utc   TEXT    NOT NULL,
-            src     TEXT,
-            dst     TEXT,
-            igate   TEXT,
-            qas     TEXT,
-            lat     REAL,
-            lon     REAL,
-            raw     TEXT    NOT NULL
+            ts_epoch INTEGER,
+            src      TEXT,
+            dst      TEXT,
+            igate    TEXT,
+            qas      TEXT,
+            lat      REAL,
+            lon      REAL,
+            raw      TEXT    NOT NULL
         )
         """
     )
 
+    cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
+    if "ts_epoch" not in cols:
+        con.execute("ALTER TABLE packets ADD COLUMN ts_epoch INTEGER;")
+
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_ts    ON packets(ts_utc);")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch ON packets(ts_epoch DESC);")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch_dst ON packets(ts_epoch DESC, dst);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_src   ON packets(src);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_dst   ON packets(dst);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_igate ON packets(igate);")
@@ -191,8 +198,8 @@ def db_connect(db_path: str) -> sqlite3.Connection:
 def insert_many(con: sqlite3.Connection, rows: Iterable[Dict[str, Any]]) -> None:
     con.executemany(
         """
-        INSERT INTO packets (ts_utc, src, dst, igate, qas, lat, lon, raw)
-        VALUES (:ts_utc, :src, :dst, :igate, :qas, :lat, :lon, :raw)
+        INSERT INTO packets (ts_utc, ts_epoch, src, dst, igate, qas, lat, lon, raw)
+        VALUES (:ts_utc, :ts_epoch, :src, :dst, :igate, :qas, :lat, :lon, :raw)
         """,
         rows,
     )
@@ -240,7 +247,9 @@ def collect_forever() -> None:
                     rejected_total += 1
                     continue
 
-                pkt["ts_utc"] = dt.datetime.now(dt.timezone.utc).isoformat()
+                now = dt.datetime.now(dt.timezone.utc)
+                pkt["ts_utc"] = now.isoformat()
+                pkt["ts_epoch"] = int(now.timestamp())
                 pending.append(pkt)
 
                 if DEBUG and received_total % 250 == 0:
