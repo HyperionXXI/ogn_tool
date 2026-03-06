@@ -39,6 +39,35 @@ Implémentation
    reception_efficiency =
        distance_km / radio_horizon_km
 
+## Station altitude assumption
+
+The radio horizon calculation requires the altitude of the receiving station.
+
+The theoretical formula used is:
+
+radio_horizon_km = 3.57 * (sqrt(station_alt_m) + sqrt(aircraft_alt_m))
+
+In the current implementation, the station altitude may not always be available
+from configuration. When this value is missing, the system uses a fallback
+assumption:
+
+station_alt_m = 400 m
+
+This value was chosen as a reasonable approximation for many OGN stations
+located in European valleys.
+
+Important:
+- This value is only a fallback.
+- It should be replaced by the real station altitude when available.
+- Using an incorrect station altitude mainly affects the horizon estimate
+  and the efficiency_ratio metric.
+
+Future improvement:
+The station altitude should ideally be obtained from:
+- station configuration
+- GNSS metadata
+- digital elevation model (DEM)
+
 7. Construire DataFrame :
 
    lat
