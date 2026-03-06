@@ -7,6 +7,9 @@
 - 05 Station range: docs/rf_features/05_station_range.md
 - 06 Antenna diagnostics: docs/rf_features/06_antenna_diagnostics.md
 - 07 Radio horizon: docs/rf_features/07_radio_horizon.md
+  Compares observed reception distance with theoretical radio horizon based on aircraft altitude.
+  Note: If station altitude is not configured, a fallback value of 400 m is used.
+  See docs/rf_features/07_radio_horizon.md for details.
 - 08 Terrain analysis: docs/rf_features/08_terrain_analysis.md
 - 09 Station comparison: docs/rf_features/09_station_comparison.md
 - 10 Station quality: docs/rf_features/10_station_quality.md
