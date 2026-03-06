@@ -90,6 +90,19 @@ def analyze(
 
     df_plot = data.sample(n=min(len(data), 20000))
 
+    bin_size_km = 10
+    data_bins = data.copy()
+    data_bins["distance_bin_km"] = (data_bins["distance_km"] // bin_size_km) * bin_size_km
+    binned = (
+        data_bins.groupby("distance_bin_km", as_index=False)
+        .agg(
+            rssi_median=("rssi_db", "median"),
+            rssi_p90=("rssi_db", lambda x: np.percentile(x, 90)),
+            sample_count=("rssi_db", "size"),
+        )
+        .sort_values("distance_bin_km")
+    )
+
     return {
         "implemented": True,
         "summary": {
@@ -102,4 +115,5 @@ def analyze(
             "distance_rows": distance_rows,
         },
         "data": df_plot,
+        "binned_data": binned,
     }

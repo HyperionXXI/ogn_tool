@@ -1070,6 +1070,15 @@ def render_signal_view() -> None:
                 with c4:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                if "distance_km" in data.columns and "rssi_db" in data.columns:
+                    st.markdown("**RSSI vs distance**")
+                    st.scatter_chart(data, x="distance_km", y="rssi_db")
+                    binned = result.get("binned_data")
+                    if binned is not None and not binned.empty:
+                        st.markdown("**RSSI median by distance bin**")
+                        st.line_chart(binned, x="distance_bin_km", y="rssi_median")
+                else:
+                    st.info("RSSI vs distance data missing required columns.")
                 st.dataframe(data.head(20), use_container_width=True)
 
     with section_altitude:
