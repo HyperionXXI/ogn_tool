@@ -938,8 +938,34 @@ def render_coverage_view() -> None:
 
     with section_map:
         st.subheader("Coverage map")
+        local_packets = _load_packets_window_raw(
+            db_path=db_path,
+            since_iso=filters_apply["since_iso"],
+            since_epoch=filters_apply["since_epoch"],
+            dst_types=dst_types,
+            station_callsign=station_callsign,
+            only_heard_by=False,
+            igate_filter=station_callsign,
+            source_mode="Heard-by station",
+            qas_filter="",
+            limit_rows=limit_rows,
+        )
+        global_packets = _load_packets_window_raw(
+            db_path=db_path,
+            since_iso=filters_apply["since_iso"],
+            since_epoch=filters_apply["since_epoch"],
+            dst_types=dst_types,
+            station_callsign=station_callsign,
+            only_heard_by=False,
+            igate_filter="",
+            source_mode="Heard-by station",
+            qas_filter="",
+            limit_rows=limit_rows,
+        )
         shadow_ctx = {
-            "packets": get_packets_context().df_packets,
+            "packets": local_packets,
+            "packets_global": global_packets,
+            "packets_local": local_packets,
             "station_callsign": station_callsign,
             "cell_size_km": 3.0,
         }
@@ -1072,10 +1098,12 @@ def render_rf_view() -> None:
                 best_sector = summary.get("best_sector_deg")
                 worst_sector = summary.get("worst_sector_deg")
                 shadow_flag = summary.get("shadow_suspect")
+                anisotropy_level = summary.get("anisotropy_level")
                 st.caption(
                     f"Best sector: {fmt_float(best_sector, 0)}° • "
                     f"Worst sector: {fmt_float(worst_sector, 0)}° • "
-                    f"Shadow suspect: {'yes' if shadow_flag else 'no'}"
+                    f"Shadow suspect: {'yes' if shadow_flag else 'no'} • "
+                    f"Anisotropy: {anisotropy_level or 'n/a'}"
                 )
                 st.dataframe(
                     data[

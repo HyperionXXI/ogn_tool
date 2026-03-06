@@ -13,18 +13,24 @@ import pandas as pd
 
 def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
     df_packets = context.get("packets")
+    df_global = context.get("packets_global")
+    if df_global is None:
+        df_global = df_packets
+    df_local = context.get("packets_local")
+    if df_local is None:
+        df_local = df_packets
     station_callsign = context.get("station_callsign")
     cell_size_km = float(context.get("cell_size_km", 3.0))
 
-    if df_packets is None or df_packets.empty or not station_callsign:
+    if df_global is None or df_global.empty or not station_callsign:
         return {
             "implemented": False,
             "summary": {},
             "data": None,
         }
 
-    lat = pd.to_numeric(df_packets.get("lat"), errors="coerce")
-    lon = pd.to_numeric(df_packets.get("lon"), errors="coerce")
+    lat = pd.to_numeric(df_global.get("lat"), errors="coerce")
+    lon = pd.to_numeric(df_global.get("lon"), errors="coerce")
     if lat is None or lon is None:
         return {
             "implemented": False,
@@ -46,14 +52,31 @@ def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
     df = pd.DataFrame({"lat": lat, "lon": lon})
 
     # Local RX detection: prefer igate column, fallback to raw contains callsign
-    if "igate" in df_packets.columns:
-        igate = df_packets.loc[valid, "igate"].astype(str)
-        local_mask = igate.eq(station_callsign)
-    elif "raw" in df_packets.columns:
-        raw = df_packets.loc[valid, "raw"].astype(str)
-        local_mask = raw.str.contains(f",{station_callsign}:", na=False)
+    local_mask = pd.Series([False] * len(df), index=df.index)
+    if df_local is not None and not df_local.empty:
+        local_lat = pd.to_numeric(df_local.get("lat"), errors="coerce")
+        local_lon = pd.to_numeric(df_local.get("lon"), errors="coerce")
+        local_valid = local_lat.notna() & local_lon.notna()
+        if "igate" in df_local.columns:
+            igate = df_local.loc[local_valid, "igate"].astype(str)
+            local_points = igate.eq(station_callsign)
+        elif "raw" in df_local.columns:
+            raw = df_local.loc[local_valid, "raw"].astype(str)
+            local_points = raw.str.contains(f",{station_callsign}:", na=False)
+        else:
+            local_points = pd.Series([False] * int(local_valid.sum()))
+        if local_valid.any():
+            local_df = pd.DataFrame(
+                {
+                    "lat": local_lat[local_valid].to_numpy(),
+                    "lon": local_lon[local_valid].to_numpy(),
+                    "is_local": local_points.to_numpy(),
+                }
+            )
+        else:
+            local_df = pd.DataFrame(columns=["lat", "lon", "is_local"])
     else:
-        local_mask = pd.Series([False] * len(df), index=df.index)
+        local_df = pd.DataFrame(columns=["lat", "lon", "is_local"])
 
     df["cell_x"] = np.floor(df["lon"].to_numpy() / cell_size_deg).astype(int)
     df["cell_y"] = np.floor(df["lat"].to_numpy() / cell_size_deg).astype(int)
@@ -67,7 +90,10 @@ def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
         )
     )
 
-    local_df = df[local_mask]
+    global_points = int(len(df))
+    local_points = int(local_df["is_local"].sum()) if "is_local" in local_df.columns else 0
+
+    local_df = local_df[local_df["is_local"]] if "is_local" in local_df.columns else pd.DataFrame()
     if local_df.empty:
         merged = global_counts.copy()
         merged["aircraft_local"] = 0
@@ -90,11 +116,15 @@ def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
                 "cells_total": 0,
                 "shadow_cells": 0,
                 "coverage_mean": None,
+                "global_points": global_points,
+                "local_points": local_points,
+                "usable_cells": 0,
             },
             "data": merged,
         }
 
     cells_total = int(len(merged))
+    usable_cells = int(len(merged))
     shadow_cells = int((merged["reception_ratio"] < 0.2).sum())
     coverage_mean = float(merged["reception_ratio"].mean())
 
@@ -104,6 +134,9 @@ def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
             "cells_total": cells_total,
             "shadow_cells": shadow_cells,
             "coverage_mean": coverage_mean,
+            "global_points": global_points,
+            "local_points": local_points,
+            "usable_cells": usable_cells,
         },
         "data": merged[
             [
