@@ -32,6 +32,10 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import streamlit as st
+try:
+    import plotly.graph_objects as go
+except Exception:  # pragma: no cover
+    go = None
 
 from ogn_tool.config import get_config
 from ogn_tool.db import connect
@@ -1072,11 +1076,39 @@ def render_signal_view() -> None:
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
                 if "distance_km" in data.columns and "rssi_db" in data.columns:
                     st.markdown("**RSSI vs distance**")
-                    st.scatter_chart(data, x="distance_km", y="rssi_db")
                     binned = result.get("binned_data")
-                    if binned is not None and not binned.empty:
-                        st.markdown("**RSSI median by distance bin**")
-                        st.line_chart(binned, x="distance_bin_km", y="rssi_median")
+                    if go is not None:
+                        fig = go.Figure()
+                        fig.add_trace(
+                            go.Scatter(
+                                x=data["distance_km"],
+                                y=data["rssi_db"],
+                                mode="markers",
+                                name="Packets",
+                                marker=dict(size=3, opacity=0.2),
+                            )
+                        )
+                        if binned is not None and not binned.empty:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=binned["distance_bin_km"],
+                                    y=binned["rssi_median"],
+                                    mode="lines",
+                                    name="Median RSSI",
+                                    line=dict(width=3, color="#f97316"),
+                                )
+                            )
+                        fig.update_layout(
+                            height=420,
+                            margin=dict(l=20, r=20, t=30, b=20),
+                            showlegend=True,
+                            legend=dict(orientation="h", x=0, y=1.02),
+                            xaxis_title="Distance (km)",
+                            yaxis_title="RSSI (dB)",
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.scatter_chart(data, x="distance_km", y="rssi_db")
                 else:
                     st.info("RSSI vs distance data missing required columns.")
                 st.dataframe(data.head(20), use_container_width=True)
