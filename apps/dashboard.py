@@ -1033,9 +1033,44 @@ def render_signal_view() -> None:
 
     with section_signal:
         st.subheader("Signal vs distance")
-        result = analysis_signal_distance.analyze(df_grid)
+        packets_signal = _load_packets_window_raw(
+            db_path=db_path,
+            since_iso=filters_apply["since_iso"],
+            since_epoch=filters_apply["since_epoch"],
+            dst_types=dst_types,
+            station_callsign=station_callsign,
+            only_heard_by=False,
+            igate_filter="",
+            source_mode="Heard-by station",
+            qas_filter="",
+            limit_rows=limit_rows,
+        )
+        result = analysis_signal_distance.analyze(
+            packets_signal,
+            station_lat=station_lat,
+            station_lon=station_lon,
+        )
         if not result.get("implemented"):
             st.info("Signal vs distance analysis not implemented.")
+        else:
+            summary = result.get("summary") or {}
+            data = result.get("data")
+            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
+                st.info("No data available.")
+            else:
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    st.metric("Packet total", fmt_int(summary.get("packet_total")))
+                with c2:
+                    val = summary.get("max_distance_km")
+                    st.metric("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c3:
+                    val = summary.get("mean_rssi")
+                    st.metric("Mean RSSI (dB)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c4:
+                    val = summary.get("p95_distance_km")
+                    st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                st.dataframe(data.head(20), use_container_width=True)
 
     with section_altitude:
         st.subheader("Altitude vs distance")
