@@ -56,6 +56,25 @@ court est fourni plus bas.
 
 ------------------------------------------------------------------------
 
+## RF analysis pipeline
+
+Le projet contient des modules d’analyse RF dans `src/ogn_tool/analysis` qui
+traitent les données de couverture pour évaluer la performance RF d’une
+station sol OGN :
+
+- `signal_distance`
+- `station_range`
+- `station_quality`
+- `polar`
+- `shadow_map`
+- `terrain`
+- `antenna_health`
+- `station_compare`
+- `altitude_distance`
+- `radio_horizon`
+
+------------------------------------------------------------------------
+
 ## Chaîne radio complète
 
 <pre>
