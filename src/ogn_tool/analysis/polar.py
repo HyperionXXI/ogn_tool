@@ -12,8 +12,6 @@ import os
 import numpy as np
 import pandas as pd
 
-from ogn_tool.config import get_config
-
 
 def _bearing_deg(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
     lat1_r = np.radians(lat1)
@@ -27,7 +25,12 @@ def _bearing_deg(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -
     return (brng + 360.0) % 360.0
 
 
-def analyze(df_grid: pd.DataFrame) -> Dict[str, Any]:
+def analyze(
+    df_grid: pd.DataFrame,
+    station_lat: float | None = None,
+    station_lon: float | None = None,
+    **_: Any,
+) -> Dict[str, Any]:
     if df_grid is None or df_grid.empty:
         return {
             "implemented": True,
@@ -35,9 +38,6 @@ def analyze(df_grid: pd.DataFrame) -> Dict[str, Any]:
             "data": None,
         }
 
-    cfg = get_config()
-    station_lat = getattr(cfg, "roof_lat", None)
-    station_lon = getattr(cfg, "roof_lon", None)
     if station_lat is None or station_lon is None:
         env_lat = os.getenv("OGN_STATION_LAT")
         env_lon = os.getenv("OGN_STATION_LON")
