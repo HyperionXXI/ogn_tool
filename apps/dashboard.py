@@ -36,6 +36,14 @@ import streamlit as st
 from ogn_tool.config import get_config
 from ogn_tool.db import connect
 from ogn_tool.rf_analysis import compute_azimuth_stats, compute_distance_probability, reliable_distance_km
+from ogn_tool.analysis import polar as analysis_polar
+from ogn_tool.analysis import signal_distance as analysis_signal_distance
+from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
+from ogn_tool.analysis import shadow_map as analysis_shadow_map
+from ogn_tool.analysis import station_range as analysis_station_range
+from ogn_tool.analysis import terrain as analysis_terrain
+from ogn_tool.analysis import station_compare as analysis_station_compare
+from ogn_tool.analysis import station_quality as analysis_station_quality
 
 try:
     from streamlit_folium import st_folium
@@ -889,17 +897,25 @@ def render_coverage_view() -> None:
     section_rssi = st.container()
     section_distance = st.container()
 
+    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
+
     with section_map:
         st.subheader("Coverage map")
-        st.info("Feature not implemented yet")
+        result = analysis_shadow_map.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
     with section_rssi:
         st.subheader("RSSI heatmap")
-        st.info("Feature not implemented yet")
+        result = analysis_signal_distance.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
     with section_distance:
         st.subheader("Distance heatmap")
-        st.info("Feature not implemented yet")
+        result = analysis_station_range.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
 
 def render_signal_view() -> None:
@@ -907,17 +923,25 @@ def render_signal_view() -> None:
     section_altitude = st.container()
     section_distribution = st.container()
 
+    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
+
     with section_signal:
         st.subheader("Signal vs distance")
-        st.info("Feature not implemented yet")
+        result = analysis_signal_distance.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
     with section_altitude:
         st.subheader("Altitude vs distance")
-        st.info("Feature not implemented yet")
+        result = analysis_altitude_distance.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
     with section_distribution:
         st.subheader("Distance distribution")
-        st.info("Feature not implemented yet")
+        result = analysis_station_range.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
 
 def render_rf_view() -> None:
@@ -925,17 +949,25 @@ def render_rf_view() -> None:
     section_probability = st.container()
     section_range = st.container()
 
+    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
+
     with section_azimuth:
         st.subheader("Azimuth radiation")
-        st.info("Feature not implemented yet")
+        result = analysis_polar.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
     with section_probability:
         st.subheader("Coverage probability")
-        st.info("Feature not implemented yet")
+        result = analysis_station_quality.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
     with section_range:
         st.subheader("Station range estimation")
-        st.info("Feature not implemented yet")
+        result = analysis_station_range.analyze(df_grid)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
 
 def render_debug_view() -> None:
@@ -945,15 +977,25 @@ def render_debug_view() -> None:
 
     with section_raw:
         st.subheader("Raw packets")
-        st.info("Feature not implemented yet")
+        if not raw_packets_mode:
+            st.info("Raw packets are disabled. Enable in Advanced settings.")
+        else:
+            ctx = get_packets_context()
+            result = analysis_station_compare.analyze(ctx.df_packets)
+            if not result.get("implemented"):
+                st.info("Feature not implemented yet")
 
     with section_sql:
         st.subheader("SQL info")
-        st.info("Feature not implemented yet")
+        result = analysis_terrain.analyze({"rows_total": rows_total, "last_ts": last_ts})
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
     with section_stats:
         st.subheader("Dataset statistics")
-        st.info("Feature not implemented yet")
+        result = analysis_station_quality.analyze(grid_df_kpi)
+        if not result.get("implemented"):
+            st.info("Feature not implemented yet")
 
 
 with content_container:
