@@ -989,26 +989,26 @@ def render_map(title: str, mode: str) -> None:
 
 def render_scatter() -> None:
     st.subheader("Received signal strength vs distance")
-    ctx = get_packets_context()
-    if ctx.df_packets.empty:
-        st.warning("No packets in the selected time window.")
+    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
+    if df_grid.empty:
+        st.warning("Coverage grid is empty. Build it first.")
         return
     with st.spinner("Loading scatter..."):
-        df_sd = ctx.df_packets.copy()
-        df_sd["rx_db"] = pd.to_numeric(df_sd["rx_db"], errors="coerce")
-        df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
-        df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
+        df_sd = df_grid.copy()
+        df_sd["best_rssi_db"] = pd.to_numeric(df_sd.get("best_rssi_db", np.nan), errors="coerce")
+        df_sd["max_distance_km"] = pd.to_numeric(df_sd.get("max_distance_km", np.nan), errors="coerce")
+        df_sd = df_sd[df_sd["best_rssi_db"].notna() & df_sd["max_distance_km"].notna()]
         max_points = min(2000, scatter_max_points)
         if len(df_sd) > max_points:
             df_sd = df_sd.sample(n=max_points, random_state=1)
         if df_sd.empty:
-            st.warning("No points with both dB and distance.")
+            st.warning("No points with both RSSI and distance.")
         else:
             import matplotlib.pyplot as plt
             plt.style.use("seaborn-v0_8")
             fig = plt.figure(figsize=(10, 4))
-            plt.scatter(df_sd["distance_km"].to_numpy(), df_sd["rx_db"].to_numpy(), s=14, alpha=0.65)
-            plt.title("Received signal strength vs distance", fontsize=16)
+            plt.scatter(df_sd["max_distance_km"].to_numpy(), df_sd["best_rssi_db"].to_numpy(), s=14, alpha=0.65)
+            plt.title("RSSI vs distance (grid)", fontsize=16)
             plt.xlabel("Distance (km)")
             plt.ylabel("Signal (dB)")
             plt.grid(alpha=0.3)
@@ -1017,12 +1017,12 @@ def render_scatter() -> None:
 
 def render_histogram() -> None:
     st.subheader("Distance distribution")
-    ctx = get_packets_context()
-    if ctx.df_packets.empty:
-        st.warning("No packets in the selected time window.")
+    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
+    if df_grid.empty:
+        st.warning("Coverage grid is empty. Build it first.")
         return
     with st.spinner("Loading histogram..."):
-        dist = pd.to_numeric(ctx.df_packets.get("distance_km", pd.Series(dtype=float)), errors="coerce").dropna()
+        dist = pd.to_numeric(df_grid.get("max_distance_km", pd.Series(dtype=float)), errors="coerce").dropna()
         if dist.empty:
             st.warning("No distance data available.")
         else:
@@ -1039,33 +1039,7 @@ def render_histogram() -> None:
 
 def render_altitude_distance() -> None:
     st.subheader("Altitude vs distance")
-    ctx = get_packets_context()
-    if ctx.df_packets.empty:
-        st.warning("No packets in the selected time window.")
-        return
-    alt_col = None
-    for candidate in ("altitude", "alt", "alt_m"):
-        if candidate in ctx.df_packets.columns:
-            alt_col = candidate
-            break
-    if alt_col is None:
-        st.info("Altitude data not available in the current dataset.")
-        return
-    with st.spinner("Loading altitude plot..."):
-        import matplotlib.pyplot as plt
-        plt.style.use("seaborn-v0_8")
-        fig = plt.figure(figsize=(10, 4))
-        plt.scatter(
-            pd.to_numeric(ctx.df_packets.get("distance_km"), errors="coerce"),
-            pd.to_numeric(ctx.df_packets.get(alt_col), errors="coerce"),
-            s=12,
-            alpha=0.6,
-        )
-        plt.title("Altitude vs distance", fontsize=16)
-        plt.xlabel("Distance (km)")
-        plt.ylabel("Altitude")
-        plt.grid(alpha=0.3)
-        st.pyplot(fig, clear_figure=True, use_container_width=True)
+    st.info("Altitude vs distance requires raw packets. Enable in Debug only.")
 
 
 def render_rf_analysis() -> None:
@@ -1136,35 +1110,35 @@ def render_rf_analysis() -> None:
 
 def render_debug() -> None:
     st.subheader("Debug")
-    ctx = get_packets_context()
-    if ctx.df_packets.empty:
-        st.info("No data.")
+    if not raw_packets_mode:
+        st.info("Raw packets are disabled. Enable in Advanced settings.")
     else:
-        with st.spinner("Loading debug..."):
-            if raw_packets_mode:
+        ctx = get_packets_context()
+        if ctx.df_packets.empty:
+            st.info("No data.")
+        else:
+            with st.spinner("Loading debug..."):
                 st.subheader("Raw packets (sample)")
                 cols = ["ts_utc", "src", "dst", "igate", "qas", "raw"]
                 existing_cols = [c for c in cols if c in ctx.df_packets.columns]
                 st.dataframe(ctx.df_packets[existing_cols].head(200), width="stretch", height=320)
-            else:
-                st.info("Raw packets are disabled. Enable in Advanced settings.")
 
-            st.subheader("Top sources")
-            top_src = ctx.df_packets["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
-            st.dataframe(top_src, width="stretch", height=240)
+                st.subheader("Top sources")
+                top_src = ctx.df_packets["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
+                st.dataframe(top_src, width="stretch", height=240)
 
-            st.subheader("Top IGates")
-            ig = ctx.df_packets["igate"].replace("", np.nan).dropna()
-            top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
-            st.dataframe(top_ig, width="stretch", height=240)
+                st.subheader("Top IGates")
+                ig = ctx.df_packets["igate"].replace("", np.nan).dropna()
+                top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
+                st.dataframe(top_ig, width="stretch", height=240)
 
-            st.subheader("Dataset stats")
-            st.json({
-                "rows_window": int(len(ctx.df_packets)),
-                "columns": list(ctx.df_packets.columns),
-                "lat_non_null": int(ctx.df_packets["lat"].notna().sum()) if "lat" in ctx.df_packets.columns else 0,
-                "lon_non_null": int(ctx.df_packets["lon"].notna().sum()) if "lon" in ctx.df_packets.columns else 0,
-            })
+                st.subheader("Dataset stats")
+                st.json({
+                    "rows_window": int(len(ctx.df_packets)),
+                    "columns": list(ctx.df_packets.columns),
+                    "lat_non_null": int(ctx.df_packets["lat"].notna().sum()) if "lat" in ctx.df_packets.columns else 0,
+                    "lon_non_null": int(ctx.df_packets["lon"].notna().sum()) if "lon" in ctx.df_packets.columns else 0,
+                })
 
     with st.expander("SQL info", expanded=False):
         st.json({
