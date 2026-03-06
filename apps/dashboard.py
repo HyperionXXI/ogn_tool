@@ -1085,7 +1085,7 @@ def render_signal_view() -> None:
                                 y=data["rssi_db"],
                                 mode="markers",
                                 name="Packets",
-                                marker=dict(size=3, opacity=0.2),
+                                marker=dict(size=2, opacity=0.18),
                             )
                         )
                         if binned is not None and not binned.empty:
@@ -1141,9 +1141,54 @@ def render_signal_view() -> None:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
                 if "distance_km" in data.columns and "altitude_m" in data.columns:
-                    st.scatter_chart(data, x="distance_km", y="altitude_m")
+                    if go is not None:
+                        fig = go.Figure()
+                        fig.add_trace(
+                            go.Scatter(
+                                x=data["distance_km"],
+                                y=data["altitude_m"],
+                                mode="markers",
+                                name="Packets",
+                                marker=dict(size=2, opacity=0.18),
+                            )
+                        )
+                        bins = (data["distance_km"] // 10) * 10
+                        med = (
+                            data.assign(distance_bin_km=bins)
+                            .groupby("distance_bin_km", as_index=False)
+                            .agg(altitude_median=("altitude_m", "median"))
+                            .sort_values("distance_bin_km")
+                        )
+                        if not med.empty:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=med["distance_bin_km"],
+                                    y=med["altitude_median"],
+                                    mode="lines",
+                                    name="Median altitude",
+                                    line=dict(width=3, color="#0ea5e9"),
+                                )
+                            )
+                        fig.update_layout(
+                            height=420,
+                            margin=dict(l=20, r=20, t=30, b=20),
+                            showlegend=True,
+                            legend=dict(orientation="h", x=0, y=1.02),
+                            xaxis_title="Distance (km)",
+                            yaxis_title="Altitude (m)",
+                            # limit altitude axis for readability; extreme outliers remain in table/statistics
+                            yaxis=dict(range=[0, 4000]),
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.scatter_chart(data, x="distance_km", y="altitude_m")
                 binned = result.get("binned_data")
                 if binned is not None and not binned.empty:
+                    order = ["0-500 m", "500-1000 m", "1000-2000 m", ">2000 m"]
+                    if "altitude_bin" in binned.columns:
+                        binned = binned.copy()
+                        binned["altitude_bin"] = pd.Categorical(binned["altitude_bin"], categories=order, ordered=True)
+                        binned = binned.sort_values("altitude_bin")
                     st.dataframe(binned, use_container_width=True)
 
     with section_distribution:
