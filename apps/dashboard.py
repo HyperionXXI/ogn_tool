@@ -904,17 +904,17 @@ def render_map(title: str, mode: str) -> None:
                     ).add_to(m)
             if not use_cov_grid:
                 st.warning("Coverage grid is required for maps. Enable it in filters.")
-                st_folium(m, height=750, use_container_width=True)
+                st_folium(m, height=750, use_container_width=True, key=f"map_{mode}_{title}_missing_grid")
                 return
             df_points = load_coverage_grid(db_path, filters_apply["since_epoch"])
             if "lat" not in df_points.columns or "lon" not in df_points.columns:
                 st.warning("Coverage grid missing or invalid (lat/lon columns not found).")
-                st_folium(m, height=750, use_container_width=True)
+                st_folium(m, height=750, use_container_width=True, key=f"map_{mode}_{title}_missing_cols")
                 return
             df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
             if df_points.empty:
                 st.warning("No packets in the selected time window.")
-                st_folium(m, height=750, use_container_width=True)
+                st_folium(m, height=750, use_container_width=True, key=f"map_{mode}_{title}_empty")
                 return
             max_cells_display = min(3000, map_max_points)
             if len(df_points) > max_cells_display:
@@ -984,7 +984,12 @@ def render_map(title: str, mode: str) -> None:
                         fill_opacity=0.75,
                         popup=popup,
                     ).add_to(layer)
-            st_folium(m, height=750, use_container_width=True)
+            st_folium(
+                m,
+                height=750,
+                use_container_width=True,
+                key=f"map_{mode}_{title}".replace(" ", "_").lower(),
+            )
 
 
 def render_scatter() -> None:
