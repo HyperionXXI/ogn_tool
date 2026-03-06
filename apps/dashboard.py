@@ -26,7 +26,7 @@ import re
 import sqlite3
 import time
 import pstats
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -44,6 +44,7 @@ from ogn_tool.analysis import station_range as analysis_station_range
 from ogn_tool.analysis import terrain as analysis_terrain
 from ogn_tool.analysis import station_compare as analysis_station_compare
 from ogn_tool.analysis import station_quality as analysis_station_quality
+from ogn_tool.analysis.grid_loader import load_coverage_grid as load_coverage_grid_base
 
 try:
     from streamlit_folium import st_folium
@@ -461,6 +462,7 @@ class AnalysisContext:
     filters_hash: str
     df_packets: pd.DataFrame
     metrics: Dict[str, Optional[float]]
+    df_grid: Optional[pd.DataFrame] = None
 
 
 def _filters_hash(filters: Dict[str, Any]) -> str:
@@ -709,13 +711,12 @@ elif rows_in_window == 0:
 else:
     db_status_label = "DB status: OK"
 
-# Grid status logic (green/yellow/red)
-grid_exists = coverage_grid_exists(db_path)
-grid_rows = 0
-if grid_exists:
-    grid_rows = int(len(load_coverage_grid(db_path, filters_apply["since_epoch"])))
+# Grid status logic
+grid_df_status = load_coverage_grid_base(db_path)
+st.session_state["grid_df"] = grid_df_status if grid_df_status is not None else None
+grid_cells = int(len(grid_df_status)) if grid_df_status is not None else 0
 grid_enabled = bool(use_cov_grid)
-if grid_exists and grid_enabled:
+if grid_df_status is not None and grid_enabled:
     grid_status_label = "GRID READY"
 else:
     grid_status_label = "GRID OFF — coverage grid not built"
@@ -723,17 +724,19 @@ else:
 last_packet_label = (last_ts[:19] + " UTC") if last_ts else "—"
 
 with status_container:
-    s1, s2, s3, s4 = st.columns(4)
+    s1, s2, s3, s4, s5 = st.columns(5)
     with s1:
         st.metric("DB status", db_status_label)
     with s2:
         st.metric("Grid status", grid_status_label)
-        if not grid_exists or not grid_enabled:
+        if grid_df_status is None or not grid_enabled:
             st.caption("Run scripts/build_coverage_grid.py to enable coverage analysis")
     with s3:
         st.metric("Last packet", last_packet_label)
     with s4:
         st.metric("Packets in window", fmt_int(rows_in_window))
+    with s5:
+        st.metric("Grid cells", fmt_int(grid_cells) if grid_df_status is not None else "—")
 
 apply_ts = st.session_state.get("last_apply_ts")
 apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
@@ -918,6 +921,9 @@ def get_packets_context() -> AnalysisContext:
     with st.status("Loading packets", expanded=False) as status:
         ctx = build_context(filters_apply, query_log=query_log if debug_sql else None)
         status.update(label="Packets loaded", state="complete")
+    grid_df_ctx = st.session_state.get("grid_df")
+    if grid_df_ctx is not None:
+        ctx = replace(ctx, df_grid=grid_df_ctx)
     st.session_state["packets_ctx"] = ctx
     st.session_state["packets_ctx_hash"] = ctx_key
     return ctx
