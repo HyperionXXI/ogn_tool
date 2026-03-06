@@ -90,6 +90,7 @@ def analyze(
 
     df_plot = data.sample(n=min(len(data), 20000))
 
+    # Feature 02 keeps finer 10 km bins for RF readability
     bin_size_km = 10
     data_bins = data.copy()
     data_bins["distance_bin_km"] = (data_bins["distance_km"] // bin_size_km) * bin_size_km

@@ -1152,7 +1152,8 @@ def render_signal_view() -> None:
                                 marker=dict(size=2, opacity=0.18),
                             )
                         )
-                        bins = (data["distance_km"] // 10) * 10
+                        # Feature 03 uses 20 km bins for altitude trend readability
+                        bins = (data["distance_km"] // 20) * 20
                         med = (
                             data.assign(distance_bin_km=bins)
                             .groupby("distance_bin_km", as_index=False)
