@@ -3,6 +3,7 @@
 # ogn_tool --- Local OGN / APRS-IS log explorer
 
 ogn_tool is a **radio analysis tool** for OGN / FLARM / FANET stations.
+It is an **RF coverage analysis for OGN / FLARM / FANET ground stations**.
 It records radio frames relayed by the Open Glider Network (OGN) into a local
 database and lets you explore:
 - the real-world reception range of a station
@@ -20,6 +21,24 @@ visualize coverage and statistics with a Streamlit dashboard.
 
 Most acronyms are defined the first time they appear. A short glossary
 is also provided below.
+
+------------------------------------------------------------------------
+
+## Why this project exists
+
+- There are many tools to track aircraft.
+- There are very few tools to analyze the RF performance of a ground station.
+- This project analyzes OGN logs to study real-world radio coverage.
+
+------------------------------------------------------------------------
+
+## Typical use cases
+
+- Analyze the real coverage range of a station
+- Optimize an antenna or a radio site
+- Detect terrain-related shadow zones
+- Statistical reception analysis
+- Compare multiple OGN stations
 
 ------------------------------------------------------------------------
 
@@ -164,17 +183,9 @@ cannot reach the upstream feed.
 
 ------------------------------------------------------------------------
 
-## Screenshots
+## Dashboard preview
 
-Screenshots should be placed in:
-
-    docs/screenshots/
-
-Example reference once images exist:
-
-``` md
 ![Dashboard overview](docs/screenshots/dashboard_overview.png)
-```
 
 ------------------------------------------------------------------------
 
