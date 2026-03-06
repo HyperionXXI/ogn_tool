@@ -1221,11 +1221,31 @@ def render_signal_view() -> None:
 
 def render_rf_view() -> None:
     section_azimuth = st.container()
+    section_summary = st.container()
     section_probability = st.container()
     section_horizon = st.container()
     section_range = st.container()
 
     df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
+    quality_result = analysis_station_quality.analyze(df_grid)
+    range_result = analysis_station_range.analyze(df_grid)
+    packets_horizon = _load_packets_window_raw(
+        db_path=db_path,
+        since_iso=filters_apply["since_iso"],
+        since_epoch=filters_apply["since_epoch"],
+        dst_types=dst_types,
+        station_callsign=station_callsign,
+        only_heard_by=False,
+        igate_filter="",
+        source_mode="Heard-by station",
+        qas_filter="",
+        limit_rows=limit_rows,
+    )
+    horizon_result = analysis_radio_horizon.analyze(
+        packets_horizon,
+        station_lat=station_lat,
+        station_lon=station_lon,
+    )
 
     with section_azimuth:
         st.subheader("Azimuth radiation")
@@ -1284,9 +1304,49 @@ def render_rf_view() -> None:
                     use_container_width=True,
                 )
 
+    with section_summary:
+        st.subheader("Station synthesis")
+        quality_score = (quality_result.get("summary") or {}).get("quality_score")
+        if quality_score is None:
+            health_status = "N/A"
+        elif quality_score >= 80:
+            health_status = "GOOD"
+        elif quality_score >= 50:
+            health_status = "FAIR"
+        else:
+            health_status = "POOR"
+
+        p95_range = (range_result.get("summary") or {}).get("p95_distance_km")
+        if p95_range is None:
+            range_status = "N/A"
+        elif p95_range < 100:
+            range_status = "LOW"
+        elif p95_range < 200:
+            range_status = "NORMAL"
+        else:
+            range_status = "HIGH"
+
+        efficiency_ratio = (horizon_result.get("summary") or {}).get("efficiency_ratio")
+        if efficiency_ratio is None:
+            horizon_status = "N/A"
+        elif efficiency_ratio < 0.7:
+            horizon_status = "LOW"
+        elif efficiency_ratio < 1.1:
+            horizon_status = "NORMAL"
+        else:
+            horizon_status = "HIGH"
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Station health", health_status)
+        with c2:
+            st.metric("Range status", range_status)
+        with c3:
+            st.metric("Horizon status", horizon_status)
+
     with section_probability:
         st.subheader("Coverage probability")
-        result = analysis_station_quality.analyze(df_grid)
+        result = quality_result
         if not result.get("implemented"):
             st.info("Coverage probability analysis not implemented.")
         else:
@@ -1312,23 +1372,7 @@ def render_rf_view() -> None:
 
     with section_horizon:
         st.subheader("Radio horizon")
-        packets_horizon = _load_packets_window_raw(
-            db_path=db_path,
-            since_iso=filters_apply["since_iso"],
-            since_epoch=filters_apply["since_epoch"],
-            dst_types=dst_types,
-            station_callsign=station_callsign,
-            only_heard_by=False,
-            igate_filter="",
-            source_mode="Heard-by station",
-            qas_filter="",
-            limit_rows=limit_rows,
-        )
-        result = analysis_radio_horizon.analyze(
-            packets_horizon,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
+        result = horizon_result
         if not result.get("implemented"):
             st.info("Radio horizon analysis not implemented.")
         else:
@@ -1364,24 +1408,35 @@ def render_rf_view() -> None:
                                 y=data["distance_km"],
                                 mode="markers",
                                 name="Packets",
-                                marker=dict(size=3, opacity=0.2),
-                            )
-                        )
-                        max_axis = float(
-                            max(
-                                data["horizon_km"].max(),
-                                data["distance_km"].max(),
+                                marker=dict(size=2, opacity=0.15),
                             )
                         )
                         fig.add_trace(
                             go.Scatter(
-                                x=[0, max_axis],
-                                y=[0, max_axis],
+                                x=[0, 400],
+                                y=[0, 400],
                                 mode="lines",
-                                name="y = x",
-                                line=dict(width=2, color="#9ca3af", dash="dash"),
+                                name="Theoretical horizon",
+                                line=dict(width=2, color="#f97316"),
                             )
                         )
+                        bins = (data["horizon_km"] // 20) * 20
+                        med = (
+                            data.assign(horizon_bin_km=bins)
+                            .groupby("horizon_bin_km", as_index=False)
+                            .agg(distance_median=("distance_km", "median"))
+                            .sort_values("horizon_bin_km")
+                        )
+                        if not med.empty:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=med["horizon_bin_km"],
+                                    y=med["distance_median"],
+                                    mode="lines",
+                                    name="Median observed",
+                                    line=dict(width=3, color="#0ea5e9"),
+                                )
+                            )
                         fig.update_layout(
                             height=420,
                             margin=dict(l=20, r=20, t=30, b=20),
@@ -1390,6 +1445,7 @@ def render_rf_view() -> None:
                             xaxis_title="Horizon (km)",
                             yaxis_title="Distance (km)",
                             xaxis=dict(range=[0, 400]),
+                            yaxis=dict(range=[0, 400]),
                         )
                         st.plotly_chart(fig, use_container_width=True)
                     else:
@@ -1399,7 +1455,7 @@ def render_rf_view() -> None:
 
     with section_range:
         st.subheader("Station range estimation")
-        result = analysis_station_range.analyze(df_grid)
+        result = range_result
         if not result.get("implemented"):
             st.info("Station range estimation not implemented.")
         else:

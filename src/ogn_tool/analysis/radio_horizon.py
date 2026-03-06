@@ -64,6 +64,7 @@ def analyze(
 
     st_alt = float(400.0 if station_alt_m is None else station_alt_m)
     horizon_km = 3.57 * (np.sqrt(np.maximum(st_alt, 0.0)) + np.sqrt(alt_m))
+    horizon_theoretical_km = horizon_km.copy()
     valid_h = (horizon_km > 0) & np.isfinite(horizon_km)
     if not valid_h.any():
         return {"implemented": False, "summary": {}, "data": None}
@@ -77,6 +78,7 @@ def analyze(
         {
             "distance_km": dist,
             "horizon_km": horizon_km,
+            "horizon_theoretical_km": horizon_theoretical_km,
             "reception_ratio": ratio,
             "altitude_m": alt_m,
         }
