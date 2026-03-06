@@ -572,6 +572,7 @@ with st.sidebar:
         igate_filter = st.text_input("IGate filter (optional)", value=st.session_state["filters_edit"]["igate_filter"])
         use_cov_grid = st.checkbox("Use coverage grid (recommended)", value=bool(st.session_state["filters_edit"].get("use_cov_grid", True)))
 
+        st.caption("Filters are applied only when clicking 'Apply filters'.")
         apply_button = st.form_submit_button("Apply filters")
 
     if apply_button:
@@ -701,14 +702,23 @@ if not db_reachable:
 rows_in_window = 0
 if db_reachable and not grid_df_kpi.empty and "packet_count" in grid_df_kpi.columns:
     rows_in_window = int(np.nansum(pd.to_numeric(grid_df_kpi.get("packet_count"), errors="coerce")))
-db_status_label = "DB OK" if not db_error and rows_in_window > 0 else "DB WARN" if not db_error else "DB OFF"
+if db_error:
+    db_status_label = "DB status: ERROR (database unavailable)"
+elif rows_in_window == 0:
+    db_status_label = "DB status: OK (no packets in selected window)"
+else:
+    db_status_label = "DB status: OK"
 
 # Grid status logic (green/yellow/red)
 grid_exists = coverage_grid_exists(db_path)
 grid_rows = 0
 if grid_exists:
     grid_rows = int(len(load_coverage_grid(db_path, filters_apply["since_epoch"])))
-grid_status_label = "GRID OK" if grid_exists and grid_rows > 0 else "GRID WARN" if grid_exists else "GRID OFF"
+grid_enabled = bool(use_cov_grid)
+if grid_exists and grid_enabled:
+    grid_status_label = "GRID READY"
+else:
+    grid_status_label = "GRID OFF — coverage grid not built"
 
 last_packet_label = (last_ts[:19] + " UTC") if last_ts else "—"
 
@@ -718,6 +728,8 @@ with status_container:
         st.metric("DB status", db_status_label)
     with s2:
         st.metric("Grid status", grid_status_label)
+        if not grid_exists or not grid_enabled:
+            st.caption("Run scripts/build_coverage_grid.py to enable coverage analysis")
     with s3:
         st.metric("Last packet", last_packet_label)
     with s4:
@@ -732,7 +744,8 @@ st.info(f"Active filters: Station={station_callsign} | Window={hours}h | Types={
 with kpi_container:
     k1, k2, k3, k4 = st.columns(4)
     with k1:
-        st.metric("Packets received", fmt_int(packets_received) if packets_received is not None else "—")
+        packets_received_display = 0 if packets_received is None else packets_received
+        st.metric("Packets in window", fmt_int(packets_received_display))
     with k2:
         st.metric("Last packet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
     with k3:
@@ -776,9 +789,27 @@ with st.expander("Advanced settings", expanded=False):
         )
 
         st.subheader("Performance")
-        limit_rows_adv = st.slider("Max SQL rows", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
-        map_max_points_adv = st.slider("Max map points", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
-        scatter_max_points_adv = st.slider("Max scatter points", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
+        limit_rows_adv = st.slider(
+            "Max grid cells",
+            1000,
+            50000,
+            int(st.session_state["filters_edit"]["limit_rows"]),
+            help="Maximum number of grid cells used for coverage computation",
+        )
+        map_max_points_adv = st.slider(
+            "Max map points",
+            100,
+            5000,
+            int(st.session_state["filters_edit"]["map_max_points"]),
+            help="Maximum number of markers displayed on the map",
+        )
+        scatter_max_points_adv = st.slider(
+            "Max scatter points",
+            100,
+            5000,
+            int(st.session_state["filters_edit"]["scatter_max_points"]),
+            help="Maximum number of points rendered in charts",
+        )
         do_autorefresh_adv = st.checkbox("Auto-refresh (30s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"]))
         perf_cache_adv = st.checkbox("Enable cache", value=bool(st.session_state["filters_edit"].get("perf_cache", True)))
 
@@ -903,19 +934,19 @@ def render_coverage_view() -> None:
         st.subheader("Coverage map")
         result = analysis_shadow_map.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Coverage map not available.\nRequires coverage_grid dataset.")
 
     with section_rssi:
         st.subheader("RSSI heatmap")
         result = analysis_signal_distance.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("RSSI heatmap not available.\nRequires RSSI aggregation per grid cell.")
 
     with section_distance:
         st.subheader("Distance heatmap")
         result = analysis_station_range.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Distance heatmap not available.\nRequires distance statistics.")
 
 
 def render_signal_view() -> None:
@@ -929,19 +960,19 @@ def render_signal_view() -> None:
         st.subheader("Signal vs distance")
         result = analysis_signal_distance.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Signal vs distance analysis not implemented.")
 
     with section_altitude:
         st.subheader("Altitude vs distance")
         result = analysis_altitude_distance.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Altitude vs distance analysis not implemented.")
 
     with section_distribution:
         st.subheader("Distance distribution")
         result = analysis_station_range.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Distance distribution analysis not implemented.")
 
 
 def render_rf_view() -> None:
@@ -955,19 +986,19 @@ def render_rf_view() -> None:
         st.subheader("Azimuth radiation")
         result = analysis_polar.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Azimuth radiation analysis not implemented.")
 
     with section_probability:
         st.subheader("Coverage probability")
         result = analysis_station_quality.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Coverage probability analysis not implemented.")
 
     with section_range:
         st.subheader("Station range estimation")
         result = analysis_station_range.analyze(df_grid)
         if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+            st.info("Station range estimation not implemented.")
 
 
 def render_debug_view() -> None:
@@ -978,7 +1009,10 @@ def render_debug_view() -> None:
     with section_raw:
         st.subheader("Raw packets")
         if not raw_packets_mode:
-            st.info("Raw packets are disabled. Enable in Advanced settings.")
+            st.info(
+                "Raw packets disabled for performance.\n"
+                "Enable in Advanced settings → Developer → Raw packets mode"
+            )
         else:
             ctx = get_packets_context()
             result = analysis_station_compare.analyze(ctx.df_packets)
