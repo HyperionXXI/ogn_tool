@@ -48,6 +48,7 @@ from ogn_tool.analysis import station_range as analysis_station_range
 from ogn_tool.analysis import terrain as analysis_terrain
 from ogn_tool.analysis import station_compare as analysis_station_compare
 from ogn_tool.analysis import station_quality as analysis_station_quality
+from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
 from ogn_tool.analysis.grid_loader import load_coverage_grid as load_coverage_grid_base
 
 try:
@@ -1221,6 +1222,7 @@ def render_signal_view() -> None:
 def render_rf_view() -> None:
     section_azimuth = st.container()
     section_probability = st.container()
+    section_horizon = st.container()
     section_range = st.container()
 
     df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
@@ -1298,6 +1300,93 @@ def render_rf_view() -> None:
                     st.metric("Quality score", f"{fmt_float(val, 0)}" if val is not None else "—")
             else:
                 st.info("No quality statistics available.")
+
+    with section_horizon:
+        st.subheader("Radio horizon")
+        packets_horizon = _load_packets_window_raw(
+            db_path=db_path,
+            since_iso=filters_apply["since_iso"],
+            since_epoch=filters_apply["since_epoch"],
+            dst_types=dst_types,
+            station_callsign=station_callsign,
+            only_heard_by=False,
+            igate_filter="",
+            source_mode="Heard-by station",
+            qas_filter="",
+            limit_rows=limit_rows,
+        )
+        result = analysis_radio_horizon.analyze(
+            packets_horizon,
+            station_lat=station_lat,
+            station_lon=station_lon,
+        )
+        if not result.get("implemented"):
+            st.info("Radio horizon analysis not implemented.")
+        else:
+            summary = result.get("summary") or {}
+            data = result.get("data")
+            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
+                st.info("No data available.")
+            else:
+                c1, c2, c3, c4, c5 = st.columns(5)
+                with c1:
+                    st.metric("Packet total", fmt_int(summary.get("packet_total")))
+                with c2:
+                    val = summary.get("horizon_mean_km")
+                    st.metric("Horizon mean (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c3:
+                    val = summary.get("horizon_p95_km")
+                    st.metric("Horizon P95 (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c4:
+                    val = summary.get("observed_p95_distance_km")
+                    st.metric("Observed P95 (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c5:
+                    val = summary.get("efficiency_ratio")
+                    st.metric("Efficiency ratio", f"{fmt_float(val, 2)}" if val is not None else "—")
+                station_alt_used = summary.get("station_alt_m")
+                if station_alt_used is not None:
+                    st.caption(f"Station altitude used: {fmt_float(station_alt_used, 0)} m")
+                if "horizon_km" in data.columns and "distance_km" in data.columns:
+                    if go is not None:
+                        fig = go.Figure()
+                        fig.add_trace(
+                            go.Scatter(
+                                x=data["horizon_km"],
+                                y=data["distance_km"],
+                                mode="markers",
+                                name="Packets",
+                                marker=dict(size=3, opacity=0.2),
+                            )
+                        )
+                        max_axis = float(
+                            max(
+                                data["horizon_km"].max(),
+                                data["distance_km"].max(),
+                            )
+                        )
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[0, max_axis],
+                                y=[0, max_axis],
+                                mode="lines",
+                                name="y = x",
+                                line=dict(width=2, color="#9ca3af", dash="dash"),
+                            )
+                        )
+                        fig.update_layout(
+                            height=420,
+                            margin=dict(l=20, r=20, t=30, b=20),
+                            showlegend=True,
+                            legend=dict(orientation="h", x=0, y=1.02),
+                            xaxis_title="Horizon (km)",
+                            yaxis_title="Distance (km)",
+                            xaxis=dict(range=[0, 400]),
+                        )
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.scatter_chart(data, x="horizon_km", y="distance_km")
+                else:
+                    st.info("Radio horizon data missing required columns.")
 
     with section_range:
         st.subheader("Station range estimation")
