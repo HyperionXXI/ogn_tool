@@ -705,13 +705,15 @@ grid_status_label = "GRID OK" if grid_exists and grid_rows > 0 else "GRID WARN" 
 last_packet_label = (last_ts[:19] + " UTC") if last_ts else "—"
 
 with status_container:
-    s1, s2, s3 = st.columns(3)
+    s1, s2, s3, s4 = st.columns(4)
     with s1:
         st.metric("DB status", db_status_label)
     with s2:
         st.metric("Grid status", grid_status_label)
     with s3:
         st.metric("Last packet", last_packet_label)
+    with s4:
+        st.metric("Packets in window", fmt_int(rows_in_window))
 
 apply_ts = st.session_state.get("last_apply_ts")
 apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
@@ -1022,7 +1024,7 @@ def render_scatter() -> None:
     st.subheader("Received signal strength vs distance")
     df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
     if df_grid.empty:
-        st.warning("Coverage grid is empty. Build it first.")
+        st.info("No aggregated data available for this window.")
         return
     with st.spinner("Loading scatter..."):
         df_sd = df_grid.copy()
@@ -1050,7 +1052,7 @@ def render_histogram() -> None:
     st.subheader("Distance distribution")
     df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
     if df_grid.empty:
-        st.warning("Coverage grid is empty. Build it first.")
+        st.info("No aggregated data available for this window.")
         return
     with st.spinner("Loading histogram..."):
         dist = pd.to_numeric(df_grid.get("max_distance_km", pd.Series(dtype=float)), errors="coerce").dropna()
@@ -1077,7 +1079,7 @@ def render_rf_analysis() -> None:
     st.subheader("RF azimuth analysis")
     df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
     if df_grid.empty:
-        st.warning("Coverage grid is empty. Build it first.")
+        st.info("No aggregated data available for this window.")
         return
     with st.spinner("Calcul du diagramme RF..."):
         lat = pd.to_numeric(df_grid["lat"], errors="coerce")
