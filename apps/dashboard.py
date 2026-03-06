@@ -398,6 +398,20 @@ def load_coverage_grid(db_path: str, since_epoch: int) -> pd.DataFrame:
         con.close()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def coverage_grid_exists(db_path: str) -> bool:
+    if not os.path.exists(db_path):
+        return False
+    con = sqlite3.connect(db_path)
+    try:
+        row = con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='coverage_grid'"
+        ).fetchone()
+        return row is not None
+    finally:
+        con.close()
+
+
 # ---------------------------
 # Derived computations
 # ---------------------------
@@ -1207,6 +1221,10 @@ def render_coverage_probability() -> None:
 
 
 def render_coverage_view() -> None:
+    if coverage_grid_exists(db_path):
+        st.success("Coverage grid ready")
+    else:
+        st.warning("Coverage grid not built. Run build_coverage_grid.py.")
     render_map("Coverage map", "Coverage grid")
     with st.expander("RSSI heatmap", expanded=False):
         render_map("RSSI heatmap", "Heatmap RSSI")
