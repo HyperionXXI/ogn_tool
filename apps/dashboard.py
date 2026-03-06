@@ -938,23 +938,11 @@ def render_coverage_view() -> None:
 
     with section_map:
         st.subheader("Coverage map")
-        local_packets = _load_packets_window_raw(
+        raw_packets = _load_packets_window_raw(
             db_path=db_path,
             since_iso=filters_apply["since_iso"],
             since_epoch=filters_apply["since_epoch"],
-            dst_types=dst_types,
-            station_callsign=station_callsign,
-            only_heard_by=False,
-            igate_filter=station_callsign,
-            source_mode="Heard-by station",
-            qas_filter="",
-            limit_rows=limit_rows,
-        )
-        global_packets = _load_packets_window_raw(
-            db_path=db_path,
-            since_iso=filters_apply["since_iso"],
-            since_epoch=filters_apply["since_epoch"],
-            dst_types=dst_types,
+            dst_types=[],
             station_callsign=station_callsign,
             only_heard_by=False,
             igate_filter="",
@@ -963,15 +951,23 @@ def render_coverage_view() -> None:
             limit_rows=limit_rows,
         )
         shadow_ctx = {
-            "packets": local_packets,
-            "packets_global": global_packets,
-            "packets_local": local_packets,
+            "packets": raw_packets,
             "station_callsign": station_callsign,
             "cell_size_km": 3.0,
+            "window_hours": hours,
         }
         result = analysis_shadow_map.analyze(shadow_ctx)
         if not result.get("implemented"):
-            st.info("Coverage map not available.\nRequires coverage_grid dataset.")
+            reason = (result.get("summary") or {}).get("reason")
+            if reason == "no_local_packets_in_window":
+                summary = result.get("summary") or {}
+                msg = "No local packets found for this station in the selected time window."
+                last_ts = summary.get("last_local_rx_ts")
+                if last_ts:
+                    msg = f"{msg} Last local reception: {last_ts}."
+                st.info(msg)
+            else:
+                st.info("Coverage map not available.\nRequires coverage_grid dataset.")
         else:
             summary = result.get("summary") or {}
             data = result.get("data")
@@ -987,6 +983,13 @@ def render_coverage_view() -> None:
                 with c3:
                     val = summary.get("coverage_mean")
                     st.metric("Coverage mean", f"{fmt_float(val, 2)}" if val is not None else "—")
+                d1, d2, d3 = st.columns(3)
+                with d1:
+                    st.metric("Local points", fmt_int(summary.get("local_points")))
+                with d2:
+                    st.metric("Local igate", fmt_int(summary.get("local_points_igate")))
+                with d3:
+                    st.metric("Local raw", fmt_int(summary.get("local_points_raw")))
                 st.dataframe(data.head(30), use_container_width=True)
 
     with section_rssi:
