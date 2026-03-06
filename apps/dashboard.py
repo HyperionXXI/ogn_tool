@@ -641,6 +641,7 @@ else:
     rows_total, last_ts = db_meta(db_path)
 
 header_container = st.container()
+status_container = st.container()
 kpi_container = st.container()
 navigation_container = st.container()
 content_container = st.container()
@@ -666,21 +667,12 @@ if last_ts:
     except Exception:
         fresh_state = "unknown"
 
-if fresh_state == "ok":
-    st.success("🟢 Database live")
-elif fresh_state == "warn":
-    st.warning(f"🟠 Database slow (last packet {int(age_s)}s)")
-elif fresh_state == "err":
-    st.error(f"🔴 Database offline (last packet {int(age_s)}s)")
-else:
-    st.info("ℹ️ Database status unknown")
-
-apply_ts = st.session_state.get("last_apply_ts")
-apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
-types_str = "/".join(dst_types) if dst_types else "—"
-st.info(f"Active filters: Station={station_callsign} | Window={hours}h | Types={types_str} | Mode={mode} — Last apply: {apply_time}")
-
-grid_df_kpi = load_coverage_grid(db_path, filters_apply["since_epoch"])
+# Precompute coverage probability KPIs (fast on grid)
+grid_df_kpi = pd.DataFrame()
+try:
+    grid_df_kpi = load_coverage_grid(db_path, filters_apply["since_epoch"])
+except Exception:
+    grid_df_kpi = pd.DataFrame()
 packets_received = None
 max_distance_grid = None
 d90 = None
@@ -692,6 +684,40 @@ if not grid_df_kpi.empty:
     centers_kpi, probs_kpi = compute_distance_probability(dist_bins_kpi, pkt_bins_kpi, bin_size_km=5.0)
     if centers_kpi.size > 0:
         d90 = reliable_distance_km(centers_kpi, probs_kpi, threshold=0.9)
+
+# DB status logic (green/yellow/red)
+db_error = False
+db_reachable = os.path.exists(db_path)
+if not db_reachable:
+    db_error = True
+rows_in_window = 0
+if db_reachable and not grid_df_kpi.empty and "packet_count" in grid_df_kpi.columns:
+    rows_in_window = int(np.nansum(pd.to_numeric(grid_df_kpi.get("packet_count"), errors="coerce")))
+db_status_label = "DB OK" if not db_error and rows_in_window > 0 else "DB WARN" if not db_error else "DB OFF"
+
+# Grid status logic (green/yellow/red)
+grid_exists = coverage_grid_exists(db_path)
+grid_rows = 0
+if grid_exists:
+    grid_rows = int(len(load_coverage_grid(db_path, filters_apply["since_epoch"])))
+grid_status_label = "GRID OK" if grid_exists and grid_rows > 0 else "GRID WARN" if grid_exists else "GRID OFF"
+
+last_packet_label = (last_ts[:19] + " UTC") if last_ts else "—"
+
+with status_container:
+    s1, s2, s3 = st.columns(3)
+    with s1:
+        st.metric("DB status", db_status_label)
+    with s2:
+        st.metric("Grid status", grid_status_label)
+    with s3:
+        st.metric("Last packet", last_packet_label)
+
+apply_ts = st.session_state.get("last_apply_ts")
+apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
+types_str = "/".join(dst_types) if dst_types else "—"
+st.info(f"Active filters: Station={station_callsign} | Window={hours}h | Types={types_str} | Mode={mode} — Last apply: {apply_time}")
+
 
 with kpi_container:
     k1, k2, k3, k4 = st.columns(4)
@@ -1200,10 +1226,11 @@ def render_coverage_probability() -> None:
 
 
 def render_coverage_view() -> None:
-    if coverage_grid_exists(db_path):
-        st.success("Coverage grid ready")
-    else:
+    if not coverage_grid_exists(db_path):
         st.warning("Coverage grid not built. Run build_coverage_grid.py.")
+        st.info("Coverage view disabled until coverage_grid is available.")
+        return
+    st.success("Coverage grid ready")
     render_map("Coverage map", "Coverage grid")
     with st.expander("RSSI heatmap", expanded=False):
         render_map("RSSI heatmap", "Heatmap RSSI")
