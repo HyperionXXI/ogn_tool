@@ -3,11 +3,11 @@
 r"""
 OGN / APRS-IS — Dashboard local (SQLite)
 
-Objectifs:
-- UI claire (wide), pas de régression (carte + signal-vs-distance quand data dispo)
-- Robuste: tolère de petites variations de schéma (colonnes absentes)
-- "Coverage" = paquets "heard-by" ta station (igate=FK50887 ou raw contient ",FK50887:")
-- Performance: fenêtre temporelle + limite rows SQL + cache TTL
+Objectives:
+- Clear UI (wide), no regression (map + signal-vs-distance when data available)
+- Robust to small schema variations (missing columns)
+- "Coverage" = packets heard-by your station (igate=FK50887 or raw contains ",FK50887:")
+- Performance: time window + SQL row limit + cache TTL
 
 Run:
   streamlit run .\dashboard.py
@@ -43,7 +43,7 @@ try:
     from folium.features import DivIcon
     from folium.plugins import HeatMap, MarkerCluster
 except Exception as e:  # pragma: no cover
-    st.error("Dépendance manquante: streamlit-folium / folium. Installe: pip install streamlit-folium folium")
+    st.error("Missing dependency: streamlit-folium / folium. Install: pip install streamlit-folium folium")
     raise
 
 # Optional profiling (enable with OGN_PROFILE=1)
@@ -79,7 +79,7 @@ section[data-testid="stSidebar"] { width: 320px !important; }
 _config = get_config()
 DB_DEFAULT = str(_config.db_path)
 CALLSIGN_DEFAULT = _config.station_callsign
-# Tu as donné roof exact (Google Maps)
+# Reference location provided (Google Maps)
 ROOF_LAT_DEFAULT = 47.33593787391701
 ROOF_LON_DEFAULT = 7.272825467967339
 
@@ -501,10 +501,8 @@ default_filters = {
     "qas_filter": "",
     "basemap_label": DEFAULT_BASEMAP,
     "show_rings": True,
-    "show_heatmap": False,
     "rings_km": [10, 25, 50, 100],
     "use_cov_grid": True,
-    "map_mode": "Coverage grid",
     "point_size": 3,
     "limit_rows": 25000,
     "perf_cache": True,
@@ -513,6 +511,7 @@ default_filters = {
     "debug_sql": False,
     "do_autorefresh": False,
     "show_cluster": False,
+    "raw_packets_mode": False,
     "since_iso": (now_utc() - dt.timedelta(hours=6)).isoformat().replace("+00:00", "+00:00"),
     "since_epoch": int((now_utc() - dt.timedelta(hours=6)).timestamp()),
 }
@@ -526,90 +525,36 @@ if "last_apply_ts" not in st.session_state:
 
 with st.sidebar:
     with st.form("filters_form"):
-        current_mode = st.session_state["filters_edit"]["mode"]
         st.markdown("## Station")
         station_callsign = st.text_input("Callsign", st.session_state["filters_edit"]["station_callsign"])
-        db_path = st.text_input("DB SQLite", st.session_state["filters_edit"]["db_path"])
+        db_path = st.text_input("DB path", st.session_state["filters_edit"]["db_path"])
         station_lat = st.number_input("Latitude", value=float(st.session_state["filters_edit"]["station_lat"]), format="%.6f")
         station_lon = st.number_input("Longitude", value=float(st.session_state["filters_edit"]["station_lon"]), format="%.6f")
 
         st.markdown("## Time window")
-        hours = st.slider("Fenêtre temporelle (heures)", 1, 72, int(st.session_state["filters_edit"]["hours"]))
+        hours = st.slider("Time window (hours)", 1, 72, int(st.session_state["filters_edit"]["hours"]))
 
         st.markdown("## Data filters")
-        source_mode = st.selectbox("Vue radio", ["Heard-by station", "Radio station view"], index=["Heard-by station", "Radio station view"].index(st.session_state["filters_edit"]["source_mode"]))
-        dst_types = st.multiselect("Types", ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"], default=st.session_state["filters_edit"]["dst_types"])
+        source_mode = st.selectbox(
+            "Packet source",
+            ["Heard-by station", "Radio station view"],
+            index=["Heard-by station", "Radio station view"].index(st.session_state["filters_edit"]["source_mode"]),
+        )
+        dst_types = st.multiselect(
+            "Aircraft types",
+            ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
+            default=st.session_state["filters_edit"]["dst_types"],
+        )
         only_heard_by = st.checkbox("Coverage heard-by", value=bool(st.session_state["filters_edit"]["only_heard_by"]))
-        only_local_radio = st.checkbox("Uniquement radio locale", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
-        igate_filter = st.text_input("Filtre igate (optionnel)", value=st.session_state["filters_edit"]["igate_filter"])
+        only_local_radio = st.checkbox("Local radio only", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
+        igate_filter = st.text_input("IGate filter (optional)", value=st.session_state["filters_edit"]["igate_filter"])
+        use_cov_grid = st.checkbox("Use coverage grid (recommended)", value=bool(st.session_state["filters_edit"].get("use_cov_grid", True)))
 
-        st.markdown("## Visualization")
-        basemap_label = st.selectbox("Fond de carte", list(BASEMAPS.keys()), index=list(BASEMAPS.keys()).index(st.session_state["filters_edit"]["basemap_label"]))
-        map_mode_options = [
-            "Coverage grid",
-            "Heatmap RSSI",
-            "Heatmap distance",
-            "Packets debug",
-        ]
-        prev_mode = st.session_state["filters_edit"]["map_mode"]
-        if prev_mode not in map_mode_options:
-            prev_mode = "Coverage grid"
-        map_mode = st.selectbox("Mode carte", map_mode_options, index=map_mode_options.index(prev_mode))
-        point_size = st.slider("Taille des points", 1, 10, int(st.session_state["filters_edit"]["point_size"]))
-        show_rings = st.checkbox("Afficher anneaux de portée", value=bool(st.session_state["filters_edit"]["show_rings"]))
-        show_heatmap = st.checkbox("Afficher heatmap couverture", value=bool(st.session_state["filters_edit"].get("show_heatmap", False)))
-        show_cluster = st.checkbox("Cluster marqueurs (plus lent)", value=bool(st.session_state["filters_edit"].get("show_cluster", False)))
-        use_cov_grid = st.checkbox("Utiliser coverage grid (rapide)", value=bool(st.session_state["filters_edit"].get("use_cov_grid", False)))
-        rings_km = st.multiselect("Anneaux (km)", [5, 10, 25, 50, 75, 100, 150, 200], default=st.session_state["filters_edit"]["rings_km"])
-
-        st.markdown("## Performance")
-        limit_rows = st.slider("Max rows SQL", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
-        map_max_points = st.slider("Max points carte", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
-        scatter_max_points = st.slider("Max points scatter", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
-        do_autorefresh = st.checkbox("Auto-refresh (30s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"]))
-
-        if current_mode == "Expert":
-            st.subheader("Maintenance DB")
-            debug_sql = st.checkbox("Debug SQL (timings)", value=bool(st.session_state["filters_edit"]["debug_sql"]))
-        else:
-            debug_sql = False
-
-        st.markdown("## Mode")
-        mode = st.selectbox("Interface", ["Standard", "Avancé", "Expert"], index=["Standard", "Avancé", "Expert"].index(st.session_state["filters_edit"]["mode"]))
-
-        apply_button = st.form_submit_button("▶ Appliquer les filtres")
-
-    if current_mode == "Expert":
-        st.subheader("Maintenance DB")
-        safe_opt = st.button("ANALYZE / OPTIMIZE")
-        vacuum_opt = st.button("VACUUM")
-        create_idx = st.button("Créer index")
-        if safe_opt:
-            with st.spinner("Optimisation en cours..."):
-                try:
-                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=False)
-                    st.success("Optimisation terminée.")
-                except Exception as e:
-                    st.error(f"Échec optimisation: {e!r}")
-        if vacuum_opt:
-            with st.spinner("VACUUM en cours..."):
-                try:
-                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=True)
-                    st.success("VACUUM terminé.")
-                except Exception as e:
-                    st.error(f"Échec VACUUM: {e!r}")
-        if create_idx:
-            with st.spinner("Création des indexes..."):
-                try:
-                    create_indexes(st.session_state["filters_apply"]["db_path"])
-                    st.success("Indexes créés.")
-                except Exception as e:
-                    st.error(f"Échec création indexes: {e!r}")
+        apply_button = st.form_submit_button("Apply filters")
 
     if apply_button:
         st.session_state["filters_edit"] = {
             **st.session_state["filters_edit"],
-            "mode": mode,
             "db_path": db_path,
             "station_callsign": station_callsign,
             "station_lat": float(station_lat),
@@ -620,19 +565,7 @@ with st.sidebar:
             "only_local_radio": bool(only_local_radio),
             "only_heard_by": bool(only_heard_by),
             "igate_filter": igate_filter,
-            "basemap_label": basemap_label,
-            "map_mode": map_mode,
-            "point_size": int(point_size),
-            "show_rings": bool(show_rings),
-            "show_heatmap": bool(show_heatmap),
-            "show_cluster": bool(show_cluster),
             "use_cov_grid": bool(use_cov_grid),
-            "rings_km": list(rings_km),
-            "limit_rows": int(limit_rows),
-            "map_max_points": int(map_max_points),
-            "scatter_max_points": int(scatter_max_points),
-            "do_autorefresh": bool(do_autorefresh),
-            "debug_sql": bool(debug_sql),
         }
 
         applied = st.session_state["filters_edit"].copy()
@@ -669,11 +602,9 @@ only_heard_by = filters_apply["only_heard_by"]
 qas_filter = filters_apply["qas_filter"]
 basemap_label = filters_apply["basemap_label"]
 show_rings = filters_apply["show_rings"]
-show_heatmap = filters_apply.get("show_heatmap", False)
 show_cluster = filters_apply.get("show_cluster", False)
 use_cov_grid = filters_apply.get("use_cov_grid", False)
 rings_km = filters_apply["rings_km"]
-map_mode = filters_apply["map_mode"]
 point_size = filters_apply["point_size"]
 limit_rows = filters_apply["limit_rows"]
 perf_cache = filters_apply["perf_cache"]
@@ -682,9 +613,10 @@ scatter_max_points = filters_apply["scatter_max_points"]
 debug_sql = filters_apply["debug_sql"]
 do_autorefresh = filters_apply["do_autorefresh"]
 btn_refresh = False
+raw_packets_mode = filters_apply.get("raw_packets_mode", False)
 
 if do_autorefresh:
-    st.caption("Auto-refresh actif (30s)")
+    st.caption("Auto-refresh active (30s)")
     _set_query_ts(str(int(dt.datetime.now().timestamp())))
     _autorefresh(interval_ms=30000, key="autorefresh_30s")
 
@@ -694,10 +626,15 @@ if debug_sql:
 else:
     rows_total, last_ts = db_meta(db_path)
 
-# Title + station summary
-st.header("OGN RF Coverage Analyzer")
-st.caption(f"Station {station_callsign} • APRS-IS / OGN analysis")
-st.markdown(f"DB: `{db_path}`")
+header_container = st.container()
+kpi_container = st.container()
+navigation_container = st.container()
+content_container = st.container()
+
+with header_container:
+    st.header("OGN RF Coverage Analyzer")
+    st.caption(f"Station {station_callsign}")
+    st.markdown(f"DB: `{db_path}`")
 
 # Freshness banner
 fresh_state = "unknown"
@@ -724,79 +661,152 @@ elif fresh_state == "err":
 else:
     st.info("ℹ️ Database status unknown")
 
-# Header KPIs (lightweight)
-cols = st.columns(3)
-with cols[0]:
-    st.metric("Rows DB", fmt_int(rows_total))
-with cols[1]:
-    st.metric("Last packet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
-with cols[2]:
-    st.metric("Packets in window", "—")
-
 apply_ts = st.session_state.get("last_apply_ts")
 apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
 types_str = "/".join(dst_types) if dst_types else "—"
-st.info(f"Filters applied: Station={station_callsign} | Window={hours}h | Types={types_str} | Mode={mode} — Last apply: {apply_time}")
+st.info(f"Active filters: Station={station_callsign} | Window={hours}h | Types={types_str} | Mode={mode} — Last apply: {apply_time}")
 
-ctx_hash = _filters_hash(filters_apply)
-cached_ctx = st.session_state.get("analysis_ctx")
-cached_hash = st.session_state.get("analysis_ctx_hash")
-if cached_ctx is not None and cached_hash == ctx_hash:
-    ctx = cached_ctx
-else:
-    with st.status("Chargement des données", expanded=False) as status:
-        ctx = build_context(filters_apply, query_log=query_log if debug_sql else None)
-        status.update(label="Données chargées", state="complete")
-    st.session_state["analysis_ctx"] = ctx
-    st.session_state["analysis_ctx_hash"] = ctx_hash
-
-analysis_context = {
-    "filters": filters_apply,
-    "dataframe": ctx.df_packets,
-    "metrics": ctx.metrics,
-}
-
-# Precompute coverage probability KPIs (fast on grid)
 grid_df_kpi = load_coverage_grid(db_path, filters_apply["since_epoch"])
-d90 = d50 = d10 = None
+packets_received = None
+max_distance_grid = None
+d90 = None
 if not grid_df_kpi.empty:
+    packets_received = int(np.nansum(pd.to_numeric(grid_df_kpi.get("packet_count"), errors="coerce")))
+    max_distance_grid = float(pd.to_numeric(grid_df_kpi.get("max_distance_km"), errors="coerce").max())
     dist_bins_kpi = pd.to_numeric(grid_df_kpi.get("max_distance_km", pd.Series(dtype=float)), errors="coerce").to_numpy()
     pkt_bins_kpi = pd.to_numeric(grid_df_kpi.get("packet_count", pd.Series(dtype=float)), errors="coerce").to_numpy()
     centers_kpi, probs_kpi = compute_distance_probability(dist_bins_kpi, pkt_bins_kpi, bin_size_km=5.0)
     if centers_kpi.size > 0:
         d90 = reliable_distance_km(centers_kpi, probs_kpi, threshold=0.9)
-        d50 = reliable_distance_km(centers_kpi, probs_kpi, threshold=0.5)
-        d10 = reliable_distance_km(centers_kpi, probs_kpi, threshold=0.1)
 
-# Update packets window KPI
-cols[2].metric("Packets in window", fmt_int(analysis_context["metrics"].get("rows_window")))
+with kpi_container:
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        st.metric("Packets received", fmt_int(packets_received) if packets_received is not None else "—")
+    with k2:
+        st.metric("Last packet (UTC)", (last_ts[:19] + "Z") if last_ts else "—")
+    with k3:
+        st.metric("Reliable distance", f"{fmt_float(d90, 1)} km" if d90 is not None else "—")
+    with k4:
+        st.metric("Max distance", f"{fmt_float(max_distance_grid, 1)} km" if max_distance_grid is not None else "—")
 
-# KPI bar
-colA, colB, colC, colD, colE = st.columns(5)
-with colA:
-    st.metric("Max distance", f"{fmt_float(analysis_context['metrics'].get('max_distance_km'), 1)} km")
-with colB:
-    st.metric("P95 distance", f"{fmt_float(analysis_context['metrics'].get('p95_distance_km'), 1)} km")
-with colC:
-    st.metric("Reliable (90%)", f"{fmt_float(d90, 1)} km" if d90 is not None else "—")
-with colD:
-    st.metric("Median (50%)", f"{fmt_float(d50, 1)} km" if d50 is not None else "—")
-with colE:
-    st.metric("Fringe (10%)", f"{fmt_float(d10, 1)} km" if d10 is not None else "—")
+with navigation_container:
+    view = st.segmented_control(
+        "Analysis",
+        [
+            "Coverage",
+            "Signal",
+            "RF diagnostics",
+            "Debug",
+        ],
+        default="Coverage",
+    )
 
-# Lazy view selector (avoids running all tabs)
-view = st.segmented_control(
-    "View",
-    [
-        "Coverage map",
-        "Signal vs distance",
-        "Distance distribution",
-        "Coverage probability",
-        "RF analysis",
-        "Debug",
-    ],
-    default="Coverage map",
-)
+with st.expander("Advanced settings", expanded=False):
+    with st.form("advanced_settings_form"):
+        st.subheader("Map settings")
+        basemap_label_adv = st.selectbox(
+            "Basemap",
+            list(BASEMAPS.keys()),
+            index=list(BASEMAPS.keys()).index(st.session_state["filters_edit"]["basemap_label"]),
+        )
+        point_size_adv = st.slider("Marker size", 1, 10, int(st.session_state["filters_edit"]["point_size"]))
+        show_cluster_adv = st.checkbox(
+            "Cluster markers (slower)",
+            value=bool(st.session_state["filters_edit"].get("show_cluster", False)),
+        )
+        show_rings_adv = st.checkbox(
+            "Show range rings",
+            value=bool(st.session_state["filters_edit"].get("show_rings", True)),
+        )
+        rings_km_adv = st.multiselect(
+            "Rings (km)",
+            [5, 10, 25, 50, 75, 100, 150, 200],
+            default=st.session_state["filters_edit"].get("rings_km", [10, 25, 50, 100]),
+        )
+
+        st.subheader("Performance")
+        limit_rows_adv = st.slider("Max SQL rows", 1000, 50000, int(st.session_state["filters_edit"]["limit_rows"]))
+        map_max_points_adv = st.slider("Max map points", 100, 5000, int(st.session_state["filters_edit"]["map_max_points"]))
+        scatter_max_points_adv = st.slider("Max scatter points", 100, 5000, int(st.session_state["filters_edit"]["scatter_max_points"]))
+        do_autorefresh_adv = st.checkbox("Auto-refresh (30s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"]))
+        perf_cache_adv = st.checkbox("Enable cache", value=bool(st.session_state["filters_edit"].get("perf_cache", True)))
+
+        st.subheader("Developer")
+        mode_adv = st.selectbox(
+            "Interface mode",
+            ["Standard", "Advanced", "Expert"],
+            index=["Standard", "Advanced", "Expert"].index(st.session_state["filters_edit"]["mode"]),
+        )
+        debug_sql_adv = st.checkbox("Debug SQL timings", value=bool(st.session_state["filters_edit"]["debug_sql"]))
+        raw_packets_mode_adv = st.checkbox("Raw packets mode (Debug only)", value=bool(st.session_state["filters_edit"].get("raw_packets_mode", False)))
+
+        apply_adv = st.form_submit_button("Apply advanced settings")
+
+    if apply_adv:
+        st.session_state["filters_edit"] = {
+            **st.session_state["filters_edit"],
+            "basemap_label": basemap_label_adv,
+            "point_size": int(point_size_adv),
+            "show_cluster": bool(show_cluster_adv),
+            "show_rings": bool(show_rings_adv),
+            "rings_km": list(rings_km_adv),
+            "limit_rows": int(limit_rows_adv),
+            "map_max_points": int(map_max_points_adv),
+            "scatter_max_points": int(scatter_max_points_adv),
+            "do_autorefresh": bool(do_autorefresh_adv),
+            "perf_cache": bool(perf_cache_adv),
+            "mode": mode_adv,
+            "debug_sql": bool(debug_sql_adv),
+            "raw_packets_mode": bool(raw_packets_mode_adv),
+        }
+        st.session_state["filters_apply"] = {
+            **st.session_state["filters_apply"],
+            "basemap_label": basemap_label_adv,
+            "point_size": int(point_size_adv),
+            "show_cluster": bool(show_cluster_adv),
+            "show_rings": bool(show_rings_adv),
+            "rings_km": list(rings_km_adv),
+            "limit_rows": int(limit_rows_adv),
+            "map_max_points": int(map_max_points_adv),
+            "scatter_max_points": int(scatter_max_points_adv),
+            "do_autorefresh": bool(do_autorefresh_adv),
+            "perf_cache": bool(perf_cache_adv),
+            "mode": mode_adv,
+            "debug_sql": bool(debug_sql_adv),
+            "raw_packets_mode": bool(raw_packets_mode_adv),
+        }
+        if mode_adv == "Expert":
+            st.info("Expert mode enabled.")
+        else:
+            st.info("Advanced settings applied.")
+
+    if st.session_state["filters_apply"]["mode"] == "Expert":
+        st.subheader("DB maintenance")
+        safe_opt = st.button("ANALYZE / OPTIMIZE")
+        vacuum_opt = st.button("VACUUM")
+        create_idx = st.button("Create indexes")
+        if safe_opt:
+            with st.spinner("Optimizing..."):
+                try:
+                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=False)
+                    st.success("Optimization completed.")
+                except Exception as e:
+                    st.error(f"Optimization failed: {e!r}")
+        if vacuum_opt:
+            with st.spinner("VACUUM in progress..."):
+                try:
+                    optimize_db(st.session_state["filters_apply"]["db_path"], vacuum=True)
+                    st.success("VACUUM completed.")
+                except Exception as e:
+                    st.error(f"VACUUM failed: {e!r}")
+        if create_idx:
+            with st.spinner("Creating indexes..."):
+                try:
+                    create_indexes(st.session_state["filters_apply"]["db_path"])
+                    st.success("Indexes created.")
+                except Exception as e:
+                    st.error(f"Index creation failed: {e!r}")
 
 
 def _color_from_value(val: float, vmin: float, vmax: float) -> str:
@@ -818,9 +828,23 @@ def _color_from_value(val: float, vmin: float, vmax: float) -> str:
     return "#ef4444"
 
 
-def render_map() -> None:
+def get_packets_context() -> AnalysisContext:
+    ctx_key = _filters_hash({**filters_apply, "_ctx": "packets"})
+    cached_ctx = st.session_state.get("packets_ctx")
+    cached_hash = st.session_state.get("packets_ctx_hash")
+    if cached_ctx is not None and cached_hash == ctx_key:
+        return cached_ctx
+    with st.status("Loading packets", expanded=False) as status:
+        ctx = build_context(filters_apply, query_log=query_log if debug_sql else None)
+        status.update(label="Packets loaded", state="complete")
+    st.session_state["packets_ctx"] = ctx
+    st.session_state["packets_ctx_hash"] = ctx_key
+    return ctx
+
+
+def render_map(title: str, mode: str) -> None:
     with st.container():
-        st.subheader("Coverage map")
+        st.subheader(title)
         with st.spinner("Loading map..."):
             bm = BASEMAPS[basemap_label]
             m = folium.Map(
@@ -840,7 +864,7 @@ def render_map() -> None:
                 fill_opacity=1.0,
                 popup=f"{station_callsign} (ref)",
             ).add_to(m)
-            max_range_km = analysis_context["metrics"].get("max_distance_km")
+            max_range_km = max_distance_grid
             max_range_label = fmt_float(max_range_km, 1)
             folium.Marker(
                 location=[station_lat, station_lon],
@@ -864,47 +888,39 @@ def render_map() -> None:
                         fill=False,
                         opacity=0.6,
                     ).add_to(m)
-            use_packets = (map_mode == "Packets debug")
-            if use_cov_grid and not use_packets:
-                df_points = load_coverage_grid(db_path, filters_apply["since_epoch"])
-            else:
-                df_points = analysis_context["dataframe"].copy()
+            if not use_cov_grid:
+                st.warning("Coverage grid is required for maps. Enable it in filters.")
+                st_folium(m, height=750, use_container_width=True)
+                return
+            df_points = load_coverage_grid(db_path, filters_apply["since_epoch"])
             if "lat" not in df_points.columns or "lon" not in df_points.columns:
-                st.warning("⚠ Coverage grid introuvable ou invalide (colonnes lat/lon manquantes).")
+                st.warning("Coverage grid missing or invalid (lat/lon columns not found).")
                 st_folium(m, height=750, use_container_width=True)
                 return
             df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
             if df_points.empty:
-                st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
+                st.warning("No packets in the selected time window.")
                 st_folium(m, height=750, use_container_width=True)
                 return
             max_cells_display = min(3000, map_max_points)
             if len(df_points) > max_cells_display:
                 df_points = df_points.sample(n=max_cells_display, random_state=1)
-            if show_heatmap and not df_points.empty:
-                heat_data = df_points[["lat", "lon"]].dropna().values.tolist()
-                HeatMap(
-                    heat_data,
-                    radius=12,
-                    blur=18,
-                    min_opacity=0.2,
-                ).add_to(m)
             if not df_points.empty:
-                if map_mode == "Heatmap RSSI":
+                if mode == "Heatmap RSSI":
                     col_db = "best_rssi_db" if use_cov_grid else "rx_db"
                     v = pd.to_numeric(df_points.get(col_db, pd.Series(dtype=float)), errors="coerce")
                     vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else -120.0
                     vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else -60.0
                     key = col_db
                     label = "dB"
-                elif map_mode == "Heatmap distance":
+                elif mode == "Heatmap distance":
                     col_dist = "max_distance_km" if use_cov_grid else "distance_km"
                     v = pd.to_numeric(df_points.get(col_dist, pd.Series(dtype=float)), errors="coerce")
                     vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
                     vmax = float(np.nanpercentile(v.to_numpy(), 90)) if v.notna().any() else 50.0
                     key = col_dist
                     label = "km"
-                elif map_mode == "Coverage grid":
+                elif mode == "Coverage grid":
                     col_dist = "max_distance_km" if use_cov_grid else "distance_km"
                     v = pd.to_numeric(df_points.get(col_dist, pd.Series(dtype=float)), errors="coerce")
                     vmin = float(np.nanpercentile(v.to_numpy(), 10)) if v.notna().any() else 0.0
@@ -925,7 +941,7 @@ def render_map() -> None:
                     for val in vals
                 ]
                 layer = m
-                if show_cluster and use_packets:
+                if show_cluster:
                     layer = MarkerCluster().add_to(m)
                 for (lat, lon, src, dst, igate, ts, val, c) in zip(
                     df_points["lat"].to_numpy(),
@@ -944,7 +960,7 @@ def render_map() -> None:
                         f"{label}={fmt_float(float(val) if val == val else None, 1)}\n"
                         f"ts={ts}"
                     )
-                    radius = 4.0 if map_mode in ("Heatmap RSSI", "Heatmap distance", "Coverage grid") and not use_packets else float(point_size)
+                    radius = 4.0 if mode in ("Heatmap RSSI", "Heatmap distance", "Coverage grid") else float(point_size)
                     folium.CircleMarker(
                         location=[float(lat), float(lon)],
                         radius=radius,
@@ -959,11 +975,12 @@ def render_map() -> None:
 
 def render_scatter() -> None:
     st.subheader("Received signal strength vs distance")
-    if analysis_context["dataframe"].empty:
-        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
+    ctx = get_packets_context()
+    if ctx.df_packets.empty:
+        st.warning("No packets in the selected time window.")
         return
-    with st.spinner("Chargement scatter..."):
-        df_sd = analysis_context["dataframe"].copy()
+    with st.spinner("Loading scatter..."):
+        df_sd = ctx.df_packets.copy()
         df_sd["rx_db"] = pd.to_numeric(df_sd["rx_db"], errors="coerce")
         df_sd["distance_km"] = pd.to_numeric(df_sd.get("distance_km", np.nan), errors="coerce")
         df_sd = df_sd[df_sd["rx_db"].notna() & df_sd["distance_km"].notna()]
@@ -971,7 +988,7 @@ def render_scatter() -> None:
         if len(df_sd) > max_points:
             df_sd = df_sd.sample(n=max_points, random_state=1)
         if df_sd.empty:
-            st.warning("Aucun point avec dB + distance.")
+            st.warning("No points with both dB and distance.")
         else:
             import matplotlib.pyplot as plt
             plt.style.use("seaborn-v0_8")
@@ -986,13 +1003,14 @@ def render_scatter() -> None:
 
 def render_histogram() -> None:
     st.subheader("Distance distribution")
-    if analysis_context["dataframe"].empty:
-        st.warning("⚠ Aucun paquet dans cette fenêtre temporelle.")
+    ctx = get_packets_context()
+    if ctx.df_packets.empty:
+        st.warning("No packets in the selected time window.")
         return
-    with st.spinner("Chargement histogramme..."):
-        dist = pd.to_numeric(analysis_context["dataframe"].get("distance_km", pd.Series(dtype=float)), errors="coerce").dropna()
+    with st.spinner("Loading histogram..."):
+        dist = pd.to_numeric(ctx.df_packets.get("distance_km", pd.Series(dtype=float)), errors="coerce").dropna()
         if dist.empty:
-            st.warning("Aucune distance disponible.")
+            st.warning("No distance data available.")
         else:
             import matplotlib.pyplot as plt
             plt.style.use("seaborn-v0_8")
@@ -1005,11 +1023,42 @@ def render_histogram() -> None:
             st.pyplot(fig, clear_figure=True, use_container_width=True)
 
 
+def render_altitude_distance() -> None:
+    st.subheader("Altitude vs distance")
+    ctx = get_packets_context()
+    if ctx.df_packets.empty:
+        st.warning("No packets in the selected time window.")
+        return
+    alt_col = None
+    for candidate in ("altitude", "alt", "alt_m"):
+        if candidate in ctx.df_packets.columns:
+            alt_col = candidate
+            break
+    if alt_col is None:
+        st.info("Altitude data not available in the current dataset.")
+        return
+    with st.spinner("Loading altitude plot..."):
+        import matplotlib.pyplot as plt
+        plt.style.use("seaborn-v0_8")
+        fig = plt.figure(figsize=(10, 4))
+        plt.scatter(
+            pd.to_numeric(ctx.df_packets.get("distance_km"), errors="coerce"),
+            pd.to_numeric(ctx.df_packets.get(alt_col), errors="coerce"),
+            s=12,
+            alpha=0.6,
+        )
+        plt.title("Altitude vs distance", fontsize=16)
+        plt.xlabel("Distance (km)")
+        plt.ylabel("Altitude")
+        plt.grid(alpha=0.3)
+        st.pyplot(fig, clear_figure=True, use_container_width=True)
+
+
 def render_rf_analysis() -> None:
     st.subheader("RF azimuth analysis")
     df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
     if df_grid.empty:
-        st.warning("⚠ Coverage grid vide. Lance d'abord le build de la grille.")
+        st.warning("Coverage grid is empty. Build it first.")
         return
     with st.spinner("Calcul du diagramme RF..."):
         lat = pd.to_numeric(df_grid["lat"], errors="coerce")
@@ -1018,7 +1067,7 @@ def render_rf_analysis() -> None:
         best_rssi = pd.to_numeric(df_grid.get("best_rssi_db", pd.Series(dtype=float)), errors="coerce")
         mask = lat.notna() & lon.notna() & max_dist.notna()
         if not mask.any():
-            st.warning("Aucune cellule valide pour le diagramme.")
+            st.warning("No valid cells for the diagram.")
             return
         lat = lat[mask]
         lon = lon[mask]
@@ -1048,7 +1097,7 @@ def render_rf_analysis() -> None:
         ax.plot(stats.angles_rad, stats.p90_distance_km, linewidth=2, linestyle="--", label="P90")
         ax.set_theta_zero_location("N")
         ax.set_theta_direction(-1)
-        ax.set_title("Portée par azimut (km) — max & P90")
+        ax.set_title("Azimuth range (km) — max & P90")
         ax.legend(loc="upper right")
         st.pyplot(fig, clear_figure=True, use_container_width=True)
 
@@ -1067,22 +1116,43 @@ def render_rf_analysis() -> None:
             ax3.plot(stats.angles_rad, stats.packet_count, linewidth=2, color="#22c55e")
             ax3.set_theta_zero_location("N")
             ax3.set_theta_direction(-1)
-            ax3.set_title("Densité de trafic par azimut (packets)")
+            ax3.set_title("Traffic density by azimuth (packets)")
             st.pyplot(fig3, clear_figure=True, use_container_width=True)
 
 
 def render_debug() -> None:
     st.subheader("Debug")
-    if analysis_context["dataframe"].empty:
-        st.info("Aucune donnée.")
+    ctx = get_packets_context()
+    if ctx.df_packets.empty:
+        st.info("No data.")
     else:
-        with st.spinner("Chargement debug..."):
-            top_src = analysis_context["dataframe"]["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
-            st.dataframe(top_src, width="stretch", height=360)
-            ig = analysis_context["dataframe"]["igate"].replace("", np.nan).dropna()
+        with st.spinner("Loading debug..."):
+            if raw_packets_mode:
+                st.subheader("Raw packets (sample)")
+                cols = ["ts_utc", "src", "dst", "igate", "qas", "raw"]
+                existing_cols = [c for c in cols if c in ctx.df_packets.columns]
+                st.dataframe(ctx.df_packets[existing_cols].head(200), width="stretch", height=320)
+            else:
+                st.info("Raw packets are disabled. Enable in Advanced settings.")
+
+            st.subheader("Top sources")
+            top_src = ctx.df_packets["src"].value_counts().head(15).rename_axis("src").reset_index(name="count")
+            st.dataframe(top_src, width="stretch", height=240)
+
+            st.subheader("Top IGates")
+            ig = ctx.df_packets["igate"].replace("", np.nan).dropna()
             top_ig = ig.value_counts().head(15).rename_axis("igate").reset_index(name="count")
-            st.dataframe(top_ig, width="stretch", height=360)
-    with st.expander("Pipeline info", expanded=False):
+            st.dataframe(top_ig, width="stretch", height=240)
+
+            st.subheader("Dataset stats")
+            st.json({
+                "rows_window": int(len(ctx.df_packets)),
+                "columns": list(ctx.df_packets.columns),
+                "lat_non_null": int(ctx.df_packets["lat"].notna().sum()) if "lat" in ctx.df_packets.columns else 0,
+                "lon_non_null": int(ctx.df_packets["lon"].notna().sum()) if "lon" in ctx.df_packets.columns else 0,
+            })
+
+    with st.expander("SQL info", expanded=False):
         st.json({
             "rows_total_db": rows_total,
             "last_ts": last_ts,
@@ -1100,17 +1170,25 @@ def render_coverage_probability() -> None:
     st.subheader("Coverage probability")
     df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
     if df_grid.empty:
-        st.warning("⚠ Coverage grid vide. Lance d'abord le build de la grille.")
+        st.warning("Coverage grid is empty. Build it first.")
         return
     dist_bins = pd.to_numeric(df_grid.get("max_distance_km", pd.Series(dtype=float)), errors="coerce").to_numpy()
     pkt_bins = pd.to_numeric(df_grid.get("packet_count", pd.Series(dtype=float)), errors="coerce").to_numpy()
     centers, probs = compute_distance_probability(dist_bins, pkt_bins, bin_size_km=5.0)
     if centers.size == 0:
-        st.warning("Aucune donnée de probabilité.")
+        st.warning("No probability data available.")
         return
     d90 = reliable_distance_km(centers, probs, threshold=0.9)
     d50 = reliable_distance_km(centers, probs, threshold=0.5)
     d10 = reliable_distance_km(centers, probs, threshold=0.1)
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("Reliable (90%)", f"{fmt_float(d90, 1)} km" if not math.isnan(d90) else "—")
+    with c2:
+        st.metric("Median (50%)", f"{fmt_float(d50, 1)} km" if not math.isnan(d50) else "—")
+    with c3:
+        st.metric("Fringe (10%)", f"{fmt_float(d10, 1)} km" if not math.isnan(d10) else "—")
 
     import matplotlib.pyplot as plt
     plt.style.use("seaborn-v0_8")
@@ -1128,21 +1206,37 @@ def render_coverage_probability() -> None:
     st.pyplot(fig, clear_figure=True, use_container_width=True)
 
 
-if view == "Coverage map":
-    render_map()
-elif view == "Signal vs distance":
+def render_coverage_view() -> None:
+    render_map("Coverage map", "Coverage grid")
+    with st.expander("RSSI heatmap", expanded=False):
+        render_map("RSSI heatmap", "Heatmap RSSI")
+    with st.expander("Distance heatmap", expanded=False):
+        render_map("Distance heatmap", "Heatmap distance")
+
+
+def render_signal_view() -> None:
     render_scatter()
-elif view == "Distance distribution":
+    render_altitude_distance()
     render_histogram()
-elif view == "Coverage probability":
-    render_coverage_probability()
-elif view == "RF analysis":
+
+
+def render_rf_diagnostics_view() -> None:
     render_rf_analysis()
-elif view == "Debug":
-    render_debug()
+    render_coverage_probability()
+
+
+with content_container:
+    if view == "Coverage":
+        render_coverage_view()
+    elif view == "Signal":
+        render_signal_view()
+    elif view == "RF diagnostics":
+        render_rf_diagnostics_view()
+    elif view == "Debug":
+        render_debug()
 if _PROFILER:
     _PROFILER.disable()
-    st.caption("Profiling actif (résultats affichés dans la console).")
+    st.caption("Profiling enabled (results printed to console).")
     _s = io.StringIO()
     _stats = pstats.Stats(_PROFILER, stream=_s)
     _stats.sort_stats("cumtime")
@@ -1154,7 +1248,7 @@ with st.container():
     st.divider()
     grid_df = load_coverage_grid(db_path, filters_apply["since_epoch"])
     st.caption(
-        f"Packets processed: {fmt_int(analysis_context['metrics'].get('rows_window'))} • "
+        f"Packets processed: {fmt_int(packets_received) if packets_received is not None else '—'} • "
         f"Grid cells: {fmt_int(len(grid_df)) if not grid_df.empty else '—'} • "
         f"Last update: {(last_ts[:19] + 'Z') if last_ts else '—'}"
     )
