@@ -1150,7 +1150,7 @@ def render_signal_view() -> None:
                                 y=data["altitude_m"],
                                 mode="markers",
                                 name="Packets",
-                                marker=dict(size=2, opacity=0.18),
+                                marker=dict(size=2, opacity=0.15),
                             )
                         )
                         # Feature 03 uses 20 km bins for altitude trend readability
@@ -1179,7 +1179,8 @@ def render_signal_view() -> None:
                             xaxis_title="Distance (km)",
                             yaxis_title="Altitude (m)",
                             # limit altitude axis for readability; extreme outliers remain in table/statistics
-                            yaxis=dict(range=[0, 4000]),
+                            xaxis=dict(range=[0, 350]),
+                            yaxis=dict(range=[0, 5000]),
                         )
                         st.plotly_chart(fig, use_container_width=True)
                     else:
@@ -1420,14 +1421,10 @@ def render_rf_view() -> None:
                                 line=dict(width=2, color="#f97316"),
                             )
                         )
-                        bins = (data["horizon_km"] // 20) * 20
-                        med = (
-                            data.assign(horizon_bin_km=bins)
-                            .groupby("horizon_bin_km", as_index=False)
-                            .agg(distance_median=("distance_km", "median"))
-                            .sort_values("horizon_bin_km")
-                        )
-                        if not med.empty:
+                        med = result.get("binned_data")
+                        if med is not None and "sample_count" in med.columns:
+                            med = med[med["sample_count"] >= 30]
+                        if med is not None and not med.empty:
                             fig.add_trace(
                                 go.Scatter(
                                     x=med["horizon_bin_km"],

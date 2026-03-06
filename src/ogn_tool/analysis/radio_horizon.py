@@ -84,6 +84,17 @@ def analyze(
         }
     )
 
+    bins = (data["horizon_km"] // 20) * 20
+    binned = (
+        data.assign(horizon_bin_km=bins)
+        .groupby("horizon_bin_km", as_index=False)
+        .agg(
+            distance_median=("distance_km", "median"),
+            sample_count=("distance_km", "size"),
+        )
+        .sort_values("horizon_bin_km")
+    )
+
     packet_total = int(len(data))
     summary = {
         "packet_total": packet_total,
@@ -94,4 +105,9 @@ def analyze(
         "efficiency_ratio": float(np.mean(ratio)) if packet_total else None,
     }
 
-    return {"implemented": True, "summary": summary, "data": data.sample(n=min(len(data), 20000))}
+    return {
+        "implemented": True,
+        "summary": summary,
+        "data": data.sample(n=min(len(data), 20000)),
+        "binned_data": binned,
+    }
