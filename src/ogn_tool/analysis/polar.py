@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import math
+import os
 import numpy as np
 import pandas as pd
 
@@ -35,8 +36,20 @@ def analyze(df_grid: pd.DataFrame) -> Dict[str, Any]:
         }
 
     cfg = get_config()
-    station_lat = float(cfg.roof_lat)
-    station_lon = float(cfg.roof_lon)
+    station_lat = getattr(cfg, "roof_lat", None)
+    station_lon = getattr(cfg, "roof_lon", None)
+    if station_lat is None or station_lon is None:
+        env_lat = os.getenv("OGN_STATION_LAT")
+        env_lon = os.getenv("OGN_STATION_LON")
+        if env_lat is not None and env_lon is not None:
+            station_lat = float(env_lat)
+            station_lon = float(env_lon)
+    if station_lat is None or station_lon is None:
+        return {
+            "implemented": True,
+            "summary": {"bins": 0, "packet_total": 0},
+            "data": None,
+        }
 
     lat = pd.to_numeric(df_grid.get("lat"), errors="coerce").to_numpy()
     lon = pd.to_numeric(df_grid.get("lon"), errors="coerce").to_numpy()
