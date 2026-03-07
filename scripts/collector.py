@@ -268,9 +268,6 @@ def collect_forever() -> None:
                 if not line:
                     raise ConnectionError("socket closed")
 
-                if DEBUG:
-                    print("[collector] raw line received")
-
                 lines_seen += 1
                 received_total += 1
                 if line.startswith("#"):
@@ -282,15 +279,10 @@ def collect_forever() -> None:
                 pkt = parse_line(line)
                 if not pkt:
                     rejected_total += 1
-                    if DEBUG and rejected_sample < 5:
-                        print(f"[collector] rejected line sample: {line.strip()}")
-                        rejected_sample += 1
                     continue
 
                 packets_seen += 1
                 last_packet_ts = time.time()
-                if DEBUG:
-                    print("[collector] parsed packet")
 
                 now = dt.datetime.now(dt.timezone.utc)
                 pkt["ts_utc"] = now.isoformat()
@@ -301,8 +293,6 @@ def collect_forever() -> None:
                     print(f"[debug] raw: {pkt['raw']}")
 
                 if len(pending) >= COMMIT_EVERY:
-                    if DEBUG:
-                        print(f"[collector] inserting packet batch size={len(pending)}")
                     try:
                         insert_many(con, pending)
                         con.commit()
