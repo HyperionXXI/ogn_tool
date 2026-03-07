@@ -5,6 +5,52 @@
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+RF analysis tool for **OGN / FLARM / FANET ground stations**.
+
+---
+
+## Quick start
+
+Clone the repository:
+
+git clone https://github.com/HyperionXXI/ogn_tool.git
+
+Enter the directory:
+
+cd ogn_tool
+
+Create a virtual environment:
+
+python -m venv .venv
+
+Activate:
+
+.venv\Scripts\activate
+
+Install the project:
+
+pip install -e .
+
+Run the dashboard:
+
+streamlit run apps/dashboard.py
+
+
+---
+
+## Features
+
+- Polar RF coverage analysis
+- RSSI / signal vs distance
+- Altitude vs distance
+- Radio shadow detection
+- Station range estimation
+- Antenna diagnostics
+- Radio horizon analysis
+- Terrain limitation detection
+- Multi-station comparison
+- Global station quality score
+
 ogn_tool is a **radio analysis tool** for OGN / FLARM / FANET stations.
 It is an **RF coverage analysis for OGN / FLARM / FANET ground stations**.
 It records radio frames relayed by the Open Glider Network (OGN) into a local
@@ -204,9 +250,9 @@ cannot reach the upstream feed.
 
 ------------------------------------------------------------------------
 
-## Dashboard preview
+## Example dashboard
 
-![Dashboard overview](docs/screenshots/dashboard_overview.png)
+![Dashboard](docs/images/dashboard.png)
 
 ------------------------------------------------------------------------
 
