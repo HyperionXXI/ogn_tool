@@ -1615,6 +1615,11 @@ def render_rf_view() -> None:
                 station_alt_used = summary.get("station_alt_m")
                 if station_alt_used is not None:
                     st.caption(f"Station altitude used: {fmt_float(station_alt_used, 0)} m")
+                    if float(station_alt_used) == 400.0:
+                        st.info(
+                            "Station altitude not available. "
+                            "Radio horizon computed with fallback altitude = 400 m."
+                        )
                 if "horizon_km" in data.columns and "distance_km" in data.columns:
                     if go is not None:
                         fig = go.Figure()
