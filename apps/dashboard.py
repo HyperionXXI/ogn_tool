@@ -281,6 +281,53 @@ def create_indexes(db_path: str) -> None:
     finally:
         con.close()
 
+def rf_sanity_check(conn: sqlite3.Connection) -> List[str]:
+    """
+    Basic runtime validation for RF analysis environment.
+    Does not modify any analysis logic.
+    """
+    issues: List[str] = []
+    cursor = conn.cursor()
+
+    # check packets table
+    try:
+        cursor.execute("SELECT COUNT(*) FROM packets")
+        packet_count = cursor.fetchone()[0]
+        if packet_count == 0:
+            issues.append("Database contains zero packets.")
+    except sqlite3.Error:
+        issues.append("Table 'packets' not found.")
+
+    # check coverage_grid
+    try:
+        cursor.execute("SELECT COUNT(*) FROM coverage_grid")
+        grid_count = cursor.fetchone()[0]
+        if grid_count == 0:
+            issues.append("coverage_grid exists but is empty.")
+    except sqlite3.Error:
+        issues.append("Table 'coverage_grid' not found (run build_coverage_grid.py).")
+
+    # check analysis modules
+    modules = [
+        "polar",
+        "signal_distance",
+        "altitude_distance",
+        "shadow_map",
+        "station_range",
+        "antenna_health",
+        "radio_horizon",
+        "terrain",
+        "station_compare",
+        "station_quality",
+    ]
+    for m in modules:
+        try:
+            __import__(f"ogn_tool.analysis.{m}")
+        except Exception:
+            issues.append(f"Analysis module missing: {m}")
+
+    return issues
+
 def _build_where(
     since_iso: str,
     since_epoch: int,
@@ -727,6 +774,20 @@ db_error = False
 db_reachable = os.path.exists(db_path)
 if not db_reachable:
     db_error = True
+
+if db_reachable:
+    try:
+        _rf_conn = sqlite3.connect(db_path)
+        rf_issues = rf_sanity_check(_rf_conn)
+    except sqlite3.Error:
+        rf_issues = ["Database connection failed."]
+    finally:
+        try:
+            _rf_conn.close()
+        except Exception:
+            pass
+else:
+    rf_issues = ["Database not found."]
 rows_in_window = 0
 if db_reachable and not grid_df_kpi.empty and "packet_count" in grid_df_kpi.columns:
     rows_in_window = int(np.nansum(pd.to_numeric(grid_df_kpi.get("packet_count"), errors="coerce")))
@@ -763,6 +824,12 @@ with status_container:
         st.metric("Packets in window", fmt_int(rows_in_window))
     with s5:
         st.metric("Grid cells", fmt_int(grid_cells) if grid_df_status is not None else "—")
+
+if rf_issues:
+    for issue in rf_issues:
+        st.warning(f"RF environment check: {issue}")
+else:
+    st.success("RF environment check passed")
 
 apply_ts = st.session_state.get("last_apply_ts")
 apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
