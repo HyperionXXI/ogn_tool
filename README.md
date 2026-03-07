@@ -25,6 +25,11 @@ The goal is to analyze the **real-world RF performance of a ground station**.
 - Multi-station comparison
 - Global station quality score
 
+Notes:
+- Several RF analyses require a populated coverage_grid (build it with scripts/build_coverage_grid.py).
+- Station comparison requires OGN_COMPARE_STATIONS to be configured.
+- Radio horizon uses a fallback station altitude of 400 m if not provided.
+
 ---
 
 ## Why this project exists

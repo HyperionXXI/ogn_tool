@@ -23,6 +23,11 @@ d’analyser les **performances radio réelles d’une station**.
 - comparaison de stations
 - score global de qualité
 
+Notes :
+- Plusieurs analyses RF nécessitent une coverage_grid remplie (à construire via scripts/build_coverage_grid.py).
+- La comparaison de stations nécessite OGN_COMPARE_STATIONS.
+- L’horizon radio utilise une altitude station par défaut de 400 m si non fournie.
+
 ---
 
 ## Pourquoi ce projet existe
