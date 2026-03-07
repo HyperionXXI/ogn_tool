@@ -146,6 +146,9 @@ OGN_FILTER=r/LAT/LON/RADIUS_KM
 OGN_DB_PATH=C:\path\to\ogn_log.sqlite3
 OGN_HOST=glidern1.glidernet.org
 OGN_PORT=14580
+OGN_HOSTS=glidern1.glidernet.org,glidern2.glidernet.org,glidern3.glidernet.org,glidern5.glidernet.org
+OGN_NO_PACKET_SECONDS=60
+OGN_ROTATE_MINUTES=20
 ```
 
 ---

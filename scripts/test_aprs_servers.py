@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 Quick APRS-IS server test: connect, login, read a few lines, report packet vs comment.
 
 Usage (PowerShell):
