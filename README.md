@@ -2,13 +2,20 @@
 
 # ogn_tool — RF Coverage Analyzer
 
-![Python](https://img.shields.io/badge/python-3.11-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+RF coverage analysis tool for **OGN / FLARM / FANET ground stations**.
+
+ogn_tool records packets from the Open Glider Network (OGN) into a
+local SQLite database and provides RF diagnostics using a Streamlit
+dashboard.
+
+The goal is to analyze the **real-world RF performance of a ground station**.
+
+---
 
 ## Features
 
 - Polar RF coverage analysis
-- RSSI / signal vs distance
+- RSSI vs distance
 - Altitude vs distance
 - Radio shadow detection
 - Station range estimation
@@ -18,244 +25,128 @@
 - Multi-station comparison
 - Global station quality score
 
-ogn_tool is a **radio analysis tool** for OGN / FLARM / FANET stations.
-It is an **RF coverage analysis for OGN / FLARM / FANET ground stations**.
-It records radio frames relayed by the Open Glider Network (OGN) into a local
-database and lets you explore:
-- the real-world reception range of a station
-- reception distances
-- heard-by relationships
-- radio coverage in space
-
-The project is especially useful to:
-- analyze your own OGN station
-- optimize an antenna or radio site
-- study local FLARM / FANET coverage
-
-Analyze a local SQLite log database containing OGN/APRS-IS packets and
-visualize coverage and statistics with a Streamlit dashboard.
-
-Most acronyms are defined the first time they appear. A short glossary
-is also provided below.
-
-------------------------------------------------------------------------
+---
 
 ## Why this project exists
 
-- There are many tools to track aircraft.
-- There are very few tools to analyze the RF performance of a ground station.
-- This project analyzes OGN logs to study real-world radio coverage.
+Many tools exist to track aircraft positions.
 
-------------------------------------------------------------------------
+Very few tools analyze the **RF performance of ground stations**.
 
-## Typical use cases
+ogn_tool analyzes OGN logs to study real-world radio coverage.
 
-- Analyze the real coverage range of a station
-- Optimize an antenna or a radio site
-- Detect terrain-related shadow zones
-- Statistical reception analysis
-- Compare multiple OGN stations
+---
 
-------------------------------------------------------------------------
+## Radio chain
 
-## What it does
 
--   A **collector** connects to an OGN/APRS-IS TCP feed and stores
-    packets into a local **SQLite** database file (`.sqlite3`).
--   A **dashboard** (Streamlit web app) reads that database and shows:
-    -   last packet time and packet counts
-    -   basic health indicators
-    -   coverage and distance statistics
-    -   map views and filters (time window, packet types, etc.)
-
-------------------------------------------------------------------------
-
-## RF analysis pipeline
-
-The project includes RF analysis modules under `src/ogn_tool/analysis` that
-process coverage data to assess the RF performance of an OGN ground station:
-
-- `signal_distance`
-- `station_range`
-- `station_quality`
-- `polar`
-- `shadow_map`
-- `terrain`
-- `antenna_health`
-- `station_compare`
-- `altitude_distance`
-- `radio_horizon`
-
-------------------------------------------------------------------------
-
-## Radio chain (end-to-end)
-
-<pre>
 Aircraft
-   │
-   │ 868 MHz
-   │
+│
+│ 868 MHz
+│
 FLARM / FANET transmitter
-   │
-   │
+│
 OGN ground station
-   │
-   │ Internet
-   │
+│
+Internet
+│
 APRS-IS servers
-   │
-   │ TCP stream
-   │
+│
 collector.py
-   │
+│
 SQLite database
-   │
+│
 RF analysis modules
-   │
+│
 dashboard.py
-</pre>
 
-------------------------------------------------------------------------
 
-## Configuration (generic, recommended)
+---
 
-The simplest setup is to define your station settings in a local `.env`
-file at the project root. Both the collector and the dashboard will read it.
+## RF analysis modules
 
-Example `.env`:
+Located in:
 
-```
+
+src/ogn_tool/analysis
+
+
+Modules:
+
+- signal_distance
+- station_range
+- station_quality
+- polar
+- shadow_map
+- terrain
+- antenna_health
+- station_compare
+- altitude_distance
+- radio_horizon
+
+---
+
+## Quick start
+
+Clone the repository:
+
+```bash
+git clone https://github.com/HyperionXXI/ogn_tool.git
+cd ogn_tool
+
+Create environment:
+
+python -m venv .venv
+
+Activate:
+
+.venv\Scripts\activate
+
+Install:
+
+pip install -e .
+
+Run dashboard:
+
+streamlit run apps/dashboard.py
+
+Open:
+
+http://localhost:8501
+Configuration
+
+Example .env:
+
 OGN_USER=CALLSIGN
 OGN_PASS=PASSCODE
 OGN_FILTER=r/LAT/LON/RADIUS_KM
 OGN_DB_PATH=C:\path\to\ogn_log.sqlite3
 OGN_HOST=glidern1.glidernet.org
 OGN_PORT=14580
-```
+Project structure
+apps/            Streamlit dashboard
+scripts/         runtime scripts
+tools/           utilities
+src/ogn_tool/    Python package
+docs/            documentation
+data/            local runtime data
+tests/           unit tests
+Troubleshooting
+Dashboard shows no data
 
-Notes:
-- `OGN_USER` is your APRS-IS callsign. The dashboard uses it as default station callsign.
-- `OGN_PASS` is the APRS-IS passcode for that callsign.
-- `OGN_FILTER` is strongly recommended to receive data (example: `r/47.33/7.27/300`).
+Possible causes:
 
-------------------------------------------------------------------------
+collector not running
 
-## Quickstart
+wrong database path
 
-### 1. Activate the Python environment
+filters excluding packets
 
-``` powershell
-cd C:\GitHub\ogn_tool
-.\.venv\Scripts\Activate.ps1
-```
-
-### 2. Define the SQLite database location
-
-The dashboard reads the database path from an environment variable:
-
-``` powershell
-$env:OGN_DB_PATH = "F:\Data\ogn\ogn_log.sqlite3"
-```
-
-### 3. Run the collector (Terminal 1)
-
-The collector must run continuously to populate the SQLite database.
-Open a first terminal and start it:
-
-``` powershell
-python .\scripts\collector.py
-```
-
-### 4. Run the dashboard (Terminal 2)
-
-Open a second terminal (same environment) and start the dashboard:
-
-``` powershell
-streamlit run .\apps\dashboard.py
-```
-
-A local address will appear, typically:
-
-http://localhost:8501
-
-------------------------------------------------------------------------
-
-## Collector
-
-The collector should run in its own terminal alongside the dashboard.
-If the dashboard reports that the database appears "stale" or "frozen",
-the most common reason is that the collector is not currently running or
-cannot reach the upstream feed.
-
-------------------------------------------------------------------------
-
-## Project layout
-
--   `apps/` --- Streamlit applications (user interface)
--   `scripts/` --- runtime scripts such as the collector
--   `tools/` --- utility scripts (exports, diagnostics, statistics)
--   `src/ogn_tool/` --- internal Python package (configuration, database
-    access, shared code)
--   `docs/` --- documentation and screenshots
--   `data/` --- local data (usually not versioned)
-
-------------------------------------------------------------------------
-
-## Glossary
-
--   **OGN** --- Open Glider Network, which relays FLARM/FANET data via APRS.
--   **FLARM** --- collision-avoidance radio system used by gliders and paragliders.
--   **FANET** --- Flying Ad-hoc Network, a low-power radio network used in paragliding.
--   **APRS** --- Automatic Packet Reporting System, a packet
-    communication protocol.
--   **APRS-IS** --- APRS Internet System, APRS data distributed via
-    internet servers.
--   **Packet / frame** --- a received message containing position or
-    status data.
--   **SQLite** --- a lightweight database stored in a single file.
--   **Streamlit** --- a Python framework used to run a local web
-    dashboard.
--   **Callsign** --- a station identifier (example: `FK50887`).
-
-------------------------------------------------------------------------
-
-## Example dashboard
-
-![Dashboard](docs/images/dashboard.png)
-
-------------------------------------------------------------------------
-
-## Troubleshooting
-
-### SyntaxWarning: invalid escape sequence
-
-This warning usually comes from Python strings containing backslashes
-(such as `\d`).
-
-Possible fixes:
-
--   use a raw string: `r"...\d..."`
--   or escape the backslash: `"\\d"`
-
-### Dashboard shows no data
-
-Common causes:
-
--   `OGN_DB_PATH` points to the wrong database file
--   the database contains no packets matching the selected filters
--   the collector is not running
-
-------------------------------------------------------------------------
-
-## Tests
-
-``` sh
+Tests
 pytest
-pytest tests
-```
+License
 
-------------------------------------------------------------------------
+MIT License
 
-## Local data
 
-`data/` contains local runtime data and is not versioned in git.
+---
