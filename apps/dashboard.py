@@ -1082,7 +1082,7 @@ def render_signal_view() -> None:
     )
 
     with section_signal:
-        st.subheader("Signal vs distance")
+        st.subheader("Signal vs distance (SNR dB)")
         result = analysis_signal_distance.analyze(
             packets_signal,
             station_lat=station_lat,
@@ -1104,7 +1104,7 @@ def render_signal_view() -> None:
                     st.metric("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
                 with c3:
                     val = summary.get("mean_rssi")
-                    st.metric("Mean RSSI (dB)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                    st.metric("Mean signal (SNR dB)", f"{fmt_float(val, 1)}" if val is not None else "—")
                 with c4:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
