@@ -25,6 +25,7 @@ import os
 import re
 import socket
 import sqlite3
+import time
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 try:
@@ -36,7 +37,21 @@ except Exception:  # pragma: no cover
 if load_dotenv:
     load_dotenv()
 
-HOST = os.getenv("OGN_HOST", "glidern5.glidernet.org")
+_HOST_ENV = os.getenv("OGN_HOST", "").strip()
+_HOSTS_ENV = os.getenv("OGN_HOSTS", "").strip()
+DEFAULT_HOSTS = [
+    "glidern1.glidernet.org",
+    "glidern2.glidernet.org",
+    "glidern3.glidernet.org",
+    "glidern5.glidernet.org",
+]
+if _HOSTS_ENV:
+    HOSTS = [h.strip() for h in _HOSTS_ENV.split(",") if h.strip()]
+elif _HOST_ENV:
+    HOSTS = [_HOST_ENV] + [h for h in DEFAULT_HOSTS if h != _HOST_ENV]
+else:
+    HOSTS = DEFAULT_HOSTS[:]
+HOST = HOSTS[0]
 PORT = int(os.getenv("OGN_PORT", "14580"))
 DB_PATH = os.getenv("OGN_DB_PATH") or os.getenv("OGN_DB") or "ogn_log.sqlite3"
 FILTER = os.getenv("OGN_FILTER", "")
@@ -48,6 +63,9 @@ PASSCODE = os.getenv("OGN_PASS", "-1")
 
 SOCKET_TIMEOUT_S = 60
 COMMIT_EVERY = int(os.getenv("OGN_COMMIT_EVERY", "250"))
+NO_PACKET_LINES = int(os.getenv("OGN_NO_PACKET_LINES", "200"))
+NO_PACKET_SECONDS = int(os.getenv("OGN_NO_PACKET_SECONDS", "60"))
+ROTATE_MINUTES = int(os.getenv("OGN_ROTATE_MINUTES", "20"))
 SCHEMA_VERSION = 1
 
 # APRS uncompressed position (DDMM.mmN/DDDMM.mmE)
@@ -214,7 +232,11 @@ def _login_line() -> str:
 
 def collect_forever() -> None:
     con = db_connect(DB_PATH)
+    db_path_abs = os.path.abspath(DB_PATH)
+    print(f"[collector] DB path: {db_path_abs}")
     pending: list[Dict[str, Any]] = []
+    rejected_sample = 0
+    host_index = 0
 
     inserted_total = 0
     received_total = 0
@@ -224,8 +246,9 @@ def collect_forever() -> None:
         sock: Optional[socket.socket] = None
         f = None
         try:
-            print(f"Connecting to {HOST}:{PORT} ...")
-            sock = socket.create_connection((HOST, PORT), timeout=SOCKET_TIMEOUT_S)
+            host = HOSTS[host_index % len(HOSTS)]
+            print(f"Connecting to {host}:{PORT} ...")
+            sock = socket.create_connection((host, PORT), timeout=SOCKET_TIMEOUT_S)
             sock.settimeout(SOCKET_TIMEOUT_S)
 
             sock.sendall(_login_line().encode("ascii", "ignore"))
@@ -233,19 +256,41 @@ def collect_forever() -> None:
 
             print("Logging into SQLite... (Ctrl+C to stop)")
             if DEBUG:
-                print(f"[debug] DB={os.path.abspath(DB_PATH)}")
+                print(f"[debug] DB={os.path.abspath(DB_PATH)} HOST={host}")
                 print(f"[debug] FILTER={FILTER!r} COMMIT_EVERY={COMMIT_EVERY}")
 
+            packets_seen = 0
+            lines_seen = 0
+            conn_started = time.time()
+            last_packet_ts = time.time()
             while True:
                 line = f.readline()
                 if not line:
                     raise ConnectionError("socket closed")
 
+                if DEBUG:
+                    print("[collector] raw line received")
+
+                lines_seen += 1
                 received_total += 1
+                if line.startswith("#"):
+                    if (time.time() - last_packet_ts) >= NO_PACKET_SECONDS:
+                        raise ConnectionError("no packets received (time threshold)")
+                    if packets_seen == 0 and lines_seen >= NO_PACKET_LINES:
+                        raise ConnectionError("no packets received (comments only)")
+                    continue
                 pkt = parse_line(line)
                 if not pkt:
                     rejected_total += 1
+                    if DEBUG and rejected_sample < 5:
+                        print(f"[collector] rejected line sample: {line.strip()}")
+                        rejected_sample += 1
                     continue
+
+                packets_seen += 1
+                last_packet_ts = time.time()
+                if DEBUG:
+                    print("[collector] parsed packet")
 
                 now = dt.datetime.now(dt.timezone.utc)
                 pkt["ts_utc"] = now.isoformat()
@@ -256,8 +301,14 @@ def collect_forever() -> None:
                     print(f"[debug] raw: {pkt['raw']}")
 
                 if len(pending) >= COMMIT_EVERY:
-                    insert_many(con, pending)
-                    con.commit()
+                    if DEBUG:
+                        print(f"[collector] inserting packet batch size={len(pending)}")
+                    try:
+                        insert_many(con, pending)
+                        con.commit()
+                    except Exception as e:
+                        print(f"[collector] insert error: {e!r}")
+                        raise
                     inserted_total += len(pending)
                     pending.clear()
 
@@ -265,6 +316,9 @@ def collect_forever() -> None:
                         print(
                             f"[debug] inserted_total={inserted_total} received_total={received_total} rejected_total={rejected_total}"
                         )
+
+                if (time.time() - conn_started) >= (ROTATE_MINUTES * 60):
+                    raise ConnectionError("rotate server (time-based)")
 
         except KeyboardInterrupt:
             print("\nStopping collector (Ctrl+C).")
@@ -280,9 +334,8 @@ def collect_forever() -> None:
                 pass
 
             print(f"[collector] ERROR: {e!r} -> reconnect in 3s")
+            host_index += 1
             try:
-                import time
-
                 time.sleep(3)
             except Exception:
                 pass
