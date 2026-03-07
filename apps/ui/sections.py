@@ -5,6 +5,7 @@ import streamlit as st
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
 from ui import charts as ui_charts
+from ui.charts import render_grid_map
 
 
 def render_coverage_tab(filters):
@@ -20,11 +21,15 @@ def render_coverage_tab(filters):
     section_map = st.container()
     section_rssi = st.container()
     section_distance = st.container()
+    section_shadow = st.container()
 
     df_grid = ctx['load_coverage_grid'](db_path, filters_apply["since_epoch"])
 
+    rf_grid = ctx.get("rf_grid")
+
     with section_map:
-        st.subheader("Coverage map")
+        st.subheader("Coverage density")
+        render_grid_map(rf_grid, value="packets", title="Coverage density", ctx=ctx)
         raw_packets = ctx['_load_packets_window_raw'](
             db_path=db_path,
             since_iso=filters_apply["since_iso"],
@@ -56,8 +61,6 @@ def render_coverage_tab(filters):
                 if last_ts:
                     msg = f"{msg} Last local reception: {last_ts}."
                 st.info(msg)
-            else:
-                st.info("Coverage map not available.\nRequires coverage_grid dataset.")
         else:
             summary = result.get("summary") or {}
             data = result.get("data")
@@ -92,26 +95,20 @@ def render_coverage_tab(filters):
 
     st.divider()
     with section_rssi:
-        st.subheader("RSSI heatmap")
-        result = ctx['analysis_signal_distance'].analyze(df_grid)
-        if not result.get("implemented"):
-            st.info(
-                "RSSI heatmap not available.\n"
-                "No local packets detected in the current window. "
-                "Try increasing the time window or disable local radio only."
-            )
+        st.subheader("Unique aircraft")
+        render_grid_map(rf_grid, value="aircraft", title="Unique aircraft", ctx=ctx)
 
     st.divider()
     with section_distance:
-        st.subheader("Distance heatmap")
+        st.subheader("Maximum reception distance")
+        render_grid_map(rf_grid, value="max_distance", title="Maximum reception distance", ctx=ctx)
+
+    st.divider()
+    with section_shadow:
+        st.subheader("Terrain shadow proxy")
+        render_grid_map(rf_grid, value="shadow", title="Terrain shadow proxy", ctx=ctx)
         result = ctx['analysis_station_range'].analyze(df_grid)
-        if not result.get("implemented"):
-            st.info(
-                "Distance heatmap not available.\n"
-                "No local packets detected in the current window. "
-                "Try increasing the time window or disable local radio only."
-            )
-        else:
+        if result.get("implemented"):
             summary = result.get("summary") or {}
             data = result.get("data")
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
@@ -746,11 +743,11 @@ def render_debug_tab(filters):
                 "Enable in Advanced settings → Developer → Raw packets mode"
             )
         else:
-            ctx = ctx['get_packets_context']()
-            if ctx.df_packets is None or ctx.df_packets.empty:
+            packets_ctx = ctx['get_packets_context']()
+            if packets_ctx.df_packets is None or packets_ctx.df_packets.empty:
                 st.info("No raw packets available.")
             else:
-                st.dataframe(ctx.df_packets.head(100), use_container_width=True, height=300)
+                st.dataframe(packets_ctx.df_packets.head(100), use_container_width=True, height=300)
 
     with section_stats:
         st.subheader("Dataset statistics")

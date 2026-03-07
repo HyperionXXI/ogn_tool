@@ -37,6 +37,12 @@ try:
 except Exception:  # pragma: no cover
     go = None
 
+from ui.layout import DASHBOARD_COLUMNS
+from ui.metrics import metric_card
+from ui.filters import render_sidebar_filters
+from ui import charts as ui_charts
+from ui.sections import render_coverage_tab, render_signal_tab, render_rf_tab, render_debug_tab
+
 from ogn_tool.config import get_config
 from ogn_tool.db import connect
 from ogn_tool.rf_analysis import compute_azimuth_stats, compute_distance_probability, reliable_distance_km
@@ -51,6 +57,7 @@ from ogn_tool.analysis import station_quality as analysis_station_quality
 from ogn_tool.analysis import antenna_health as analysis_antenna_health
 from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
 from ogn_tool.analysis.grid_loader import load_coverage_grid as load_coverage_grid_base
+from ogn_tool.analysis.pipeline import build_rf_dataset
 
 try:
     from streamlit_folium import st_folium
@@ -91,22 +98,6 @@ section[data-testid="stSidebar"] { width: 320px !important; }
     unsafe_allow_html=True,
 )
 
-DASHBOARD_COLUMNS = 5
-
-def metric_card(col_or_label, label: Optional[str] = None, value: Optional[str] = None) -> None:
-    """
-    Render a metric with a uniform trailing spacer for consistent height.
-    Accepts either (col, label, value) or (label, value) inside a column context.
-    """
-    if value is None and label is not None:
-        st.metric(col_or_label, label)
-        st.write("")
-        return
-    if value is None and label is None:
-        return
-    col = col_or_label
-    col.metric(label, value)
-    col.write("")
 
 _config = get_config()
 DB_DEFAULT = str(_config.db_path)
@@ -230,21 +221,23 @@ def _parse_compare_stations(env_value: str) -> Dict[str, Tuple[float, float]]:
 # DB layer
 # ---------------------------
 
+@st.cache_resource
+def get_db_connection(db_path: str) -> sqlite3.Connection:
+    return sqlite3.connect(db_path, check_same_thread=False)
+
+
 def _db_meta_raw(db_path: str, query_log: Optional[List[Dict]] = None) -> Tuple[int, Optional[str]]:
     """Return (rows_total, max_ts_utc) from packets table, robust."""
     if not os.path.exists(db_path):
         return 0, None
-    con = sqlite3.connect(db_path)
-    try:
-        sql = "SELECT COUNT(*) AS cnt, MAX(ts_utc) AS max_ts FROM packets"
-        t0 = time.perf_counter()
-        row = con.execute(sql).fetchone()
-        dt_ms = (time.perf_counter() - t0) * 1000.0
-        if query_log is not None:
-            query_log.append({"query": "db_meta", "ms": round(dt_ms, 2), "rows": 1})
-        return int(row[0]), row[1]
-    finally:
-        con.close()
+    con = get_db_connection(db_path)
+    sql = "SELECT COUNT(*) AS cnt, MAX(ts_utc) AS max_ts FROM packets"
+    t0 = time.perf_counter()
+    row = con.execute(sql).fetchone()
+    dt_ms = (time.perf_counter() - t0) * 1000.0
+    if query_log is not None:
+        query_log.append({"query": "db_meta", "ms": round(dt_ms, 2), "rows": 1})
+    return int(row[0]), row[1]
 
 
 @st.cache_data(ttl=30, show_spinner=False)
@@ -392,6 +385,7 @@ def _build_where(
 
 
 @st.cache_data(ttl=5, show_spinner=False)
+@st.cache_data(show_spinner=False)
 def _load_packets_window_raw(
     db_path: str,
     since_iso: str,
@@ -408,41 +402,46 @@ def _load_packets_window_raw(
     if not os.path.exists(db_path):
         return pd.DataFrame()
 
-    con = sqlite3.connect(db_path)
-    try:
-        cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
-        use_epoch = "ts_epoch" in cols
+    con = get_db_connection(db_path)
+    cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
+    use_epoch = "ts_epoch" in cols
 
-        where_sql, params = _build_where(
-            since_iso=since_iso,
-            since_epoch=since_epoch,
-            use_epoch=use_epoch,
-            dst_types=dst_types,
-            station_callsign=station_callsign,
-            only_heard_by=only_heard_by,
-            igate_filter=igate_filter,
-            source_mode=source_mode,
-            qas_filter=qas_filter,
-        )
+    where_sql, params = _build_where(
+        since_iso=since_iso,
+        since_epoch=since_epoch,
+        use_epoch=use_epoch,
+        dst_types=dst_types,
+        station_callsign=station_callsign,
+        only_heard_by=only_heard_by,
+        igate_filter=igate_filter,
+        source_mode=source_mode,
+        qas_filter=qas_filter,
+    )
 
-        select_cols = "ts_epoch, ts_utc, src, dst, igate, qas, lat, lon, raw"
-        order_col = "ts_epoch" if use_epoch else "ts_utc"
-        sql = f"""
-        SELECT
-            {select_cols}
-        FROM packets
-        WHERE {where_sql}
-        ORDER BY {order_col} DESC
-        LIMIT ?
-        """
-        params2 = params + [int(limit_rows)]
-        t0 = time.perf_counter()
-        df = pd.read_sql_query(sql, con, params=params2)
-        dt_ms = (time.perf_counter() - t0) * 1000.0
-        if query_log is not None:
-            query_log.append({"query": "load_packets_window", "ms": round(dt_ms, 2), "rows": int(len(df))})
-    finally:
-        con.close()
+    select_cols = "ts_epoch, ts_utc, src, dst, igate, qas, lat, lon, raw"
+    order_col = "ts_epoch" if use_epoch else "ts_utc"
+    sql = f"""
+    SELECT
+        {select_cols}
+    FROM packets
+    WHERE {where_sql}
+    ORDER BY {order_col} DESC
+    LIMIT ?
+    """
+    params2 = params + [int(limit_rows)]
+    t0 = time.perf_counter()
+    df = pd.read_sql_query(sql, con, params=params2)
+    dt_ms = (time.perf_counter() - t0) * 1000.0
+    if query_log is not None:
+        query_log.append({"query": "load_packets_window", "ms": round(dt_ms, 2), "rows": int(len(df))})
+
+    if "igate" in df.columns and station_callsign:
+        igate_series = df["igate"].fillna("")
+        df = df[igate_series.eq(station_callsign) | igate_series.str.contains(station_callsign)]
+
+    max_packets = 2_000_000
+    if len(df) > max_packets:
+        df = df.sample(n=max_packets, random_state=42)
 
     return df
 
@@ -472,6 +471,11 @@ def load_packets_window(
         qas_filter=qas_filter,
         limit_rows=limit_rows,
     )
+
+
+@st.cache_data(show_spinner=False)
+def build_rf_cached(df_packets: pd.DataFrame, station_lat: float, station_lon: float):
+    return build_rf_dataset(df_packets, station_lat, station_lon)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -630,79 +634,7 @@ default_filters = {
     "since_epoch": int((now_utc() - dt.timedelta(hours=6)).timestamp()),
 }
 
-if "filters_apply" not in st.session_state:
-    st.session_state["filters_apply"] = default_filters.copy()
-if "filters_edit" not in st.session_state:
-    st.session_state["filters_edit"] = st.session_state["filters_apply"].copy()
-if "last_apply_ts" not in st.session_state:
-    st.session_state["last_apply_ts"] = now_utc()
-
-with st.sidebar:
-    with st.form("filters_form"):
-        st.markdown("## Station")
-        station_callsign = st.text_input("Callsign", st.session_state["filters_edit"]["station_callsign"])
-        db_path = st.text_input("DB path", st.session_state["filters_edit"]["db_path"])
-        station_lat = st.number_input("Latitude", value=float(st.session_state["filters_edit"]["station_lat"]), format="%.6f")
-        station_lon = st.number_input("Longitude", value=float(st.session_state["filters_edit"]["station_lon"]), format="%.6f")
-
-        st.markdown("## Time window")
-        hours = st.slider("Time window (hours)", 1, 72, int(st.session_state["filters_edit"]["hours"]))
-
-        st.markdown("## Data filters")
-        source_mode = st.selectbox(
-            "Packet source",
-            ["Heard-by station", "Radio station view"],
-            index=["Heard-by station", "Radio station view"].index(st.session_state["filters_edit"]["source_mode"]),
-        )
-        dst_types = st.multiselect(
-            "Aircraft types",
-            ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
-            default=st.session_state["filters_edit"]["dst_types"],
-        )
-        only_heard_by = st.checkbox("Coverage heard-by", value=bool(st.session_state["filters_edit"]["only_heard_by"]))
-        only_local_radio = st.checkbox("Local radio only", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
-        igate_filter = st.text_input("IGate filter (optional)", value=st.session_state["filters_edit"]["igate_filter"])
-        use_cov_grid = st.checkbox("Use coverage grid (recommended)", value=bool(st.session_state["filters_edit"].get("use_cov_grid", True)))
-
-        st.caption("Filters are applied only when clicking 'Apply filters'.")
-        apply_button = st.form_submit_button("Apply filters")
-
-    if apply_button:
-        st.session_state["filters_edit"] = {
-            **st.session_state["filters_edit"],
-            "db_path": db_path,
-            "station_callsign": station_callsign,
-            "station_lat": float(station_lat),
-            "station_lon": float(station_lon),
-            "hours": int(hours),
-            "source_mode": source_mode,
-            "dst_types": list(dst_types),
-            "only_local_radio": bool(only_local_radio),
-            "only_heard_by": bool(only_heard_by),
-            "igate_filter": igate_filter,
-            "use_cov_grid": bool(use_cov_grid),
-        }
-
-        applied = st.session_state["filters_edit"].copy()
-        if applied["only_local_radio"]:
-            applied["source_mode"] = "Radio station view"
-            if not applied.get("igate_filter"):
-                applied["igate_filter"] = applied["station_callsign"]
-            applied["qas_filter"] = "qA*"
-        else:
-            applied["qas_filter"] = ""
-        since_dt = now_utc() - dt.timedelta(hours=int(applied["hours"]))
-        applied["since_iso"] = since_dt.isoformat().replace("+00:00", "+00:00")
-        applied["since_epoch"] = int(since_dt.timestamp())
-        st.session_state["filters_apply"] = applied
-        st.session_state["last_apply_ts"] = now_utc()
-
-filters_apply = st.session_state["filters_apply"]
-if filters_apply["do_autorefresh"]:
-    filters_apply = filters_apply.copy()
-    since_dt = now_utc() - dt.timedelta(hours=int(filters_apply["hours"]))
-    filters_apply["since_iso"] = since_dt.isoformat().replace("+00:00", "+00:00")
-    filters_apply["since_epoch"] = int(since_dt.timestamp())
+filters_apply = render_sidebar_filters(default_filters, now_utc)
 
 mode = filters_apply["mode"]
 db_path = filters_apply["db_path"]
@@ -831,14 +763,43 @@ else:
 
 last_packet_label = (last_ts[:19] + " UTC") if last_ts else "—"
 
+packets_kpi = _load_packets_window_raw(
+    db_path=db_path,
+    since_iso=filters_apply["since_iso"],
+    since_epoch=filters_apply["since_epoch"],
+    dst_types=dst_types,
+    station_callsign=station_callsign,
+    only_heard_by=False,
+    igate_filter="",
+    source_mode="Heard-by station",
+    qas_filter="",
+    limit_rows=limit_rows,
+)
+rf_packets, rf_grid = build_rf_cached(packets_kpi, station_lat, station_lon)
+unique_aircraft = packets_kpi["src"].nunique() if "src" in packets_kpi.columns else None
+igate_count = packets_kpi["igate"].nunique() if "igate" in packets_kpi.columns else None
+
 with kpi_container:
     k1, k2, k3, k4, k5 = st.columns(DASHBOARD_COLUMNS)
-    packets_received_display = 0 if packets_received is None else packets_received
-    metric_card(k1, "Packets in window", fmt_int(packets_received_display))
-    metric_card(k2, "Reliable distance", f"{fmt_float(d90, 1)} km" if d90 is not None else "—")
-    metric_card(k3, "Max distance", f"{fmt_float(max_distance_grid, 1)} km" if max_distance_grid is not None else "—")
-    metric_card(k4, "Grid cells", fmt_int(grid_cells) if grid_df_status is not None else "—")
-    metric_card(k5, "P95 distance", f"{fmt_float(p95_distance_grid, 1)} km" if p95_distance_grid is not None else "—")
+    packets_total = int(len(rf_packets)) if rf_packets is not None else 0
+    aircraft_total = int(rf_packets["src"].nunique()) if rf_packets is not None and "src" in rf_packets.columns else 0
+    max_dist = float(rf_packets["distance_km"].max()) if rf_packets is not None and "distance_km" in rf_packets.columns else None
+    p95_dist = (
+        float(rf_packets["distance_km"].quantile(0.95))
+        if rf_packets is not None and "distance_km" in rf_packets.columns and not rf_packets.empty
+        else None
+    )
+    metric_card(k1, "Packets", fmt_int(packets_total))
+    metric_card(k2, "Aircraft", fmt_int(aircraft_total))
+    metric_card(k3, "Max distance", f"{fmt_float(max_dist, 1)} km" if max_dist is not None else "—")
+    metric_card(k4, "P95 distance", f"{fmt_float(p95_dist, 1)} km" if p95_dist is not None else "—")
+    metric_card(k5, "Grid cells", fmt_int(len(rf_grid)) if rf_grid is not None else "—")
+    k6, k7, k8, k9, k10 = st.columns(DASHBOARD_COLUMNS)
+    metric_card(k6, "Unique aircraft", fmt_int(unique_aircraft) if unique_aircraft is not None else "—")
+    metric_card(k7, "IGates in dataset", fmt_int(igate_count) if igate_count is not None else "—")
+    k8.empty()
+    k9.empty()
+    k10.empty()
 
 with status_container:
     st.caption(
@@ -1029,831 +990,63 @@ def get_packets_context() -> AnalysisContext:
     return ctx
 
 
-def render_coverage_view() -> None:
-    section_map = st.container()
-    section_rssi = st.container()
-    section_distance = st.container()
-
-    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
-
-    with section_map:
-        st.subheader("Coverage map")
-        raw_packets = _load_packets_window_raw(
-            db_path=db_path,
-            since_iso=filters_apply["since_iso"],
-            since_epoch=filters_apply["since_epoch"],
-            dst_types=[],
-            station_callsign=station_callsign,
-            only_heard_by=False,
-            igate_filter="",
-            source_mode="Heard-by station",
-            qas_filter="",
-            limit_rows=limit_rows,
-        )
-        shadow_ctx = {
-            "packets": raw_packets,
-            "station_callsign": station_callsign,
-            "cell_size_km": 3.0,
-            "window_hours": hours,
-        }
-        result = analysis_shadow_map.analyze(shadow_ctx)
-        if not result.get("implemented"):
-            reason = (result.get("summary") or {}).get("reason")
-            if reason == "no_local_packets_in_window":
-                summary = result.get("summary") or {}
-                msg = (
-                    "No local packets found for this station in the selected time window. "
-                    "Try increasing the time window or disable local radio only."
-                )
-                last_ts = summary.get("last_local_rx_ts")
-                if last_ts:
-                    msg = f"{msg} Last local reception: {last_ts}."
-                st.info(msg)
-            else:
-                st.info("Coverage map not available.\nRequires coverage_grid dataset.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            st.markdown("**Radio shadow map**")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            else:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Cells", fmt_int(summary.get("cells_total")))
-                with c2:
-                    metric_card("Shadow cells", fmt_int(summary.get("shadow_cells")))
-                with c3:
-                    val = summary.get("coverage_mean")
-                    metric_card("Coverage mean", f"{fmt_float(val, 2)}" if val is not None else "—")
-                with c4:
-                    st.empty()
-                with c5:
-                    st.empty()
-                d1, d2, d3, d4, d5 = st.columns(DASHBOARD_COLUMNS)
-                with d1:
-                    metric_card("Local points", fmt_int(summary.get("local_points")))
-                with d2:
-                    metric_card("Local igate", fmt_int(summary.get("local_points_igate")))
-                with d3:
-                    metric_card("Local raw", fmt_int(summary.get("local_points_raw")))
-                with d4:
-                    st.empty()
-                with d5:
-                    st.empty()
-                st.dataframe(data.head(30), use_container_width=True, height=300)
-
-    st.divider()
-    with section_rssi:
-        st.subheader("RSSI heatmap")
-        result = analysis_signal_distance.analyze(df_grid)
-        if not result.get("implemented"):
-            st.info(
-                "RSSI heatmap not available.\n"
-                "No local packets detected in the current window. "
-                "Try increasing the time window or disable local radio only."
-            )
-
-    st.divider()
-    with section_distance:
-        st.subheader("Distance heatmap")
-        result = analysis_station_range.analyze(df_grid)
-        if not result.get("implemented"):
-            st.info(
-                "Distance heatmap not available.\n"
-                "No local packets detected in the current window. "
-                "Try increasing the time window or disable local radio only."
-            )
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            if summary:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c2:
-                    metric_card("Grid cells", fmt_int(summary.get("grid_cells")))
-                with c3:
-                    val = summary.get("max_distance_km")
-                    metric_card("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("p95_distance_km")
-                    metric_card("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c5:
-                    st.empty()
-            else:
-                st.info("No distance statistics available.")
-
-
-def render_signal_view() -> None:
-    section_signal = st.container()
-    section_altitude = st.container()
-    section_distribution = st.container()
-
-    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
-    packets_signal = _load_packets_window_raw(
-        db_path=db_path,
-        since_iso=filters_apply["since_iso"],
-        since_epoch=filters_apply["since_epoch"],
-        dst_types=dst_types,
-        station_callsign=station_callsign,
-        only_heard_by=False,
-        igate_filter="",
-        source_mode="Heard-by station",
-        qas_filter="",
-        limit_rows=limit_rows,
-    )
-
-    with section_signal:
-        st.subheader("Signal vs distance (SNR dB)")
-        result = analysis_signal_distance.analyze(
-            packets_signal,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
-        if not result.get("implemented"):
-            st.info("Signal vs distance analysis not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            else:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c2:
-                    val = summary.get("max_distance_km")
-                    metric_card("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c3:
-                    val = summary.get("mean_rssi")
-                    metric_card("Mean signal (SNR dB)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("p95_distance_km")
-                    metric_card("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c5:
-                    st.empty()
-                data_plot = data
-                if len(data_plot) > 20000:
-                    data_plot = data_plot.sample(n=20000, random_state=42)
-                x_max = None
-                if "distance_km" in data_plot.columns and not data_plot["distance_km"].empty:
-                    x_max = float(data_plot["distance_km"].quantile(0.99))
-                if "distance_km" in data_plot.columns and "rssi_db" in data_plot.columns:
-                    st.markdown("**RSSI vs distance**")
-                    binned = result.get("binned_data")
-                    if go is not None:
-                        fig = go.Figure()
-                        fig.add_trace(
-                            go.Scatter(
-                                x=data_plot["distance_km"],
-                                y=data_plot["rssi_db"],
-                                mode="markers",
-                                name="Packets",
-                                marker=dict(size=2, opacity=0.18),
-                            )
-                        )
-                        if binned is not None and not binned.empty:
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=binned["distance_bin_km"],
-                                    y=binned["rssi_median"],
-                                    mode="lines",
-                                    name="Median RSSI",
-                                    line=dict(width=3, color="#f97316"),
-                                )
-                            )
-                        fig.update_layout(
-                            height=420,
-                            margin=dict(l=20, r=20, t=30, b=20),
-                            showlegend=True,
-                            legend=dict(orientation="h", x=0, y=1.02),
-                            xaxis_title="Distance (km)",
-                            yaxis_title="RSSI (dB)",
-                            xaxis=dict(range=[0, x_max] if x_max else None),
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.scatter_chart(data_plot, x="distance_km", y="rssi_db")
-                else:
-                    st.info("RSSI vs distance data missing required columns.")
-                st.dataframe(data.head(20), use_container_width=True, height=300)
-
-    st.divider()
-    with section_altitude:
-        st.subheader("Altitude vs distance")
-        result = analysis_altitude_distance.analyze(
-            packets_signal,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
-        if not result.get("implemented"):
-            st.info("Altitude vs distance analysis not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            else:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c2:
-                    val = summary.get("max_distance_km")
-                    metric_card("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c3:
-                    val = summary.get("mean_altitude_m")
-                    metric_card("Mean altitude (m)", f"{fmt_float(val, 0)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("p95_distance_km")
-                    metric_card("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c5:
-                    st.empty()
-                data_plot = data
-                if len(data_plot) > 20000:
-                    data_plot = data_plot.sample(n=20000, random_state=42)
-                x_max = None
-                if "distance_km" in data_plot.columns and not data_plot["distance_km"].empty:
-                    x_max = float(data_plot["distance_km"].quantile(0.99))
-                if "distance_km" in data_plot.columns and "altitude_m" in data_plot.columns:
-                    if go is not None:
-                        fig = go.Figure()
-                        fig.add_trace(
-                            go.Scatter(
-                                x=data_plot["distance_km"],
-                                y=data_plot["altitude_m"],
-                                mode="markers",
-                                name="Packets",
-                                marker=dict(size=2, opacity=0.15),
-                            )
-                        )
-                        # Feature 03 uses 20 km bins for altitude trend readability
-                        bins = (data_plot["distance_km"] // 20) * 20
-                        med = (
-                            data_plot.assign(distance_bin_km=bins)
-                            .groupby("distance_bin_km", as_index=False)
-                            .agg(altitude_median=("altitude_m", "median"))
-                            .sort_values("distance_bin_km")
-                        )
-                        if not med.empty:
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=med["distance_bin_km"],
-                                    y=med["altitude_median"],
-                                    mode="lines",
-                                    name="Median altitude",
-                                    line=dict(width=3, color="#0ea5e9"),
-                                )
-                            )
-                        fig.update_layout(
-                            height=420,
-                            margin=dict(l=20, r=20, t=30, b=20),
-                            showlegend=True,
-                            legend=dict(orientation="h", x=0, y=1.02),
-                            xaxis_title="Distance (km)",
-                            yaxis_title="Altitude (m)",
-                            # limit altitude axis for readability; extreme outliers remain in table/statistics
-                            xaxis=dict(range=[0, x_max] if x_max else None),
-                            yaxis=dict(range=[0, 5000]),
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.scatter_chart(data_plot, x="distance_km", y="altitude_m")
-                binned = result.get("binned_data")
-                if binned is not None and not binned.empty:
-                    order = ["0-500 m", "500-1000 m", "1000-2000 m", ">2000 m"]
-                    if "altitude_bin" in binned.columns:
-                        binned = binned.copy()
-                        binned["altitude_bin"] = pd.Categorical(binned["altitude_bin"], categories=order, ordered=True)
-                        binned = binned.sort_values("altitude_bin")
-                    st.dataframe(binned, use_container_width=True, height=300)
-
-    st.divider()
-    with section_distribution:
-        st.subheader("Distance distribution")
-        result = analysis_station_range.analyze(df_grid)
-        if not result.get("implemented"):
-            st.info("Distance distribution analysis not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            if summary:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c2:
-                    metric_card("Grid cells", fmt_int(summary.get("grid_cells")))
-                with c3:
-                    val = summary.get("max_distance_km")
-                    metric_card("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("p95_distance_km")
-                    metric_card("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c5:
-                    st.empty()
-            else:
-                st.info("No distance statistics available.")
-
-
-def render_rf_view() -> None:
-    section_azimuth = st.container()
-    section_terrain = st.container()
-    section_antenna = st.container()
-    section_horizon = st.container()
-    section_range = st.container()
-    section_probability = st.container()
-    section_summary = st.container()
-    section_compare = st.container()
-
-    df_grid = load_coverage_grid(db_path, filters_apply["since_epoch"])
-    quality_result = analysis_station_quality.analyze(df_grid)
-    range_result = analysis_station_range.analyze(df_grid)
-    packets_horizon = _load_packets_window_raw(
-        db_path=db_path,
-        since_iso=filters_apply["since_iso"],
-        since_epoch=filters_apply["since_epoch"],
-        dst_types=dst_types,
-        station_callsign=station_callsign,
-        only_heard_by=False,
-        igate_filter="",
-        source_mode="Heard-by station",
-        qas_filter="",
-        limit_rows=limit_rows,
-    )
-    horizon_result = analysis_radio_horizon.analyze(
-        packets_horizon,
-        station_lat=station_lat,
-        station_lon=station_lon,
-    )
-
-    with section_azimuth:
-        st.subheader("Azimuth radiation")
-        result = analysis_polar.analyze(df_grid, station_lat=station_lat, station_lon=station_lon)
-        if not result.get("implemented"):
-            st.info("Azimuth radiation analysis not implemented.")
-        else:
-            data = result.get("data")
-            summary = result.get("summary") or {}
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            else:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Azimuth bins", fmt_int(summary.get("bins")))
-                with c2:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c3:
-                    val = summary.get("max_distance_km")
-                    metric_card("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("anisotropy_ratio")
-                    metric_card("Anisotropy", f"{fmt_float(val, 2)}" if val is not None else "—")
-                with c5:
-                    st.empty()
-                best_sector = summary.get("best_sector_deg")
-                worst_sector = summary.get("worst_sector_deg")
-                shadow_flag = summary.get("shadow_suspect")
-                anisotropy_level = summary.get("anisotropy_level")
-                st.caption(
-                    f"Best sector: {fmt_float(best_sector, 0)}° • "
-                    f"Worst sector: {fmt_float(worst_sector, 0)}° • "
-                    f"Shadow suspect: {'yes' if shadow_flag else 'no'} • "
-                    f"Anisotropy: {anisotropy_level or 'n/a'}"
-                )
-                if "azimuth_center_deg" in data.columns and "max_distance_km" in data.columns:
-                    chart = data[["azimuth_center_deg", "max_distance_km"]].copy()
-                    chart = chart.sort_values("azimuth_center_deg")
-                    st.line_chart(
-                        chart,
-                        x="azimuth_center_deg",
-                        y="max_distance_km",
-                        height=240,
-                    )
-                st.dataframe(
-                    data[
-                        [
-                            "azimuth_center_deg",
-                            "packet_count",
-                            "p95_distance_km",
-                            "mean_rssi_db",
-                        ]
-                    ].head(20),
-                    use_container_width=True,
-                    height=300,
-                )
-
-    st.divider()
-
-    with section_terrain:
-        st.subheader("Terrain analysis")
-        result = analysis_terrain.analyze(
-            df_grid,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
-        if not result.get("implemented"):
-            st.info("Terrain analysis not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-            with c1:
-                metric_card("Terrain status", summary.get("terrain_status") or "N/A")
-            with c2:
-                metric_card("Open sectors", fmt_int(summary.get("open_sector_count")))
-            with c3:
-                metric_card("Limited sectors", fmt_int(summary.get("limited_sector_count")))
-            with c4:
-                val = summary.get("best_opening_deg")
-                metric_card("Best opening (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
-            with c5:
-                val = summary.get("main_limited_deg")
-                metric_card("Main limited (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
-            d1, d2, d3, d4, d5 = st.columns(DASHBOARD_COLUMNS)
-            with d1:
-                metric_card("Terrain mask", "yes" if summary.get("terrain_mask_suspected") else "no")
-            with d2:
-                st.empty()
-            with d3:
-                st.empty()
-            with d4:
-                st.empty()
-            with d5:
-                st.empty()
-            if data is not None and not data.empty:
-                cols = [
-                    "azimuth_center_deg",
-                    "packet_count",
-                    "p95_distance_km",
-                    "mean_rssi_db",
-                    "terrain_class",
-                ]
-                chart_cols = ["azimuth_center_deg", "p95_distance_km"]
-                if all(c in data.columns for c in chart_cols):
-                    st.markdown("**P95 distance by azimuth sector**")
-                    chart = data[chart_cols].sort_values("azimuth_center_deg")
-                    st.line_chart(chart, x="azimuth_center_deg", y="p95_distance_km", height=220)
-                st.dataframe(data[[c for c in cols if c in data.columns]].head(20), use_container_width=True, height=300)
-
-    st.divider()
-
-    with section_antenna:
-        st.subheader("Antenna diagnostics")
-        result = analysis_antenna_health.analyze(
-            df_grid,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
-        if not result.get("implemented"):
-            st.info("Antenna diagnostics not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-            with c1:
-                metric_card("Health status", summary.get("health_status") or "N/A")
-            with c2:
-                val = summary.get("anisotropy_ratio")
-                metric_card("Anisotropy ratio", f"{fmt_float(val, 2)}" if val is not None else "—")
-            with c3:
-                shadow_flag = summary.get("suspected_shadow")
-                metric_card("Suspected shadow", "yes" if shadow_flag else "no")
-            with c4:
-                val = summary.get("best_sector_deg")
-                metric_card("Best sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
-            with c5:
-                val = summary.get("worst_sector_deg")
-                metric_card("Worst sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
-            if summary.get("suspected_shadow") is False:
-                st.info("No significant directional shadow detected")
-            if data is not None and not data.empty:
-                cols = [
-                    "azimuth_center_deg",
-                    "packet_count",
-                    "p95_distance_km",
-                    "mean_rssi_db",
-                ]
-                st.dataframe(data[[c for c in cols if c in data.columns]].head(20), use_container_width=True, height=300)
-
-    st.divider()
-
-    with section_horizon:
-        st.subheader("Radio horizon")
-        result = horizon_result
-        if not result.get("implemented"):
-            st.info("Radio horizon analysis not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            else:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c2:
-                    val = summary.get("horizon_mean_km")
-                    metric_card("Horizon mean (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c3:
-                    val = summary.get("horizon_p95_km")
-                    metric_card("Horizon P95 (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("observed_p95_distance_km")
-                    metric_card("Observed P95 (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c5:
-                    val = summary.get("efficiency_ratio")
-                    metric_card("Efficiency ratio", f"{fmt_float(val, 2)}" if val is not None else "—")
-                station_alt_used = summary.get("station_alt_m")
-                if station_alt_used is not None:
-                    st.caption(f"Station altitude used: {fmt_float(station_alt_used, 0)} m")
-                    if float(station_alt_used) == 400.0:
-                        st.info(
-                            "Station altitude not available. "
-                            "Radio horizon computed with fallback altitude = 400 m."
-                        )
-                if "horizon_km" in data.columns and "distance_km" in data.columns:
-                    if go is not None:
-                        fig = go.Figure()
-                        fig.add_trace(
-                            go.Scatter(
-                                x=data["horizon_km"],
-                                y=data["distance_km"],
-                                mode="markers",
-                                name="Packets",
-                                marker=dict(size=2, opacity=0.15),
-                            )
-                        )
-                        fig.add_trace(
-                            go.Scatter(
-                                x=[0, 400],
-                                y=[0, 400],
-                                mode="lines",
-                                name="Theoretical horizon",
-                                line=dict(width=2, color="#f97316"),
-                            )
-                        )
-                        med = result.get("binned_data")
-                        if med is not None and "sample_count" in med.columns:
-                            med = med[med["sample_count"] >= 30]
-                        if med is not None and not med.empty:
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=med["horizon_bin_km"],
-                                    y=med["distance_median"],
-                                    mode="lines",
-                                    name="Median observed",
-                                    line=dict(width=3, color="#0ea5e9"),
-                                )
-                            )
-                        fig.update_layout(
-                            height=420,
-                            margin=dict(l=20, r=20, t=30, b=20),
-                            showlegend=True,
-                            legend=dict(orientation="h", x=0, y=1.02),
-                            xaxis_title="Horizon (km)",
-                            yaxis_title="Distance (km)",
-                            xaxis=dict(range=[0, 400]),
-                            yaxis=dict(range=[0, 400]),
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                        st.caption("Blue = median observed distance • Orange = theoretical horizon")
-                    else:
-                        st.scatter_chart(data, x="horizon_km", y="distance_km")
-                else:
-                    st.info("Radio horizon data missing required columns.")
-
-    st.divider()
-
-    with section_range:
-        st.subheader("Station range estimation")
-        result = range_result
-        if not result.get("implemented"):
-            st.info("Station range estimation not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            if summary:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c2:
-                    metric_card("Grid cells", fmt_int(summary.get("grid_cells")))
-                with c3:
-                    val = summary.get("max_distance_km")
-                    metric_card("Max distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("p95_distance_km")
-                    metric_card("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c5:
-                    st.empty()
-            else:
-                st.info("No range statistics available.")
-
-    st.divider()
-
-    with section_probability:
-        st.subheader("Coverage probability")
-        result = quality_result
-        if not result.get("implemented"):
-            st.info("Coverage probability analysis not implemented.")
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
-                st.info("No data available.")
-            if summary:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Packet total", fmt_int(summary.get("packet_total")))
-                with c2:
-                    val = summary.get("rssi_best")
-                    metric_card("Best RSSI (dB)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c3:
-                    val = summary.get("rssi_mean")
-                    metric_card("Mean RSSI (dB)", f"{fmt_float(val, 1)}" if val is not None else "—")
-                with c4:
-                    val = summary.get("quality_score")
-                    metric_card("Quality score", f"{fmt_float(val, 0)}" if val is not None else "—")
-                with c5:
-                    st.empty()
-            else:
-                st.info("No quality statistics available.")
-
-    st.divider()
-
-    with section_summary:
-        st.subheader("Station synthesis")
-        quality_score = (quality_result.get("summary") or {}).get("quality_score")
-        if quality_score is None:
-            health_status = "N/A"
-        elif quality_score >= 80:
-            health_status = "GOOD"
-        elif quality_score >= 50:
-            health_status = "FAIR"
-        else:
-            health_status = "POOR"
-
-        p95_range = (range_result.get("summary") or {}).get("p95_distance_km")
-        if p95_range is None:
-            range_status = "N/A"
-        elif p95_range < 100:
-            range_status = "LOW"
-        elif p95_range < 200:
-            range_status = "NORMAL"
-        else:
-            range_status = "HIGH"
-
-        efficiency_ratio = (horizon_result.get("summary") or {}).get("efficiency_ratio")
-        if efficiency_ratio is None:
-            horizon_status = "N/A"
-        elif efficiency_ratio < 0.7:
-            horizon_status = "LOW"
-        elif efficiency_ratio < 1.1:
-            horizon_status = "NORMAL"
-        else:
-            horizon_status = "HIGH"
-
-        c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-        with c1:
-            metric_card("Station health", health_status)
-        with c2:
-            metric_card("Range status", range_status)
-        with c3:
-            metric_card("Horizon status", horizon_status)
-        with c4:
-            st.empty()
-        with c5:
-            st.empty()
-
-    st.divider()
-
-    with section_compare:
-        st.subheader("Station comparison")
-        compare_map = _parse_compare_stations(os.getenv("OGN_COMPARE_STATIONS", ""))
-        compare_map.setdefault(station_callsign, (station_lat, station_lon))
-        packets_compare = _load_packets_window_raw(
-            db_path=db_path,
-            since_iso=filters_apply["since_iso"],
-            since_epoch=filters_apply["since_epoch"],
-            dst_types=dst_types,
-            station_callsign=station_callsign,
-            only_heard_by=False,
-            igate_filter="",
-            source_mode="Heard-by station",
-            qas_filter="",
-            limit_rows=limit_rows,
-        )
-        result = analysis_station_compare.analyze(
-            packets_compare,
-            station_coords=compare_map,
-            station_callsigns=list(compare_map.keys()),
-        )
-        if not result.get("implemented"):
-            summary = result.get("summary") or {}
-            reason = summary.get("reason")
-            if reason == "missing_station_config":
-                st.info(
-                    "Station comparison requires configuration.\n\n"
-                    "Set environment variable:\n\n"
-                    "OGN_COMPARE_STATIONS=CALLSIGN:lat,lon;CALLSIGN2:lat,lon\n\n"
-                    "Example:\n"
-                    "OGN_COMPARE_STATIONS=FK50887:47.33,7.27;FJ12345:46.20,6.14"
-                )
-            elif reason == "fewer_than_two_stations":
-                st.info("Station comparison requires at least 2 configured stations.")
-            elif reason == "no_packets_for_configured_stations":
-                st.info(
-                    "Configured stations were found, but fewer than 2 have usable data in the selected time window."
-                )
-            elif reason == "invalid_station_coordinates":
-                st.info("Some configured stations have missing or invalid coordinates.")
-            else:
-                st.info("Station comparison not implemented.")
-            st.caption("Example: OGN_COMPARE_STATIONS=FK50887:47.3359,7.2728;STATION2:47.20,7.40")
-            configured = summary.get("configured_station_count")
-            comparable = summary.get("comparable_station_count")
-            if configured is not None or comparable is not None:
-                c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-                with c1:
-                    metric_card("Configured stations", fmt_int(configured))
-                with c2:
-                    metric_card("Comparable stations", fmt_int(comparable))
-                with c3:
-                    st.empty()
-                with c4:
-                    st.empty()
-                with c5:
-                    st.empty()
-        else:
-            summary = result.get("summary") or {}
-            data = result.get("data")
-            c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-            with c1:
-                metric_card("Station count", fmt_int(summary.get("station_count")))
-            with c2:
-                metric_card("Best station", summary.get("best_station") or "—")
-            with c3:
-                val = summary.get("best_rank_score")
-                metric_card("Best rank score", f"{fmt_float(val, 2)}" if val is not None else "—")
-            with c4:
-                st.empty()
-            with c5:
-                st.empty()
-            if data is not None and not data.empty:
-                if "station_callsign" in data.columns and "rank_score" in data.columns:
-                    chart = data[["station_callsign", "rank_score"]].set_index("station_callsign")
-                    st.bar_chart(chart)
-                cols = [
-                    "station_callsign",
-                    "rank_score",
-                    "p95_distance_km",
-                    "max_distance_km",
-                    "packet_total",
-                    "quality_score",
-                    "health_status",
-                ]
-                st.dataframe(data[[c for c in cols if c in data.columns]], use_container_width=True, height=300)
-
-def render_debug_view() -> None:
-    section_raw = st.container()
-    section_stats = st.container()
-
-    with section_raw:
-        st.subheader("Raw packets")
-        if not raw_packets_mode:
-            st.info(
-                "Raw packets disabled for performance.\n"
-                "Enable in Advanced settings → Developer → Raw packets mode"
-            )
-        else:
-            ctx = get_packets_context()
-            if ctx.df_packets is None or ctx.df_packets.empty:
-                st.info("No raw packets available.")
-            else:
-                st.dataframe(ctx.df_packets.head(100), use_container_width=True, height=300)
-
-    with section_stats:
-        st.subheader("Dataset statistics")
-        result = analysis_station_quality.analyze(grid_df_kpi)
-        if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+ui_ctx = {
+    "db_path": db_path,
+    "filters_apply": filters_apply,
+    "station_callsign": station_callsign,
+    "station_lat": station_lat,
+    "station_lon": station_lon,
+    "BASEMAPS": BASEMAPS,
+    "basemap_label": basemap_label,
+    "max_distance_grid": max_distance_grid,
+    "use_cov_grid": use_cov_grid,
+    "map_max_points": map_max_points,
+    "point_size": point_size,
+    "show_cluster": show_cluster,
+    "show_rings": show_rings,
+    "rings_km": rings_km,
+    "dst_types": dst_types,
+    "limit_rows": limit_rows,
+    "hours": hours,
+    "raw_packets_mode": raw_packets_mode,
+    "grid_df_kpi": grid_df_kpi,
+    "rf_packets": rf_packets,
+    "rf_grid": rf_grid,
+    "pd": pd,
+    "np": np,
+    "os": os,
+    "folium": folium,
+    "st_folium": st_folium,
+    "DivIcon": DivIcon,
+    "MarkerCluster": MarkerCluster,
+    "load_coverage_grid": load_coverage_grid,
+    "_load_packets_window_raw": _load_packets_window_raw,
+    "analysis_shadow_map": analysis_shadow_map,
+    "analysis_signal_distance": analysis_signal_distance,
+    "analysis_station_range": analysis_station_range,
+    "analysis_altitude_distance": analysis_altitude_distance,
+    "analysis_station_quality": analysis_station_quality,
+    "analysis_polar": analysis_polar,
+    "analysis_terrain": analysis_terrain,
+    "analysis_antenna_health": analysis_antenna_health,
+    "analysis_radio_horizon": analysis_radio_horizon,
+    "analysis_station_compare": analysis_station_compare,
+    "get_packets_context": get_packets_context,
+    "parse_compare_stations": _parse_compare_stations,
+    "fmt_int": fmt_int,
+    "fmt_float": fmt_float,
+}
 
 
 with content_container:
     if view == "Coverage":
-        render_coverage_view()
+        render_coverage_tab(ui_ctx)
     elif view == "Signal":
-        render_signal_view()
+        render_signal_tab(ui_ctx)
     elif view == "RF diagnostics":
-        render_rf_view()
+        render_rf_tab(ui_ctx)
     elif view == "Debug":
-        render_debug_view()
+        render_debug_tab(ui_ctx)
 if _PROFILER:
     _PROFILER.disable()
     st.caption("Profiling enabled (results printed to console).")
@@ -1872,3 +1065,5 @@ with st.container():
         f"Grid cells: {fmt_int(len(grid_df)) if not grid_df.empty else '—'} • "
         f"Last update: {(last_ts[:19] + 'Z') if last_ts else '—'}"
     )
+
+
