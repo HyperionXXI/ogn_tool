@@ -771,7 +771,7 @@ st.info(f"Active filters: Station={station_callsign} | Window={hours}h | Types={
 
 
 with kpi_container:
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4, k5 = st.columns(5)
     with k1:
         packets_received_display = 0 if packets_received is None else packets_received
         st.metric("Packets in window", fmt_int(packets_received_display))
@@ -781,6 +781,8 @@ with kpi_container:
         st.metric("Reliable distance", f"{fmt_float(d90, 1)} km" if d90 is not None else "—")
     with k4:
         st.metric("Max distance", f"{fmt_float(max_distance_grid, 1)} km" if max_distance_grid is not None else "—")
+    with k5:
+        st.empty()
 
 with navigation_container:
     view = st.segmented_control(
@@ -1001,7 +1003,7 @@ def render_coverage_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             else:
-                c1, c2, c3 = st.columns(3)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Cells", fmt_int(summary.get("cells_total")))
                 with c2:
@@ -1009,13 +1011,21 @@ def render_coverage_view() -> None:
                 with c3:
                     val = summary.get("coverage_mean")
                     st.metric("Coverage mean", f"{fmt_float(val, 2)}" if val is not None else "—")
-                d1, d2, d3 = st.columns(3)
+                with c4:
+                    st.empty()
+                with c5:
+                    st.empty()
+                d1, d2, d3, d4, d5 = st.columns(5)
                 with d1:
                     st.metric("Local points", fmt_int(summary.get("local_points")))
                 with d2:
                     st.metric("Local igate", fmt_int(summary.get("local_points_igate")))
                 with d3:
                     st.metric("Local raw", fmt_int(summary.get("local_points_raw")))
+                with d4:
+                    st.empty()
+                with d5:
+                    st.empty()
                 st.dataframe(data.head(30), use_container_width=True)
 
     with section_rssi:
@@ -1035,7 +1045,7 @@ def render_coverage_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             if summary:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Packet total", fmt_int(summary.get("packet_total")))
                 with c2:
@@ -1046,6 +1056,8 @@ def render_coverage_view() -> None:
                 with c4:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c5:
+                    st.empty()
             else:
                 st.info("No distance statistics available.")
 
@@ -1084,7 +1096,7 @@ def render_signal_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             else:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Packet total", fmt_int(summary.get("packet_total")))
                 with c2:
@@ -1096,6 +1108,8 @@ def render_signal_view() -> None:
                 with c4:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c5:
+                    st.empty()
                 if "distance_km" in data.columns and "rssi_db" in data.columns:
                     st.markdown("**RSSI vs distance**")
                     binned = result.get("binned_data")
@@ -1150,7 +1164,7 @@ def render_signal_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             else:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Packet total", fmt_int(summary.get("packet_total")))
                 with c2:
@@ -1162,6 +1176,8 @@ def render_signal_view() -> None:
                 with c4:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c5:
+                    st.empty()
                 if "distance_km" in data.columns and "altitude_m" in data.columns:
                     if go is not None:
                         fig = go.Figure()
@@ -1226,7 +1242,7 @@ def render_signal_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             if summary:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Packet total", fmt_int(summary.get("packet_total")))
                 with c2:
@@ -1237,6 +1253,8 @@ def render_signal_view() -> None:
                 with c4:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c5:
+                    st.empty()
             else:
                 st.info("No distance statistics available.")
 
@@ -1283,7 +1301,7 @@ def render_rf_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             else:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Azimuth bins", fmt_int(summary.get("bins")))
                 with c2:
@@ -1294,6 +1312,8 @@ def render_rf_view() -> None:
                 with c4:
                     val = summary.get("anisotropy_ratio")
                     st.metric("Anisotropy", f"{fmt_float(val, 2)}" if val is not None else "—")
+                with c5:
+                    st.empty()
                 best_sector = summary.get("best_sector_deg")
                 worst_sector = summary.get("worst_sector_deg")
                 shadow_flag = summary.get("shadow_suspect")
@@ -1357,13 +1377,17 @@ def render_rf_view() -> None:
         else:
             horizon_status = "HIGH"
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
             st.metric("Station health", health_status)
         with c2:
             st.metric("Range status", range_status)
         with c3:
             st.metric("Horizon status", horizon_status)
+        with c4:
+            st.empty()
+        with c5:
+            st.empty()
 
     with section_antenna:
         st.subheader("Antenna diagnostics")
@@ -1384,14 +1408,14 @@ def render_rf_view() -> None:
                 val = summary.get("anisotropy_ratio")
                 st.metric("Anisotropy ratio", f"{fmt_float(val, 2)}" if val is not None else "—")
             with c3:
-                val = summary.get("best_sector_deg")
-                st.metric("Best sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
-            with c4:
-                val = summary.get("worst_sector_deg")
-                st.metric("Worst sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
-            with c5:
                 shadow_flag = summary.get("suspected_shadow")
                 st.metric("Suspected shadow", "yes" if shadow_flag else "no")
+            with c4:
+                val = summary.get("best_sector_deg")
+                st.metric("Best sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
+            with c5:
+                val = summary.get("worst_sector_deg")
+                st.metric("Worst sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
             if summary.get("suspected_shadow") is False:
                 st.info("No significant directional shadow detected")
             if data is not None and not data.empty:
@@ -1415,7 +1439,7 @@ def render_rf_view() -> None:
         else:
             summary = result.get("summary") or {}
             data = result.get("data")
-            c1, c2, c3, c4, c5, c6 = st.columns(6)
+            c1, c2, c3, c4, c5 = st.columns(5)
             with c1:
                 st.metric("Terrain status", summary.get("terrain_status") or "N/A")
             with c2:
@@ -1428,8 +1452,17 @@ def render_rf_view() -> None:
             with c5:
                 val = summary.get("main_limited_deg")
                 st.metric("Main limited (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
-            with c6:
+            d1, d2, d3, d4, d5 = st.columns(5)
+            with d1:
                 st.metric("Terrain mask", "yes" if summary.get("terrain_mask_suspected") else "no")
+            with d2:
+                st.empty()
+            with d3:
+                st.empty()
+            with d4:
+                st.empty()
+            with d5:
+                st.empty()
             if data is not None and not data.empty:
                 cols = [
                     "azimuth_center_deg",
@@ -1484,15 +1517,21 @@ def render_rf_view() -> None:
             configured = summary.get("configured_station_count")
             comparable = summary.get("comparable_station_count")
             if configured is not None or comparable is not None:
-                c1, c2 = st.columns(2)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Configured stations", fmt_int(configured))
                 with c2:
                     st.metric("Comparable stations", fmt_int(comparable))
+                with c3:
+                    st.empty()
+                with c4:
+                    st.empty()
+                with c5:
+                    st.empty()
         else:
             summary = result.get("summary") or {}
             data = result.get("data")
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3, c4, c5 = st.columns(5)
             with c1:
                 st.metric("Station count", fmt_int(summary.get("station_count")))
             with c2:
@@ -1500,6 +1539,10 @@ def render_rf_view() -> None:
             with c3:
                 val = summary.get("best_rank_score")
                 st.metric("Best rank score", f"{fmt_float(val, 2)}" if val is not None else "—")
+            with c4:
+                st.empty()
+            with c5:
+                st.empty()
             if data is not None and not data.empty:
                 if "station_callsign" in data.columns and "rank_score" in data.columns:
                     chart = data[["station_callsign", "rank_score"]].set_index("station_callsign")
@@ -1526,7 +1569,7 @@ def render_rf_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             if summary:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Packet total", fmt_int(summary.get("packet_total")))
                 with c2:
@@ -1538,6 +1581,8 @@ def render_rf_view() -> None:
                 with c4:
                     val = summary.get("quality_score")
                     st.metric("Quality score", f"{fmt_float(val, 0)}" if val is not None else "—")
+                with c5:
+                    st.empty()
             else:
                 st.info("No quality statistics available.")
 
@@ -1631,7 +1676,7 @@ def render_rf_view() -> None:
             if data is None or (hasattr(data, "empty") and data.empty) or (hasattr(data, "__len__") and len(data) == 0):
                 st.info("No data available.")
             if summary:
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 with c1:
                     st.metric("Packet total", fmt_int(summary.get("packet_total")))
                 with c2:
@@ -1642,6 +1687,8 @@ def render_rf_view() -> None:
                 with c4:
                     val = summary.get("p95_distance_km")
                     st.metric("P95 distance (km)", f"{fmt_float(val, 1)}" if val is not None else "—")
+                with c5:
+                    st.empty()
             else:
                 st.info("No range statistics available.")
 
