@@ -122,6 +122,12 @@ Open:
 
 http://localhost:8501
 
+Optional (collector):
+
+```bash
+python .\scripts\collector.py
+```
+
 ---
 
 ## Configuration

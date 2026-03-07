@@ -72,15 +72,32 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -e .
 streamlit run apps/dashboard.py
-Configuration
+```
+
+Optionnel (collector):
+
+```bash
+python .\scripts\collector.py
+```
+
+---
+
+## Configuration
 
 Exemple .env:
 
+```
 OGN_USER=CALLSIGN
 OGN_PASS=PASSCODE
 OGN_FILTER=r/LAT/LON/RADIUS_KM
 OGN_DB_PATH=C:\path\to\ogn_log.sqlite3
-Structure du projet
+```
+
+---
+
+## Structure du projet
+
+```
 apps/
 scripts/
 tools/
@@ -88,11 +105,18 @@ src/ogn_tool/
 docs/
 tests/
 data/
-Tests
-pytest
-Licence
-
-MIT
-
+```
 
 ---
+
+## Tests
+
+```bash
+pytest
+```
+
+---
+
+## Licence
+
+MIT
