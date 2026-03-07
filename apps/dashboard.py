@@ -48,6 +48,7 @@ from ogn_tool.analysis import station_range as analysis_station_range
 from ogn_tool.analysis import terrain as analysis_terrain
 from ogn_tool.analysis import station_compare as analysis_station_compare
 from ogn_tool.analysis import station_quality as analysis_station_quality
+from ogn_tool.analysis import antenna_health as analysis_antenna_health
 from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
 from ogn_tool.analysis.grid_loader import load_coverage_grid as load_coverage_grid_base
 
@@ -1223,6 +1224,7 @@ def render_signal_view() -> None:
 def render_rf_view() -> None:
     section_azimuth = st.container()
     section_summary = st.container()
+    section_antenna = st.container()
     section_probability = st.container()
     section_horizon = st.container()
     section_range = st.container()
@@ -1344,6 +1346,45 @@ def render_rf_view() -> None:
             st.metric("Range status", range_status)
         with c3:
             st.metric("Horizon status", horizon_status)
+
+    with section_antenna:
+        st.subheader("Antenna diagnostics")
+        result = analysis_antenna_health.analyze(
+            df_grid,
+            station_lat=station_lat,
+            station_lon=station_lon,
+        )
+        if not result.get("implemented"):
+            st.info("Antenna diagnostics not implemented.")
+        else:
+            summary = result.get("summary") or {}
+            data = result.get("data")
+            c1, c2, c3, c4, c5 = st.columns(5)
+            with c1:
+                st.metric("Health status", summary.get("health_status") or "N/A")
+            with c2:
+                val = summary.get("anisotropy_ratio")
+                st.metric("Anisotropy ratio", f"{fmt_float(val, 2)}" if val is not None else "—")
+            with c3:
+                val = summary.get("best_sector_deg")
+                st.metric("Best sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
+            with c4:
+                val = summary.get("worst_sector_deg")
+                st.metric("Worst sector (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
+            with c5:
+                shadow_flag = summary.get("suspected_shadow")
+                st.metric("Suspected shadow", "yes" if shadow_flag else "no")
+            if summary.get("suspected_shadow") is False:
+                st.info("No significant directional shadow detected")
+            if data is not None and not data.empty:
+                cols = [
+                    "azimuth_center_deg",
+                    "packet_count",
+                    "max_distance_km",
+                    "p95_distance_km",
+                    "mean_rssi_db",
+                ]
+                st.dataframe(data[[c for c in cols if c in data.columns]].head(20), use_container_width=True)
 
     with section_probability:
         st.subheader("Coverage probability")
