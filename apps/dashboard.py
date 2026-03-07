@@ -189,6 +189,26 @@ def iso_utc(dtobj: dt.datetime) -> str:
     return dtobj.isoformat().replace("+00:00", "Z")
 
 
+def _parse_compare_stations(env_value: str) -> Dict[str, Tuple[float, float]]:
+    stations: Dict[str, Tuple[float, float]] = {}
+    if not env_value:
+        return stations
+    for item in env_value.split(";"):
+        item = item.strip()
+        if not item or ":" not in item:
+            continue
+        callsign, coords = item.split(":", 1)
+        callsign = callsign.strip()
+        if not callsign or "," not in coords:
+            continue
+        lat_s, lon_s = coords.split(",", 1)
+        try:
+            stations[callsign] = (float(lat_s.strip()), float(lon_s.strip()))
+        except ValueError:
+            continue
+    return stations
+
+
 # ---------------------------
 # DB layer
 # ---------------------------
@@ -1225,6 +1245,8 @@ def render_rf_view() -> None:
     section_azimuth = st.container()
     section_summary = st.container()
     section_antenna = st.container()
+    section_terrain = st.container()
+    section_compare = st.container()
     section_probability = st.container()
     section_horizon = st.container()
     section_range = st.container()
@@ -1295,13 +1317,9 @@ def render_rf_view() -> None:
                     data[
                         [
                             "azimuth_center_deg",
-                            "grid_cells",
                             "packet_count",
-                            "max_distance_km",
                             "p95_distance_km",
-                            "best_rssi_db",
                             "mean_rssi_db",
-                            "sector_score",
                         ]
                     ].head(20),
                     use_container_width=True,
@@ -1380,11 +1398,122 @@ def render_rf_view() -> None:
                 cols = [
                     "azimuth_center_deg",
                     "packet_count",
-                    "max_distance_km",
                     "p95_distance_km",
                     "mean_rssi_db",
                 ]
                 st.dataframe(data[[c for c in cols if c in data.columns]].head(20), use_container_width=True)
+
+    with section_terrain:
+        st.subheader("Terrain analysis")
+        result = analysis_terrain.analyze(
+            df_grid,
+            station_lat=station_lat,
+            station_lon=station_lon,
+        )
+        if not result.get("implemented"):
+            st.info("Terrain analysis not implemented.")
+        else:
+            summary = result.get("summary") or {}
+            data = result.get("data")
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
+            with c1:
+                st.metric("Terrain status", summary.get("terrain_status") or "N/A")
+            with c2:
+                st.metric("Open sectors", fmt_int(summary.get("open_sector_count")))
+            with c3:
+                st.metric("Limited sectors", fmt_int(summary.get("limited_sector_count")))
+            with c4:
+                val = summary.get("best_opening_deg")
+                st.metric("Best opening (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
+            with c5:
+                val = summary.get("main_limited_deg")
+                st.metric("Main limited (°)", f"{fmt_float(val, 0)}" if val is not None else "—")
+            with c6:
+                st.metric("Terrain mask", "yes" if summary.get("terrain_mask_suspected") else "no")
+            if data is not None and not data.empty:
+                cols = [
+                    "azimuth_center_deg",
+                    "packet_count",
+                    "p95_distance_km",
+                    "mean_rssi_db",
+                    "terrain_class",
+                ]
+                chart_cols = ["azimuth_center_deg", "p95_distance_km"]
+                if all(c in data.columns for c in chart_cols):
+                    chart = data[chart_cols].sort_values("azimuth_center_deg")
+                    st.line_chart(chart, x="azimuth_center_deg", y="p95_distance_km", height=220)
+                st.dataframe(data[[c for c in cols if c in data.columns]].head(20), use_container_width=True)
+
+    with section_compare:
+        st.subheader("Station comparison")
+        compare_map = _parse_compare_stations(os.getenv("OGN_COMPARE_STATIONS", ""))
+        compare_map.setdefault(station_callsign, (station_lat, station_lon))
+        packets_compare = _load_packets_window_raw(
+            db_path=db_path,
+            since_iso=filters_apply["since_iso"],
+            since_epoch=filters_apply["since_epoch"],
+            dst_types=dst_types,
+            station_callsign=station_callsign,
+            only_heard_by=False,
+            igate_filter="",
+            source_mode="Heard-by station",
+            qas_filter="",
+            limit_rows=limit_rows,
+        )
+        result = analysis_station_compare.analyze(
+            packets_compare,
+            station_coords=compare_map,
+            station_callsigns=list(compare_map.keys()),
+        )
+        if not result.get("implemented"):
+            summary = result.get("summary") or {}
+            reason = summary.get("reason")
+            if reason == "missing_station_config":
+                st.info("Station comparison requires OGN_COMPARE_STATIONS with at least 2 stations.")
+            elif reason == "fewer_than_two_stations":
+                st.info("Station comparison requires at least 2 configured stations.")
+            elif reason == "no_packets_for_configured_stations":
+                st.info(
+                    "Configured stations were found, but fewer than 2 have usable data in the selected time window."
+                )
+            elif reason == "invalid_station_coordinates":
+                st.info("Some configured stations have missing or invalid coordinates.")
+            else:
+                st.info("Station comparison not implemented.")
+            st.caption("Example: OGN_COMPARE_STATIONS=FK50887:47.3359,7.2728;STATION2:47.20,7.40")
+            configured = summary.get("configured_station_count")
+            comparable = summary.get("comparable_station_count")
+            if configured is not None or comparable is not None:
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.metric("Configured stations", fmt_int(configured))
+                with c2:
+                    st.metric("Comparable stations", fmt_int(comparable))
+        else:
+            summary = result.get("summary") or {}
+            data = result.get("data")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric("Station count", fmt_int(summary.get("station_count")))
+            with c2:
+                st.metric("Best station", summary.get("best_station") or "—")
+            with c3:
+                val = summary.get("best_rank_score")
+                st.metric("Best rank score", f"{fmt_float(val, 2)}" if val is not None else "—")
+            if data is not None and not data.empty:
+                if "station_callsign" in data.columns and "rank_score" in data.columns:
+                    chart = data[["station_callsign", "rank_score"]].set_index("station_callsign")
+                    st.bar_chart(chart)
+                cols = [
+                    "station_callsign",
+                    "rank_score",
+                    "p95_distance_km",
+                    "max_distance_km",
+                    "packet_total",
+                    "quality_score",
+                    "health_status",
+                ]
+                st.dataframe(data[[c for c in cols if c in data.columns]], use_container_width=True)
 
     with section_probability:
         st.subheader("Coverage probability")
@@ -1537,9 +1666,7 @@ def render_debug_view() -> None:
 
     with section_sql:
         st.subheader("SQL info")
-        result = analysis_terrain.analyze({"rows_total": rows_total, "last_ts": last_ts})
-        if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+        st.info("Feature not implemented yet")
 
     with section_stats:
         st.subheader("Dataset statistics")
