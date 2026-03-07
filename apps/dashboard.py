@@ -1502,7 +1502,13 @@ def render_rf_view() -> None:
             summary = result.get("summary") or {}
             reason = summary.get("reason")
             if reason == "missing_station_config":
-                st.info("Station comparison requires OGN_COMPARE_STATIONS with at least 2 stations.")
+                st.info(
+                    "Station comparison requires configuration.\n\n"
+                    "Set environment variable:\n\n"
+                    "OGN_COMPARE_STATIONS=CALLSIGN:lat,lon;CALLSIGN2:lat,lon\n\n"
+                    "Example:\n"
+                    "OGN_COMPARE_STATIONS=FK50887:47.33,7.27;FJ12345:46.20,6.14"
+                )
             elif reason == "fewer_than_two_stations":
                 st.info("Station comparison requires at least 2 configured stations.")
             elif reason == "no_packets_for_configured_stations":
