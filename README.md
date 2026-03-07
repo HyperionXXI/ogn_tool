@@ -1,6 +1,9 @@
 🇬🇧 English | 🇫🇷 [Version française](README.fr.md)
 
-# ogn_tool --- Local OGN / APRS-IS log explorer
+# ogn_tool — RF Coverage Analyzer
+
+![Python](https://img.shields.io/badge/python-3.11-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
 ogn_tool is a **radio analysis tool** for OGN / FLARM / FANET stations.
 It is an **RF coverage analysis for OGN / FLARM / FANET ground stations**.
