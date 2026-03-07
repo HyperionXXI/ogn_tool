@@ -5,39 +5,6 @@
 ![Python](https://img.shields.io/badge/python-3.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-RF analysis tool for **OGN / FLARM / FANET ground stations**.
-
----
-
-## Quick start
-
-Clone the repository:
-
-git clone https://github.com/HyperionXXI/ogn_tool.git
-
-Enter the directory:
-
-cd ogn_tool
-
-Create a virtual environment:
-
-python -m venv .venv
-
-Activate:
-
-.venv\Scripts\activate
-
-Install the project:
-
-pip install -e .
-
-Run the dashboard:
-
-streamlit run apps/dashboard.py
-
-
----
-
 ## Features
 
 - Polar RF coverage analysis
@@ -142,6 +109,8 @@ APRS-IS servers
 collector.py
    │
 SQLite database
+   │
+RF analysis modules
    │
 dashboard.py
 </pre>

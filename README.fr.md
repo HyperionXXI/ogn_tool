@@ -1,5 +1,5 @@
 🇫🇷 Français | 🇬🇧 [English version](README.md)
-# ogn_tool --- Exploration locale de logs OGN / APRS-IS
+# ogn_tool — Analyseur de couverture RF pour stations OGN
 
 ogn_tool est un **outil d'analyse radio** pour les stations OGN / FLARM / FANET.
 Il s'agit d'une **analyse de couverture RF pour les stations sol OGN / FLARM / FANET**.
