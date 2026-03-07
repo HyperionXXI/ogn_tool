@@ -39,7 +39,7 @@ ogn_tool analyzes OGN logs to study real-world radio coverage.
 
 ## Radio chain
 
-
+```
 Aircraft
 │
 │ 868 MHz
@@ -59,6 +59,7 @@ SQLite database
 RF analysis modules
 │
 dashboard.py
+```
 
 
 ---
@@ -67,9 +68,7 @@ dashboard.py
 
 Located in:
 
-
-src/ogn_tool/analysis
-
+`src/ogn_tool/analysis`
 
 Modules:
 
@@ -93,37 +92,56 @@ Clone the repository:
 ```bash
 git clone https://github.com/HyperionXXI/ogn_tool.git
 cd ogn_tool
+```
 
 Create environment:
 
+```bash
 python -m venv .venv
+```
 
 Activate:
 
+```bash
 .venv\Scripts\activate
+```
 
 Install:
 
+```bash
 pip install -e .
+```
 
 Run dashboard:
 
+```bash
 streamlit run apps/dashboard.py
+```
 
 Open:
 
 http://localhost:8501
-Configuration
+
+---
+
+## Configuration
 
 Example .env:
 
+```
 OGN_USER=CALLSIGN
 OGN_PASS=PASSCODE
 OGN_FILTER=r/LAT/LON/RADIUS_KM
 OGN_DB_PATH=C:\path\to\ogn_log.sqlite3
 OGN_HOST=glidern1.glidernet.org
 OGN_PORT=14580
-Project structure
+```
+
+---
+
+## Project structure
+
+```
 apps/            Streamlit dashboard
 scripts/         runtime scripts
 tools/           utilities
@@ -131,20 +149,31 @@ src/ogn_tool/    Python package
 docs/            documentation
 data/            local runtime data
 tests/           unit tests
-Troubleshooting
-Dashboard shows no data
+```
+
+---
+
+## Troubleshooting
+
+### Dashboard shows no data
 
 Possible causes:
 
-collector not running
+- collector not running
+- wrong database path
+- filters excluding packets
 
-wrong database path
+---
 
-filters excluding packets
+## Tests
 
-Tests
+```bash
 pytest
-License
+```
+
+---
+
+## License
 
 MIT License
 
