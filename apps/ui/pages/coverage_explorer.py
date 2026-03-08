@@ -83,25 +83,12 @@ def render_coverage_explorer_page(ctx):
     rf_packets = ctx.get("rf_packets")
     packets_window = ctx.get("packets_window")
 
-    st.subheader("DEBUG MAP TEST")
-    if folium is not None and st_folium is not None:
-        test_map = folium.Map(location=[47.3, 7.3], zoom_start=8, tiles=_map_tiles(ctx))
-        st_folium(test_map, height=500, use_container_width=True)
-    else:
-        st.warning("DEBUG MAP TEST unavailable: streamlit-folium not loaded.")
-
     rf_local_count = int(ctx.get("rf_local_count", 0))
     readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
 
     total_packets = len(packets_window) if packets_window is not None else 0
     total_rf = len(rf_packets) if rf_packets is not None else 0
     filtered_packets = total_rf if total_rf > 0 else total_packets
-
-    st.info(
-        f"packets_total = {total_packets}\n"
-        f"packets_rf = {total_rf}\n"
-        f"packets_filtered = {filtered_packets}"
-    )
 
     st.markdown("**RF DATASET STATUS**")
     st.write(f"Packets heard by station: {ctx['fmt_int'](rf_local_count)}")
@@ -131,20 +118,6 @@ def render_coverage_explorer_page(ctx):
     station_metrics = dataset["station_metrics"]
     network_metrics = dataset["network_metrics"]
 
-    st.markdown("### Dataset Debug Panel")
-    st.write(f"Packets total: {ctx['fmt_int'](len(packets_all))}")
-    st.write(f"Packets RF: {ctx['fmt_int'](len(packets_rf))}")
-    st.write(f"Radio events: {ctx['fmt_int'](len(radio_events))}")
-    st.write(f"Coverage cells: {ctx['fmt_int'](network_metrics.get('coverage_cells', 0))}")
-    st.write(f"Stations: {ctx['fmt_int'](int(len(station_metrics)) if not station_metrics.empty else 0)}")
-    st.write("Network metrics:")
-    st.write(
-        f"  stations={ctx['fmt_int'](network_metrics.get('station_count', 0))}, "
-        f"coverage_cells={ctx['fmt_int'](network_metrics.get('coverage_cells', 0))}, "
-        f"redundancy_cells={ctx['fmt_int'](network_metrics.get('redundancy_cells', 0))}, "
-        f"blind_cells={ctx['fmt_int'](network_metrics.get('blind_cells', 0))}, "
-        f"resilience_score={ctx['fmt_float'](network_metrics.get('network_resilience_score', 0.0), 1)}%"
-    )
 
     if "ce_active_station" not in st.session_state:
         st.session_state["ce_active_station"] = "(network)"
