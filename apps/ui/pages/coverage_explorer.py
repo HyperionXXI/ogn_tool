@@ -48,39 +48,6 @@ def _build_grid_polygons(grid):
     return df, cell_size_deg
 
 
-def _compute_station_points(ctx, packets_window, compare_str: str):
-    station_points = []
-    compare_map = ctx.get("parse_compare_stations")(compare_str) if ctx.get("parse_compare_stations") else {}
-    station_cs = ctx.get("station_callsign")
-    if station_cs and station_cs not in compare_map:
-        compare_map[station_cs] = (ctx.get("station_lat"), ctx.get("station_lon"))
-
-    if packets_window is not None and "igate" in packets_window.columns:
-        igate_counts = packets_window.groupby("igate").size()
-        igate_aircraft = (
-            packets_window.groupby("igate")["src"].nunique() if "src" in packets_window.columns else None
-        )
-    else:
-        igate_counts = ctx["pd"].Series(dtype=int)
-        igate_aircraft = None
-
-    for callsign, coords in compare_map.items():
-        lat, lon = coords
-        if lat is None or lon is None:
-            continue
-        station_points.append(
-            {
-                "callsign": callsign,
-                "lat": lat,
-                "lon": lon,
-                "packet_count": int(igate_counts.get(callsign, 0)),
-                "aircraft_seen": int(igate_aircraft.get(callsign, 0)) if igate_aircraft is not None else 0,
-            }
-        )
-
-    return station_points
-
-
 def _bin_color(value, bins, colors, default="#9ca3af"):
     if value is None:
         return default
@@ -108,54 +75,6 @@ def _closest_station(lat, lon, station_points, max_km=5.0):
     return best
 
 
-def _compute_network_contribution(packets_window, station_callsign, station_engine):
-    if packets_window is None or packets_window.empty or "igate" not in packets_window.columns:
-        return {
-            "unique_packets": 0,
-            "shared_packets": 0,
-            "redundant_packets": 0,
-            "unique_cells": 0,
-            "contribution_score": 0.0,
-        }
-    station_packets = packets_window[packets_window["igate"].astype(str) == station_callsign]
-    if station_packets.empty or "src" not in station_packets.columns:
-        return {
-            "unique_packets": 0,
-            "shared_packets": 0,
-            "redundant_packets": 0,
-            "unique_cells": 0,
-            "contribution_score": 0.0,
-        }
-
-    src_igates = packets_window.groupby("src")["igate"].nunique() if "src" in packets_window.columns else None
-    if src_igates is None:
-        unique_packets = 0
-        shared_packets = 0
-    else:
-        unique_src = src_igates[src_igates == 1].index
-        shared_src = src_igates[src_igates > 1].index
-        unique_packets = int(station_packets[station_packets["src"].isin(unique_src)].shape[0])
-        shared_packets = int(station_packets[station_packets["src"].isin(shared_src)].shape[0])
-
-    redundant_packets = shared_packets
-    total_packets = int(station_packets.shape[0])
-    contribution_score = (unique_packets / total_packets * 100.0) if total_packets else 0.0
-
-    unique_cells = 0
-    if station_engine is not None and station_engine.coverage_grid is not None:
-        grid = station_engine.coverage_grid
-        if not grid.empty and "packets" in grid.columns:
-            unique_cells = int((grid["packets"] > 0).sum())
-
-    return {
-        "unique_packets": unique_packets,
-        "shared_packets": shared_packets,
-        "redundant_packets": redundant_packets,
-        "unique_cells": unique_cells,
-        "contribution_score": contribution_score,
-    }
-
-
 def render_coverage_explorer_page(ctx):
     st.markdown("<h2>Coverage Explorer</h2>", unsafe_allow_html=True)
     st.success("Coverage Explorer loaded")
@@ -163,13 +82,12 @@ def render_coverage_explorer_page(ctx):
     rf_packets = ctx.get("rf_packets")
     packets_window = ctx.get("packets_window")
 
-    if folium is None or st_folium is None:
-        st.error("Missing dependency: streamlit-folium. Install: pip install streamlit-folium")
-        return
-
     st.subheader("DEBUG MAP TEST")
-    test_map = folium.Map(location=[47.3, 7.3], zoom_start=8, tiles=_map_tiles(ctx))
-    st_folium(test_map, height=500, use_container_width=True)
+    if folium is not None and st_folium is not None:
+        test_map = folium.Map(location=[47.3, 7.3], zoom_start=8, tiles=_map_tiles(ctx))
+        st_folium(test_map, height=500, use_container_width=True)
+    else:
+        st.warning("DEBUG MAP TEST unavailable: streamlit-folium not loaded.")
 
     rf_local_count = int(ctx.get("rf_local_count", 0))
     readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
@@ -203,12 +121,79 @@ def render_coverage_explorer_page(ctx):
     packets_all = analysis_data["packets_all"]
     packets_rf = analysis_data["packets_rf"]
     packets_filtered = analysis_data["packets_filtered"]
+    radio_events = analysis_data["radio_events"]
     rf_grid = analysis_data["coverage_grid"]
+    station_metrics = analysis_data["station_metrics"]
+    network_metrics = analysis_data["network_metrics"]
+
+    st.markdown("### Dataset Debug Panel")
+    st.write(f"Packets total: {ctx['fmt_int'](len(packets_all))}")
+    st.write(f"Packets RF: {ctx['fmt_int'](len(packets_rf))}")
+    st.write(f"Radio events: {ctx['fmt_int'](len(radio_events))}")
+    st.write(f"Coverage cells: {ctx['fmt_int'](int((rf_grid['packets'] > 0).sum()) if not rf_grid.empty and 'packets' in rf_grid.columns else 0)}")
+    st.write(f"Stations: {ctx['fmt_int'](int(len(station_metrics)) if not station_metrics.empty else 0)}")
 
     if "ce_active_station" not in st.session_state:
         st.session_state["ce_active_station"] = "(network)"
     if "ce_active_cell" not in st.session_state:
         st.session_state["ce_active_cell"] = None
+
+    compare_default = st.session_state.get("ce_compare_stations")
+    if compare_default is None:
+        compare_default = ctx.get("os").getenv("OGN_COMPARE_STATIONS", "") if ctx.get("os") else ""
+
+    st.markdown("### Network Configuration")
+    compare_str = st.text_input("Stations compared (callsign=lat,lon; ...)", value=compare_default)
+    st.session_state["ce_compare_stations"] = compare_str
+
+    compare_map = ctx.get("parse_compare_stations")(compare_str) if ctx.get("parse_compare_stations") else {}
+    station_cs = ctx.get("station_callsign")
+    if station_cs and station_cs not in compare_map:
+        compare_map[station_cs] = (ctx.get("station_lat"), ctx.get("station_lon"))
+
+    station_points = []
+    for callsign, coords in compare_map.items():
+        lat, lon = coords
+        if lat is None or lon is None:
+            continue
+        packet_count = 0
+        aircraft_seen = 0
+        if not station_metrics.empty:
+            row = station_metrics[station_metrics["igate"] == callsign]
+            if not row.empty:
+                packet_count = int(row["packet_count"].iloc[0])
+                aircraft_seen = int(row["aircraft_count"].iloc[0])
+        station_points.append(
+            {
+                "callsign": callsign,
+                "lat": lat,
+                "lon": lon,
+                "packet_count": packet_count,
+                "aircraft_seen": aircraft_seen,
+            }
+        )
+
+    station_choices = ["(network)"] + [s["callsign"] for s in station_points] if station_points else ["(network)"]
+    col_cfg1, col_cfg2 = st.columns(2)
+    with col_cfg1:
+        st.selectbox("Station analyzed", station_choices, key="ce_active_station")
+        st.caption(f"Time window: {ctx.get('hours', '—')} hours")
+    with col_cfg2:
+        rings_km = st.slider("Analysis radius (km)", 5, 200, int(ctx.get("rings_km", 40)))
+        st.caption("Basemap: " + str(ctx.get("basemap_label") or "Default"))
+
+    active_station = st.session_state.get("ce_active_station", "(network)")
+    if active_station != "(network)":
+        station_meta = next((s for s in station_points if s["callsign"] == active_station), None)
+        station_packets = (
+            packets_window[packets_window["igate"].astype(str) == active_station]
+            if packets_window is not None and "igate" in packets_window.columns
+            else ctx["pd"].DataFrame()
+        )
+        station_engine = compute_rf_engine(station_packets, station_meta["lat"], station_meta["lon"]) if station_meta is not None else compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
+    else:
+        station_meta = None
+        station_engine = compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
 
     st.markdown("### MAP")
     show_traffic = st.checkbox("Traffic", value=True, key="ce_layer_traffic")
@@ -218,158 +203,141 @@ def render_coverage_explorer_page(ctx):
     show_stations = st.checkbox("Stations", value=True, key="ce_layer_stations")
     show_rings = st.checkbox("Range rings", value=True, key="ce_layer_rings")
 
-    compare_default = st.session_state.get("ce_compare_stations")
-    if compare_default is None:
-        compare_default = ctx.get("os").getenv("OGN_COMPARE_STATIONS", "") if ctx.get("os") else ""
-
-    station_points = _compute_station_points(ctx, packets_window, compare_default)
-    station_choices = ["(network)"] + [s["callsign"] for s in station_points] if station_points else ["(network)"]
-    active_station = st.session_state.get("ce_active_station", "(network)")
-
-    if active_station != "(network)":
-        station_meta = next((s for s in station_points if s["callsign"] == active_station), None)
-        station_packets = (
-            packets_window[packets_window["igate"].astype(str) == active_station]
-            if packets_window is not None and "igate" in packets_window.columns
-            else ctx["pd"].DataFrame()
-        )
-        if station_meta and (station_packets is not None and not station_packets.empty):
-            station_engine = compute_rf_engine(station_packets, station_meta["lat"], station_meta["lon"])
-        else:
-            station_engine = compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
+    if folium is None or st_folium is None:
+        st.warning("Map rendering disabled: streamlit-folium not available.")
+        map_data = {}
+        grid_df = None
+        cell_size = 0.01
     else:
-        station_meta = None
-        station_engine = compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
+        m = folium.Map(
+            location=[ctx.get("station_lat"), ctx.get("station_lon")],
+            zoom_start=8,
+            tiles=_map_tiles(ctx),
+            control_scale=True,
+        )
 
-    m = folium.Map(
-        location=[ctx.get("station_lat"), ctx.get("station_lon")],
-        zoom_start=8,
-        tiles=_map_tiles(ctx),
-        control_scale=True,
-    )
+        grid_df = None
+        cell_size = 0.01
+        if rf_grid is not None and not rf_grid.empty:
+            grid = rf_grid.dropna(subset=["lat", "lon"])
+            if not grid.empty:
+                grid_df, cell_size = _build_grid_polygons(grid)
+                grid_df["probability_val"] = ctx["pd"].to_numeric(grid_df.get("probability"), errors="coerce")
+                grid_df["confidence_val"] = ctx["pd"].to_numeric(grid_df.get("confidence"), errors="coerce")
+                grid_df["max_distance_val"] = ctx["pd"].to_numeric(grid_df.get("max_distance"), errors="coerce")
 
-    grid_df = None
-    cell_size = 0.01
-    if rf_grid is not None and not rf_grid.empty:
-        grid = rf_grid.dropna(subset=["lat", "lon"])
-        if not grid.empty:
-            grid_df, cell_size = _build_grid_polygons(grid)
-            grid_df["probability_val"] = ctx["pd"].to_numeric(grid_df.get("probability"), errors="coerce")
-            grid_df["confidence_val"] = ctx["pd"].to_numeric(grid_df.get("confidence"), errors="coerce")
-            grid_df["max_distance_val"] = ctx["pd"].to_numeric(grid_df.get("max_distance"), errors="coerce")
+                if show_prob and "probability" in grid_df.columns:
+                    prob_group = folium.FeatureGroup(name="Coverage probability", show=True)
+                    for _, row in grid_df.iterrows():
+                        color = _bin_color(
+                            row.get("probability_val"),
+                            [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                            ["#ef4444", "#f97316", "#f59e0b", "#3b82f6", "#9ca3af"],
+                        )
+                        folium.Polygon(
+                            locations=row["polygon"],
+                            color="#f8fafc",
+                            weight=1,
+                            fill=True,
+                            fill_color=color,
+                            fill_opacity=0.65,
+                            tooltip=(
+                                f"Coverage: {ctx['fmt_float'](row.get('probability_val'), 2)}<br/>"
+                                f"Confidence: {ctx['fmt_float'](row.get('confidence_val'), 2)}"
+                            ),
+                        ).add_to(prob_group)
+                    prob_group.add_to(m)
 
-            if show_prob and "probability" in grid_df.columns:
-                prob_group = folium.FeatureGroup(name="Coverage probability", show=True)
-                for _, row in grid_df.iterrows():
-                    color = _bin_color(
-                        row.get("probability_val"),
-                        [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-                        ["#ef4444", "#f97316", "#f59e0b", "#3b82f6", "#9ca3af"],
-                    )
-                    folium.Polygon(
-                        locations=row["polygon"],
-                        color="#f8fafc",
-                        weight=1,
+                if show_conf and "confidence" in grid_df.columns:
+                    conf_group = folium.FeatureGroup(name="Confidence", show=True)
+                    for _, row in grid_df.iterrows():
+                        color = _bin_color(
+                            row.get("confidence_val"),
+                            [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+                            ["#94a3b8", "#7dd3fc", "#60a5fa", "#2563eb", "#1e3a8a"],
+                        )
+                        folium.Polygon(
+                            locations=row["polygon"],
+                            color="#f8fafc",
+                            weight=1,
+                            fill=True,
+                            fill_color=color,
+                            fill_opacity=0.4,
+                            tooltip=(
+                                f"Confidence: {ctx['fmt_float'](row.get('confidence_val'), 2)}<br/>"
+                                f"Max dist: {ctx['fmt_float'](row.get('max_distance_val'), 1)}"
+                            ),
+                        ).add_to(conf_group)
+                    conf_group.add_to(m)
+
+        if show_traffic:
+            traffic_group = folium.FeatureGroup(name="Traffic", show=True)
+            points = packets_all.dropna(subset=["lat", "lon"]) if packets_all is not None else None
+            if points is not None and not points.empty:
+                for _, row in points.iterrows():
+                    folium.CircleMarker(
+                        location=[row["lat"], row["lon"]],
+                        radius=6,
+                        color="#f97316",
                         fill=True,
-                        fill_color=color,
-                        fill_opacity=0.65,
-                        tooltip=(
-                            f"Coverage: {ctx['fmt_float'](row.get('probability_val'), 2)}<br/>"
-                            f"Confidence: {ctx['fmt_float'](row.get('confidence_val'), 2)}"
-                        ),
-                    ).add_to(prob_group)
-                prob_group.add_to(m)
+                        fill_opacity=0.75,
+                        weight=0,
+                    ).add_to(traffic_group)
+            traffic_group.add_to(m)
 
-            if show_conf and "confidence" in grid_df.columns:
-                conf_group = folium.FeatureGroup(name="Confidence", show=True)
-                for _, row in grid_df.iterrows():
-                    color = _bin_color(
-                        row.get("confidence_val"),
-                        [0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
-                        ["#94a3b8", "#7dd3fc", "#60a5fa", "#2563eb", "#1e3a8a"],
-                    )
-                    folium.Polygon(
-                        locations=row["polygon"],
-                        color="#f8fafc",
-                        weight=1,
+        if show_reception:
+            reception_group = folium.FeatureGroup(name="Reception", show=True)
+            reception_points = packets_rf if packets_rf is not None and not packets_rf.empty else None
+            if station_meta is not None and packets_window is not None and "igate" in packets_window.columns:
+                reception_points = packets_window[packets_window["igate"].astype(str) == active_station]
+            if reception_points is not None and not reception_points.empty:
+                points = reception_points.dropna(subset=["lat", "lon"])
+                for _, row in points.iterrows():
+                    folium.CircleMarker(
+                        location=[row["lat"], row["lon"]],
+                        radius=7,
+                        color="#22c55e",
                         fill=True,
-                        fill_color=color,
-                        fill_opacity=0.4,
-                        tooltip=(
-                            f"Confidence: {ctx['fmt_float'](row.get('confidence_val'), 2)}<br/>"
-                            f"Max dist: {ctx['fmt_float'](row.get('max_distance_val'), 1)}"
-                        ),
-                    ).add_to(conf_group)
-                conf_group.add_to(m)
+                        fill_opacity=0.85,
+                        weight=0,
+                    ).add_to(reception_group)
+            reception_group.add_to(m)
 
-    if show_traffic:
-        traffic_group = folium.FeatureGroup(name="Traffic", show=True)
-        points = packets_all.dropna(subset=["lat", "lon"]) if packets_all is not None else None
-        if points is not None and not points.empty:
-            for _, row in points.iterrows():
-                folium.CircleMarker(
-                    location=[row["lat"], row["lon"]],
-                    radius=6,
-                    color="#f97316",
-                    fill=True,
-                    fill_opacity=0.75,
-                    weight=0,
-                ).add_to(traffic_group)
-        traffic_group.add_to(m)
+        if show_stations and station_points:
+            station_group = folium.FeatureGroup(name="Stations", show=True)
+            for s in station_points:
+                tooltip = f"{s['callsign']}<br/>Packets: {s['packet_count']}<br/>Aircraft: {s['aircraft_seen']}"
+                folium.Marker(
+                    location=[s["lat"], s["lon"]],
+                    tooltip=tooltip,
+                    icon=folium.Icon(color="blue", icon="signal", prefix="fa"),
+                ).add_to(station_group)
+            station_group.add_to(m)
 
-    if show_reception:
-        reception_group = folium.FeatureGroup(name="Reception", show=True)
-        reception_points = packets_rf if packets_rf is not None and not packets_rf.empty else None
-        if station_meta is not None and packets_window is not None and "igate" in packets_window.columns:
-            reception_points = packets_window[packets_window["igate"].astype(str) == active_station]
-        if reception_points is not None and not reception_points.empty:
-            points = reception_points.dropna(subset=["lat", "lon"])
-            for _, row in points.iterrows():
-                folium.CircleMarker(
-                    location=[row["lat"], row["lon"]],
-                    radius=7,
-                    color="#22c55e",
-                    fill=True,
-                    fill_opacity=0.85,
-                    weight=0,
-                ).add_to(reception_group)
-        reception_group.add_to(m)
-
-    if show_stations and station_points:
-        station_group = folium.FeatureGroup(name="Stations", show=True)
-        for s in station_points:
-            tooltip = f"{s['callsign']}<br/>Packets: {s['packet_count']}<br/>Aircraft: {s['aircraft_seen']}"
-            folium.Marker(
-                location=[s["lat"], s["lon"]],
-                tooltip=tooltip,
-                icon=folium.Icon(color="blue", icon="signal", prefix="fa"),
-            ).add_to(station_group)
-        station_group.add_to(m)
-
-    if station_meta:
-        folium.CircleMarker(
-            location=[station_meta["lat"], station_meta["lon"]],
-            radius=9,
-            color="#0ea5e9",
-            fill=True,
-            fill_opacity=0.95,
-            weight=2,
-        ).add_to(m)
-
-    if show_rings and station_meta:
-        rings_group = folium.FeatureGroup(name="Range rings", show=True)
-        for r_km in (10, 20, 40):
-            folium.Circle(
+        if station_meta:
+            folium.CircleMarker(
                 location=[station_meta["lat"], station_meta["lon"]],
-                radius=r_km * 1000,
-                color="#2563eb",
-                fill=False,
-                weight=1,
-            ).add_to(rings_group)
-        rings_group.add_to(m)
+                radius=9,
+                color="#0ea5e9",
+                fill=True,
+                fill_opacity=0.95,
+                weight=2,
+            ).add_to(m)
 
-    folium.LayerControl().add_to(m)
-    map_data = st_folium(m, height=700, use_container_width=True)
+        if show_rings and station_meta:
+            rings_group = folium.FeatureGroup(name="Range rings", show=True)
+            for r_km in (10, 20, 40, rings_km):
+                folium.Circle(
+                    location=[station_meta["lat"], station_meta["lon"]],
+                    radius=r_km * 1000,
+                    color="#2563eb",
+                    fill=False,
+                    weight=1,
+                ).add_to(rings_group)
+            rings_group.add_to(m)
+
+        folium.LayerControl().add_to(m)
+        map_data = st_folium(m, height=700, use_container_width=True)
 
     clicked = map_data.get("last_clicked") if isinstance(map_data, dict) else None
     if clicked:
@@ -397,31 +365,22 @@ def render_coverage_explorer_page(ctx):
             if updated:
                 st.rerun()
 
-    st.markdown("### Network Configuration")
-    compare_str = st.text_input("Stations compared (callsign=lat,lon; ...)", value=compare_default)
-    st.session_state["ce_compare_stations"] = compare_str
-
-    col_cfg1, col_cfg2 = st.columns(2)
-    with col_cfg1:
-        st.selectbox("Station analyzed", station_choices, key="ce_active_station")
-        st.caption(f"Time window: {ctx.get('hours', '—')} hours")
-    with col_cfg2:
-        rings_km = st.slider("Analysis radius (km)", 5, 200, int(ctx.get("rings_km", 40)))
-        st.caption("Basemap: " + str(ctx.get("basemap_label") or "Default"))
-
     st.markdown("### Station Summary")
-    range_summary = (station_engine.metrics.get("station_range") or {}).get("summary") or {}
-    max_dist = range_summary.get("max_distance_km")
-    p95_dist = range_summary.get("p95_distance_km")
-    aircraft_seen = None
-    if active_station != "(network)" and station_meta is not None:
-        aircraft_seen = station_meta.get("aircraft_seen")
-    elif rf_packets is not None and "src" in rf_packets.columns:
-        aircraft_seen = rf_packets["src"].nunique()
+    max_dist = None
+    p95_dist = None
+    aircraft_seen = 0
+    packet_count = 0
+    if not station_metrics.empty and active_station != "(network)":
+        row = station_metrics[station_metrics["igate"] == active_station]
+        if not row.empty:
+            packet_count = int(row["packet_count"].iloc[0])
+            aircraft_seen = int(row["aircraft_count"].iloc[0])
+            max_dist = row["max_distance"].iloc[0]
+            p95_dist = row["p95_distance"].iloc[0]
 
     k1, k2, k3, k4 = st.columns(4)
-    metric_card(k1, "RF packets", ctx["fmt_int"](station_engine.metrics.get("rf_packets", 0)))
-    metric_card(k2, "Aircraft", ctx["fmt_int"](aircraft_seen) if aircraft_seen is not None else "—")
+    metric_card(k1, "RF packets", ctx["fmt_int"](packet_count))
+    metric_card(k2, "Aircraft", ctx["fmt_int"](aircraft_seen))
     metric_card(k3, "Max distance", ctx["fmt_float"](max_dist, 1) if max_dist is not None else "—")
     metric_card(k4, "P95 distance", ctx["fmt_float"](p95_dist, 1) if p95_dist is not None else "—")
 
@@ -429,12 +388,15 @@ def render_coverage_explorer_page(ctx):
     if active_station == "(network)":
         st.info("Select a station to compute network contribution.")
     else:
-        contribution = _compute_network_contribution(packets_window, active_station, station_engine)
-        st.write(f"Unique packets: {ctx['fmt_int'](contribution['unique_packets'])}")
-        st.write(f"Shared packets: {ctx['fmt_int'](contribution['shared_packets'])}")
-        st.write(f"Redundant packets: {ctx['fmt_int'](contribution['redundant_packets'])}")
-        st.write(f"Unique coverage cells: {ctx['fmt_int'](contribution['unique_cells'])}")
-        st.write(f"Contribution score: {ctx['fmt_float'](contribution['contribution_score'], 1)}%")
+        row = station_metrics[station_metrics["igate"] == active_station] if not station_metrics.empty else None
+        if row is not None and not row.empty:
+            st.write(f"Unique packets: {ctx['fmt_int'](row['unique_packets'].iloc[0])}")
+            st.write(f"Shared packets: {ctx['fmt_int'](row['shared_packets'].iloc[0])}")
+            st.write(f"Redundant packets: {ctx['fmt_int'](row['redundant_packets'].iloc[0])}")
+            st.write(f"Unique coverage cells: {ctx['fmt_int'](row['coverage_cells'].iloc[0])}")
+            st.write(f"Contribution score: {ctx['fmt_float'](row['contribution_score'].iloc[0], 1)}%")
+        else:
+            st.info("No station metrics available for this station.")
 
     st.markdown("### Zone Inspector")
     zone_info = None
