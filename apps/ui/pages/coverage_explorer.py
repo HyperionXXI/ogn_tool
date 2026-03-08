@@ -125,6 +125,8 @@ def render_coverage_explorer_page(ctx):
     packets_filtered = dataset["packets_filtered"]
     radio_events = dataset["radio_events"]
     rf_grid = dataset["coverage_grid"]
+    coverage_redundancy_grid = dataset.get("coverage_redundancy_grid")
+    blind_cells = dataset.get("blind_cells")
     station_metrics = dataset["station_metrics"]
     network_metrics = dataset["network_metrics"]
 
@@ -132,7 +134,7 @@ def render_coverage_explorer_page(ctx):
     st.write(f"Packets total: {ctx['fmt_int'](len(packets_all))}")
     st.write(f"Packets RF: {ctx['fmt_int'](len(packets_rf))}")
     st.write(f"Radio events: {ctx['fmt_int'](len(radio_events))}")
-    st.write(f"Coverage cells: {ctx['fmt_int'](int((rf_grid['packets'] > 0).sum()) if not rf_grid.empty and 'packets' in rf_grid.columns else 0)}")
+    st.write(f"Coverage cells: {ctx['fmt_int'](network_metrics.get('coverage_cells', 0))}")
     st.write(f"Stations: {ctx['fmt_int'](int(len(station_metrics)) if not station_metrics.empty else 0)}")
     st.write("Network metrics:")
     st.write(
@@ -233,6 +235,8 @@ def render_coverage_explorer_page(ctx):
     show_reception = st.checkbox("Reception", value=True, key="ce_layer_reception")
     show_prob = st.checkbox("Coverage probability", value=True, key="ce_layer_prob")
     show_conf = st.checkbox("Confidence", value=True, key="ce_layer_conf")
+    show_redundancy = st.checkbox("Redundancy", value=False, key="ce_layer_redundancy")
+    show_blind = st.checkbox("Blind zones", value=False, key="ce_layer_blind")
     show_stations = st.checkbox("Stations", value=True, key="ce_layer_stations")
     show_rings = st.checkbox("Range rings", value=True, key="ce_layer_rings")
 
@@ -335,6 +339,47 @@ def render_coverage_explorer_page(ctx):
                         weight=0,
                     ).add_to(reception_group)
             reception_group.add_to(m)
+
+        if show_redundancy and coverage_redundancy_grid is not None and not coverage_redundancy_grid.empty:
+            red_group = folium.FeatureGroup(name="Redundancy", show=True)
+            for _, row in coverage_redundancy_grid.iterrows():
+                count = int(row.get("station_count", 0))
+                if count <= 0:
+                    color = "#111827"
+                elif count == 1:
+                    color = "#ef4444"
+                elif count == 2:
+                    color = "#f97316"
+                elif count == 3:
+                    color = "#facc15"
+                else:
+                    color = "#22c55e"
+                folium.CircleMarker(
+                    location=[row["lat_cell"], row["lon_cell"]],
+                    radius=6,
+                    color=color,
+                    fill=True,
+                    fill_opacity=0.7,
+                    weight=0,
+                    tooltip=f"Stations: {count}",
+                ).add_to(red_group)
+            red_group.add_to(m)
+
+        if show_blind and blind_cells is not None and not blind_cells.empty:
+            blind_group = folium.FeatureGroup(name="Blind zones", show=True)
+            for _, row in blind_cells.iterrows():
+                count = int(row.get("station_count", 0))
+                color = "#ef4444" if count == 1 else "#111827"
+                folium.CircleMarker(
+                    location=[row["lat_cell"], row["lon_cell"]],
+                    radius=6,
+                    color=color,
+                    fill=True,
+                    fill_opacity=0.7,
+                    weight=0,
+                    tooltip=f"Stations: {count}",
+                ).add_to(blind_group)
+            blind_group.add_to(m)
 
         if show_stations and station_points:
             station_group = folium.FeatureGroup(name="Stations", show=True)
