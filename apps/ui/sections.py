@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .pages.overview import render_overview_page
 from .pages.rf_map import render_rf_map_page
+from .pages.coverage_explorer import render_coverage_explorer_page
 from .pages.propagation import render_propagation_page
 from .pages.directional_rf import render_directional_rf_page
 from .pages.terrain import render_terrain_page
@@ -18,6 +19,10 @@ def render_overview_tab(ctx):
 
 def render_rf_coverage_tab(ctx):
     return render_rf_map_page(ctx)
+
+
+def render_coverage_explorer_tab(ctx):
+    return render_coverage_explorer_page(ctx)
 
 
 def render_aircraft_tab(ctx):

@@ -44,6 +44,7 @@ from ui import charts as ui_charts
 from ui.sections import (
     render_overview_tab,
     render_rf_coverage_tab,
+    render_coverage_explorer_tab,
     render_signal_tab,
     render_directional_rf_tab,
     render_terrain_tab,
@@ -1031,10 +1032,8 @@ with navigation_container:
         "Navigation",
         [
             "Overview",
-            "RF Map",
+            "Coverage Explorer",
             "Propagation",
-            "Directional RF",
-            "Terrain",
             "Network",
             "Diagnostics",
         ],
@@ -1294,13 +1293,9 @@ with content_container:
     if page == "Overview":
         render_overview_tab(ui_ctx)
     elif page == "RF Map":
-        render_rf_coverage_tab(ui_ctx)
+        render_coverage_explorer_tab(ui_ctx)
     elif page == "Propagation":
         render_signal_tab(ui_ctx)
-    elif page == "Directional RF":
-        render_directional_rf_tab(ui_ctx)
-    elif page == "Terrain":
-        render_terrain_tab(ui_ctx)
     elif page == "Network":
         render_network_tab(ui_ctx)
     elif page == "Diagnostics":
