@@ -132,6 +132,14 @@ def render_coverage_explorer_page(ctx):
     st.write(f"Radio events: {ctx['fmt_int'](len(radio_events))}")
     st.write(f"Coverage cells: {ctx['fmt_int'](int((rf_grid['packets'] > 0).sum()) if not rf_grid.empty and 'packets' in rf_grid.columns else 0)}")
     st.write(f"Stations: {ctx['fmt_int'](int(len(station_metrics)) if not station_metrics.empty else 0)}")
+    st.write("Network metrics:")
+    st.write(
+        f"  stations={ctx['fmt_int'](network_metrics.get('station_count', 0))}, "
+        f"coverage_cells={ctx['fmt_int'](network_metrics.get('coverage_cells', 0))}, "
+        f"redundancy_cells={ctx['fmt_int'](network_metrics.get('redundancy_cells', 0))}, "
+        f"blind_cells={ctx['fmt_int'](network_metrics.get('blind_cells', 0))}, "
+        f"resilience_score={ctx['fmt_float'](network_metrics.get('network_resilience_score', 0.0), 1)}%"
+    )
 
     if "ce_active_station" not in st.session_state:
         st.session_state["ce_active_station"] = "(network)"
@@ -185,12 +193,12 @@ def render_coverage_explorer_page(ctx):
     active_station = st.session_state.get("ce_active_station", "(network)")
     if active_station != "(network)":
         station_meta = next((s for s in station_points if s["callsign"] == active_station), None)
-        station_packets = (
-            packets_window[packets_window["igate"].astype(str) == active_station]
-            if packets_window is not None and "igate" in packets_window.columns
-            else ctx["pd"].DataFrame()
+        station_packets = RFAnalysisEngine.filter_packets_by_station(packets_rf, active_station)
+        station_engine = compute_rf_engine(
+            station_packets if station_packets is not None else packets_window,
+            station_meta["lat"] if station_meta is not None else ctx.get("station_lat"),
+            station_meta["lon"] if station_meta is not None else ctx.get("station_lon"),
         )
-        station_engine = compute_rf_engine(station_packets, station_meta["lat"], station_meta["lon"]) if station_meta is not None else compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
     else:
         station_meta = None
         station_engine = compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))

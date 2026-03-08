@@ -24,6 +24,14 @@ class RFAnalysisEngine:
         self.station_lat = station_lat
         self.station_lon = station_lon
 
+    @staticmethod
+    def filter_packets_by_station(packets_rf: pd.DataFrame, station_id: str) -> pd.DataFrame:
+        if packets_rf is None or packets_rf.empty or not station_id:
+            return packets_rf if packets_rf is not None else pd.DataFrame()
+        if "igate" not in packets_rf.columns:
+            return packets_rf.iloc[0:0].copy()
+        return packets_rf[packets_rf["igate"].astype(str) == station_id]
+
 
     def build_analysis_dataset(self) -> dict:
         packets_all = self.packets.copy()
@@ -32,6 +40,9 @@ class RFAnalysisEngine:
         if "qas" in packets_all.columns:
             qas_upper = packets_all["qas"].astype(str).str.upper()
             packets_rf = packets_all[qas_upper.isin(["QAR", "QAO"])].copy()
+        stations = []
+        if not packets_rf.empty and "igate" in packets_rf.columns:
+            stations = sorted(packets_rf["igate"].astype(str).dropna().unique().tolist())
 
         distance_df, _grid = build_rf_dataset(packets_filtered, self.station_lat, self.station_lon)
         coverage_grid = build_rf_probability_field(distance_df)
@@ -151,6 +162,7 @@ class RFAnalysisEngine:
             "coverage_grid": coverage_grid,
             "station_metrics": station_metrics,
             "network_metrics": network_metrics,
+            "stations": stations,
         }
 
     def run(self) -> RFAnalysisResult:
