@@ -54,22 +54,22 @@ def render_diagnostics_page(ctx):
     station_callsign = ctx['station_callsign']
     station_lat = ctx['station_lat']
     station_lon = ctx['station_lon']
-        dst_types = ctx['dst_types']
-        limit_rows = ctx['limit_rows']
-        compare_map = ctx['parse_compare_stations'](ctx['os'].getenv("OGN_COMPARE_STATIONS", ""))
-        compare_map.setdefault(station_callsign, (station_lat, station_lon))
-        packets_compare = ctx['_load_packets_window_raw'](
-            db_path=db_path,
-            since_iso=filters_apply["since_iso"],
-            since_epoch=filters_apply["since_epoch"],
-            dst_types=dst_types,
-            station_callsign=station_callsign,
-            only_heard_by=False,
-            igate_filter="",
-            source_mode="Heard-by station",
-            qas_filter="",
-            limit_rows=limit_rows,
-        )
+    dst_types = ctx['dst_types']
+    limit_rows = ctx['limit_rows']
+    compare_map = ctx['parse_compare_stations'](ctx['os'].getenv("OGN_COMPARE_STATIONS", ""))
+    compare_map.setdefault(station_callsign, (station_lat, station_lon))
+    packets_compare = ctx['_load_packets_window_raw'](
+        db_path=db_path,
+        since_iso=filters_apply["since_iso"],
+        since_epoch=filters_apply["since_epoch"],
+        dst_types=dst_types,
+        station_callsign=station_callsign,
+        only_heard_by=False,
+        igate_filter="",
+        source_mode="Heard-by station",
+        qas_filter="",
+        limit_rows=limit_rows,
+    )
     result = ctx['analysis_station_compare'].analyze(
         packets_compare,
         station_coords=compare_map,
