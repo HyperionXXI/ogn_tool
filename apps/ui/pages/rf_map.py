@@ -18,12 +18,18 @@ def compute_rf_engine(packets, station_lat, station_lon):
 
 
 def render_rf_map_page(ctx):
-    st.subheader("RF Coverage")
+    st.markdown("<h2>RF Coverage</h2>", unsafe_allow_html=True)
     rf_packets = ctx.get("rf_packets")
     packets_window = ctx.get("packets_window")
     data_source = ctx.get("data_source", "APRS-IS gated")
-    if ctx.get("rf_local_count", 0) < 500:
-        st.warning("RF dataset too small for reliable coverage analysis.")
+    rf_local_count = int(ctx.get("rf_local_count", 0))
+    readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
+    st.markdown("**RF DATASET STATUS**")
+    st.write(f"Packets heard by station: {ctx['fmt_int'](rf_local_count)}")
+    st.write("Recommended minimum: 2000")
+    st.write(f"Coverage readiness: {readiness}")
+    if rf_local_count < 2000:
+        st.warning("Dataset too small for reliable RF coverage analysis")
     if rf_packets is None or rf_packets.empty:
         st.warning("No RF-gated packets detected (qAR / qAO). Showing APRS-IS network coverage instead.")
         dataset = packets_window
@@ -34,10 +40,7 @@ def render_rf_map_page(ctx):
         st.info("No packets available for coverage map.")
         return
 
-    st.caption(
-        "RF probability is a normalized packet-density proxy (not absolute reception probability). "
-        "Use confidence and minimum samples to assess reliability."
-    )
+    st.caption("RF probability = density proxy.")
     st.markdown(
         "**Legend (probability bands)**: "
         "<span style='color:#dc2626'>0–0.2 very low</span> · "
@@ -63,14 +66,16 @@ def render_rf_map_page(ctx):
         "Map layers",
         ["Coverage cloud", "RF probability", "RF contours", "Confidence", "Max distance footprint"],
         default=["Coverage cloud", "RF probability", "Confidence"],
+        help="Toggle map layers",
     )
-    altitude_filter = st.checkbox("Apply altitude filter", value=False)
+    altitude_filter = st.checkbox("Apply altitude filter", value=False, help="Limit by altitude range")
     alt_min, alt_max = st.slider(
         "Altitude range (m)",
         min_value=0,
         max_value=8000,
         value=(0, 2000),
         step=100,
+        help="Filter packets by altitude",
     )
     if altitude_filter and "altitude_m" in dataset.columns:
         alt_series = ctx["pd"].to_numeric(dataset["altitude_m"], errors="coerce")
@@ -80,16 +85,19 @@ def render_rf_map_page(ctx):
             return
     elif altitude_filter and "altitude_m" not in dataset.columns:
         st.info("Altitude field not present in packets. Filter skipped.")
-    max_range_km = st.slider("Max range (km)", min_value=10, max_value=300, value=200, step=10)
+    max_range_km = st.slider("Max range (km)", min_value=10, max_value=300, value=200, step=10, help="Limit maximum distance")
     if "distance_km" in dataset.columns:
         dist_series = ctx["pd"].to_numeric(dataset["distance_km"], errors="coerce")
         dataset = dataset[dist_series <= float(max_range_km)]
         if dataset.empty:
             st.info("No packets remain after range filtering.")
             return
-    min_samples = st.slider("Min samples per cell", min_value=1, max_value=50, value=5, step=1)
-    side_by_side = st.checkbox("Side-by-side Probability / Confidence", value=True)
+    min_samples = st.slider("Min samples per cell", min_value=1, max_value=50, value=5, step=1, help="Minimum samples for a cell to appear")
+    side_by_side = st.checkbox("Side-by-side Probability / Confidence", value=True, help="Split probability and confidence views")
     engine_result = compute_rf_engine(dataset, ctx.get("station_lat"), ctx.get("station_lon"))
+    if engine_result.metrics.get("rf_packets", 0) < 200:
+        st.info("Not enough RF packets for this analysis.")
+        return
     rf_grid = engine_result.coverage_grid
     if "sample_count" in rf_grid.columns:
         rf_grid = rf_grid[rf_grid["sample_count"] >= min_samples]

@@ -18,15 +18,24 @@ def compute_rf_engine(packets, station_lat, station_lon):
 
 
 def render_terrain_page(ctx):
-    st.subheader("Terrain")
-    if ctx.get("rf_local_count", 0) < 500:
-        st.warning("RF dataset too small for reliable terrain analysis.")
+    st.markdown("<h2>Terrain</h2>", unsafe_allow_html=True)
+    rf_local_count = int(ctx.get("rf_local_count", 0))
+    readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
+    st.markdown("**RF DATASET STATUS**")
+    st.write(f"Packets heard by station: {ctx['fmt_int'](rf_local_count)}")
+    st.write("Recommended minimum: 2000")
+    st.write(f"Coverage readiness: {readiness}")
+    if rf_local_count < 2000:
+        st.warning("Dataset too small for reliable RF coverage analysis")
 
     df_grid = ctx.get("grid_df_kpi")
     station_lat = ctx.get("station_lat")
     station_lon = ctx.get("station_lon")
     engine_result = compute_rf_engine(ctx.get("rf_packets"), station_lat, station_lon)
     st.markdown("**Terrain analysis**")
+    if engine_result.metrics.get("rf_packets", 0) < 200:
+        st.info("Not enough RF packets for this analysis.")
+        return
     result = (engine_result.metrics.get("terrain") or {"implemented": False})
     if not result.get("implemented"):
         st.info("Terrain analysis requires sufficient azimuth coverage. Current dataset too small.")

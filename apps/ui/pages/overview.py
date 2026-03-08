@@ -18,60 +18,31 @@ def compute_rf_engine(packets, station_lat, station_lon):
 
 
 def render_overview_page(ctx):
-    st.subheader("Overview")
-    if not ctx.get("has_rf", False):
-        st.warning(
-            "No RF-gated packets detected in this dataset. "
-            "Displaying APRS-IS network traffic only."
-        )
-    rf_receiver_only_count = ctx.get("rf_receiver_only_count", 0)
-    if rf_receiver_only_count > 0 and ctx.get("rf_local_count", 0) == 0:
-        st.warning(
-            "This station receives RF but does not gate packets to APRS-IS.\n"
-            "RF coverage analysis requires gated packets (qAR/qAO)."
-        )
+    st.markdown("<h2>Overview</h2>", unsafe_allow_html=True)
     rf_packets = ctx.get("rf_packets")
-    aircraft_seen = rf_packets["src"].nunique() if rf_packets is not None and "src" in rf_packets.columns else None
-    igates_seen = ctx.get("packets_window")["igate"].nunique() if ctx.get("packets_window") is not None and "igate" in ctx.get("packets_window").columns else None
-    redundancy = ctx.get("redundancy")
-    mean_redundancy = None
-    if redundancy is not None and not redundancy.empty:
-        total_aircraft = redundancy.mul(redundancy.index).sum()
-        mean_redundancy = float(total_aircraft / redundancy.sum()) if redundancy.sum() else None
-
     rf_local_count = int(ctx.get("rf_local_count", 0))
     engine_result = compute_rf_engine(rf_packets, ctx.get("station_lat"), ctx.get("station_lon"))
-    az_stats = engine_result.azimuth_df
-    p95_dist = None
-    anisotropy_indicator = None
-    if az_stats is not None and not az_stats.empty and "p95_distance_km" in az_stats.columns:
-        p95 = ctx["pd"].to_numeric(az_stats.get("p95_distance_km"), errors="coerce")
-        if p95.notna().any():
-            p95_dist = float(p95.median())
-            mean_val = float(p95.mean()) if p95.notna().any() else None
-            std_val = float(p95.std()) if p95.notna().any() else None
-            anisotropy_indicator = (std_val / mean_val) if mean_val and std_val is not None else None
+    rf_packets_count = int(engine_result.metrics.get("rf_packets", 0))
+    readiness = "GOOD" if rf_packets_count >= 2000 else "FAIR" if rf_packets_count >= 500 else "LOW"
 
-    components = []
-    if rf_local_count >= 0:
-        components.append((min(rf_local_count / 2000.0, 1.0), 40.0))
-    if p95_dist is not None:
-        components.append((min(p95_dist / 80.0, 1.0), 30.0))
-    if anisotropy_indicator is not None:
-        components.append((max(0.0, 1.0 - min(anisotropy_indicator / 0.6, 1.0)), 30.0))
+    st.markdown("**RF DATASET STATUS**")
+    st.write(f"Packets heard by station: {ctx['fmt_int'](rf_packets_count)}")
+    st.write("Recommended minimum: 2000")
+    st.write(f"Coverage readiness: {readiness}")
+    if rf_packets_count < 2000:
+        st.warning("Dataset too small for reliable RF coverage analysis")
 
-    score = None
-    status = None
-    if components:
-        score = sum(v * w for v, w in components) / sum(w for _, w in components) * 100.0
-        score = round(score, 1)
-        status = "GOOD" if score >= 80 else "FAIR" if score >= 50 else "POOR"
+    aircraft_seen = rf_packets["src"].nunique() if rf_packets is not None and "src" in rf_packets.columns else None
+    max_range = engine_result.metrics.get("max_range_km")
+    health = engine_result.metrics.get("health")
+    health_status = "GOOD" if health is not None and health >= 80 else "FAIR" if health is not None and health >= 50 else "POOR"
 
-    c1, c2, c3, c4, c5 = st.columns(DASHBOARD_COLUMNS)
-    metric_card(c1, "RF packets", ctx.get("rf_count"))
-    metric_card(c2, "Aircraft seen", ctx["fmt_int"](aircraft_seen) if aircraft_seen is not None else "—")
-    metric_card(c3, "IGates seen", ctx["fmt_int"](igates_seen) if igates_seen is not None else "—")
-    metric_card(c4, "RF Health", f"{score} / 100" if score is not None else "—")
-    metric_card(c5, "Mean redundancy", ctx["fmt_float"](mean_redundancy, 2) if mean_redundancy is not None else "—")
-    if status:
-        st.caption(f"RF Health Status: {status}")
+    st.markdown("<div style='font-size:18px;font-weight:600;'>Key Metrics</div>", unsafe_allow_html=True)
+    col1, col2, col3, col4 = st.columns(4)
+    metric_card(col1, "Packets heard", ctx["fmt_int"](rf_packets_count))
+    metric_card(col2, "Aircraft seen", ctx["fmt_int"](aircraft_seen) if aircraft_seen is not None else "—")
+    metric_card(col3, "Max distance", ctx["fmt_float"](max_range, 1) if max_range is not None else "—")
+    metric_card(col4, "RF Health", f"{ctx['fmt_float'](health, 0)} / 100" if health is not None else "—")
+
+    st.markdown("**Station health diagnostic**")
+    st.write(health_status)

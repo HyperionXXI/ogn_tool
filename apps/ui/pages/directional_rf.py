@@ -18,11 +18,20 @@ def compute_rf_engine(packets, station_lat, station_lon):
 
 
 def render_directional_rf_page(ctx):
-    st.subheader("Directional RF Analysis")
-    if ctx.get("rf_local_count", 0) < 500:
-        st.warning("RF dataset too small for reliable directional analysis.")
+    st.markdown("<h2>Directional RF Analysis</h2>", unsafe_allow_html=True)
+    rf_local_count = int(ctx.get("rf_local_count", 0))
+    readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
+    st.markdown("**RF DATASET STATUS**")
+    st.write(f"Packets heard by station: {ctx['fmt_int'](rf_local_count)}")
+    st.write("Recommended minimum: 2000")
+    st.write(f"Coverage readiness: {readiness}")
+    if rf_local_count < 2000:
+        st.warning("Dataset too small for reliable RF coverage analysis")
     engine_result = compute_rf_engine(ctx.get("rf_packets"), ctx.get("station_lat"), ctx.get("station_lon"))
     az_stats = engine_result.azimuth_df
+    if engine_result.metrics.get("rf_packets", 0) < 200:
+        st.info("Not enough RF packets for this analysis.")
+        return
     if az_stats is None or az_stats.empty:
         st.info("No azimuth statistics available.")
         return

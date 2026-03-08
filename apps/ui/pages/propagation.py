@@ -19,6 +19,7 @@ def compute_rf_engine(packets, station_lat, station_lon):
 
 def render_propagation_page(filters):
     ctx = filters
+    st.markdown("<h2>Propagation</h2>", unsafe_allow_html=True)
     
     db_path = ctx['db_path']
     filters_apply = ctx['filters_apply']
@@ -46,12 +47,21 @@ def render_propagation_page(filters):
         limit_rows=limit_rows,
     )
     engine_result = compute_rf_engine(packets_signal, station_lat, station_lon)
-    if ctx.get("rf_local_count", 0) < 500:
-        st.warning("RF dataset too small for reliable propagation analysis.")
+    rf_local_count = int(ctx.get("rf_local_count", 0))
+    readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
+    st.markdown("**RF DATASET STATUS**")
+    st.write(f"Packets heard by station: {ctx['fmt_int'](rf_local_count)}")
+    st.write("Recommended minimum: 2000")
+    st.write(f"Coverage readiness: {readiness}")
+    if rf_local_count < 2000:
+        st.warning("Dataset too small for reliable RF coverage analysis")
     horizon_result = (engine_result.metrics.get("radio_horizon") or {"implemented": False})
     horizon_summary = horizon_result.get("summary") or {}
     horizon_p95 = horizon_summary.get("horizon_p95_km")
     observed_p95 = horizon_summary.get("observed_p95_distance_km")
+    if engine_result.metrics.get("rf_packets", 0) < 200:
+        st.info("Not enough RF packets for this analysis.")
+        return
 
     with section_signal:
         st.subheader("Signal vs distance (SNR dB)")
