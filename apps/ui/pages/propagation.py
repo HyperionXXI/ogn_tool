@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ogn_tool.engine.rf_engine import RFAnalysisEngine
+
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
 from ui import charts as ui_charts
 from ui.charts import render_rf_cartography
 from ogn_tool.rf_probability_field import build_rf_probability_field
+
+
+@st.cache_data(show_spinner=False)
+def compute_rf_engine(packets, station_lat, station_lon):
+    engine = RFAnalysisEngine(packets, station_lat, station_lon)
+    return engine.run()
 
 
 def render_propagation_page(filters):
@@ -37,24 +45,17 @@ def render_propagation_page(filters):
         qas_filter="",
         limit_rows=limit_rows,
     )
+    engine_result = compute_rf_engine(packets_signal, station_lat, station_lon)
     if ctx.get("rf_local_count", 0) < 500:
         st.warning("RF dataset too small for reliable propagation analysis.")
-    horizon_result = ctx["analysis_radio_horizon"].analyze(
-        packets_signal,
-        station_lat=station_lat,
-        station_lon=station_lon,
-    )
+    horizon_result = (engine_result.metrics.get("radio_horizon") or {"implemented": False})
     horizon_summary = horizon_result.get("summary") or {}
     horizon_p95 = horizon_summary.get("horizon_p95_km")
     observed_p95 = horizon_summary.get("observed_p95_distance_km")
 
     with section_signal:
         st.subheader("Signal vs distance (SNR dB)")
-        result = ctx['analysis_signal_distance'].analyze(
-            packets_signal,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
+        result = (engine_result.metrics.get("signal_distance") or {"implemented": False})
         if not result.get("implemented"):
             df = ctx.get("rf_packets")
             if df is None or df.empty:
@@ -120,11 +121,7 @@ def render_propagation_page(filters):
     st.divider()
     with section_altitude:
         st.subheader("Altitude vs distance")
-        result = ctx['analysis_altitude_distance'].analyze(
-            packets_signal,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
+        result = (engine_result.metrics.get("altitude_distance") or {"implemented": False})
         if not result.get("implemented"):
             df = ctx.get("rf_packets")
             if df is None or df.empty:
@@ -202,7 +199,7 @@ def render_propagation_page(filters):
     st.divider()
     with section_distribution:
         st.subheader("Distance distribution")
-        result = ctx['analysis_station_range'].analyze(df_grid)
+        result = (engine_result.metrics.get("station_range") or {"implemented": False})
         if not result.get("implemented"):
             st.info("Distance distribution analysis not implemented.")
         else:

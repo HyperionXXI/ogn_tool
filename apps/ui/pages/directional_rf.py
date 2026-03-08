@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ogn_tool.engine.rf_engine import RFAnalysisEngine
+
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
 from ui import charts as ui_charts
@@ -9,11 +11,18 @@ from ui.charts import render_rf_cartography
 from ogn_tool.rf_probability_field import build_rf_probability_field
 
 
+@st.cache_data(show_spinner=False)
+def compute_rf_engine(packets, station_lat, station_lon):
+    engine = RFAnalysisEngine(packets, station_lat, station_lon)
+    return engine.run()
+
+
 def render_directional_rf_page(ctx):
     st.subheader("Directional RF Analysis")
     if ctx.get("rf_local_count", 0) < 500:
         st.warning("RF dataset too small for reliable directional analysis.")
-    az_stats = ctx.get("azimuth_stats")
+    engine_result = compute_rf_engine(ctx.get("rf_packets"), ctx.get("station_lat"), ctx.get("station_lon"))
+    az_stats = engine_result.azimuth_df
     if az_stats is None or az_stats.empty:
         st.info("No azimuth statistics available.")
         return

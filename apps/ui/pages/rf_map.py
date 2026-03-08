@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ogn_tool.engine.rf_engine import RFAnalysisEngine
+
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
 from ui import charts as ui_charts
 from ui.charts import render_rf_cartography
 from ogn_tool.rf_probability_field import build_rf_probability_field
+
+
+@st.cache_data(show_spinner=False)
+def compute_rf_engine(packets, station_lat, station_lon):
+    engine = RFAnalysisEngine(packets, station_lat, station_lon)
+    return engine.run()
 
 
 def render_rf_map_page(ctx):
@@ -81,7 +89,8 @@ def render_rf_map_page(ctx):
             return
     min_samples = st.slider("Min samples per cell", min_value=1, max_value=50, value=5, step=1)
     side_by_side = st.checkbox("Side-by-side Probability / Confidence", value=True)
-    rf_grid = build_rf_probability_field(dataset)
+    engine_result = compute_rf_engine(dataset, ctx.get("station_lat"), ctx.get("station_lon"))
+    rf_grid = engine_result.coverage_grid
     if "sample_count" in rf_grid.columns:
         rf_grid = rf_grid[rf_grid["sample_count"] >= min_samples]
     if rf_grid.empty:

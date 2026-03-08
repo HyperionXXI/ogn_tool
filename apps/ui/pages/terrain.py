@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ogn_tool.engine.rf_engine import RFAnalysisEngine
+
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
 from ui import charts as ui_charts
 from ui.charts import render_rf_cartography
 from ogn_tool.rf_probability_field import build_rf_probability_field
+
+
+@st.cache_data(show_spinner=False)
+def compute_rf_engine(packets, station_lat, station_lon):
+    engine = RFAnalysisEngine(packets, station_lat, station_lon)
+    return engine.run()
 
 
 def render_terrain_page(ctx):
@@ -17,12 +25,9 @@ def render_terrain_page(ctx):
     df_grid = ctx.get("grid_df_kpi")
     station_lat = ctx.get("station_lat")
     station_lon = ctx.get("station_lon")
+    engine_result = compute_rf_engine(ctx.get("rf_packets"), station_lat, station_lon)
     st.markdown("**Terrain analysis**")
-    result = ctx["analysis_terrain"].analyze(
-        df_grid,
-        station_lat=station_lat,
-        station_lon=station_lon,
-    )
+    result = (engine_result.metrics.get("terrain") or {"implemented": False})
     if not result.get("implemented"):
         st.info("Terrain analysis requires sufficient azimuth coverage. Current dataset too small.")
     else:
@@ -48,11 +53,7 @@ def render_terrain_page(ctx):
 
     st.markdown("**Visibility envelope (P10 altitude by azimuth)**")
     rf_packets = ctx.get("rf_packets")
-    vis = ctx["analysis_terrain_visibility"].analyze(
-        rf_packets,
-        station_lat=station_lat,
-        station_lon=station_lon,
-    )
+    vis = (engine_result.metrics.get("terrain_visibility") or {"implemented": False})
     if not vis.get("implemented"):
         st.info("Visibility envelope requires altitude data and sufficient RF samples.")
     else:

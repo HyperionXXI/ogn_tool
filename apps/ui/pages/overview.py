@@ -2,11 +2,19 @@ from __future__ import annotations
 
 import streamlit as st
 
+from ogn_tool.engine.rf_engine import RFAnalysisEngine
+
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
 from ui import charts as ui_charts
 from ui.charts import render_rf_cartography
 from ogn_tool.rf_probability_field import build_rf_probability_field
+
+
+@st.cache_data(show_spinner=False)
+def compute_rf_engine(packets, station_lat, station_lon):
+    engine = RFAnalysisEngine(packets, station_lat, station_lon)
+    return engine.run()
 
 
 def render_overview_page(ctx):
@@ -32,7 +40,8 @@ def render_overview_page(ctx):
         mean_redundancy = float(total_aircraft / redundancy.sum()) if redundancy.sum() else None
 
     rf_local_count = int(ctx.get("rf_local_count", 0))
-    az_stats = ctx.get("azimuth_stats")
+    engine_result = compute_rf_engine(rf_packets, ctx.get("station_lat"), ctx.get("station_lon"))
+    az_stats = engine_result.azimuth_df
     p95_dist = None
     anisotropy_indicator = None
     if az_stats is not None and not az_stats.empty and "p95_distance_km" in az_stats.columns:
