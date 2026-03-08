@@ -33,16 +33,30 @@ class RFAnalysisEngine:
         return packets_rf[packets_rf["igate"].astype(str) == station_id]
 
 
-    def build_analysis_dataset(self) -> dict:
+    def build_analysis_dataset(self, dataset_mode: str = "STRICT_RF", station_id: str | None = None) -> dict:
         packets_all = self.packets.copy()
         packets_filtered = packets_all
         packets_rf = packets_all.iloc[0:0].copy()
-        if "qas" in packets_all.columns:
-            qas_upper = packets_all["qas"].astype(str).str.upper()
-            packets_rf = packets_all[qas_upper.isin(["QAR", "QAO"])].copy()
+        dataset_mode = (dataset_mode or "STRICT_RF").upper()
+        if dataset_mode == "NETWORK":
+            packets_rf = packets_all
+            packets_filtered = packets_all
+        elif dataset_mode == "STATION_RF":
+            if "igate" in packets_all.columns and station_id:
+                packets_rf = packets_all[packets_all["igate"].astype(str) == station_id].copy()
+            else:
+                packets_rf = packets_all.iloc[0:0].copy()
+            packets_filtered = packets_rf
+        else:
+            # STRICT_RF
+            if "qas" in packets_all.columns:
+                qas_upper = packets_all["qas"].astype(str).str.upper()
+                packets_rf = packets_all[qas_upper.isin(["QAR", "QAO"])].copy()
+            packets_filtered = packets_rf
+
         stations = []
-        if not packets_rf.empty and "igate" in packets_rf.columns:
-            stations = sorted(packets_rf["igate"].astype(str).dropna().unique().tolist())
+        if not packets_filtered.empty and "igate" in packets_filtered.columns:
+            stations = sorted(packets_filtered["igate"].astype(str).dropna().unique().tolist())
 
         distance_df, _grid = build_rf_dataset(packets_filtered, self.station_lat, self.station_lon)
         coverage_grid = build_rf_probability_field(distance_df)
@@ -53,12 +67,14 @@ class RFAnalysisEngine:
             df_cells = distance_df.copy()
             df_cells["grid_lat"] = (pd.to_numeric(df_cells.get("lat"), errors="coerce") // cell_size) * cell_size
             df_cells["grid_lon"] = (pd.to_numeric(df_cells.get("lon"), errors="coerce") // cell_size) * cell_size
+            agg = {
+                "max_distance": ("distance_km", "max"),
+            }
+            if "altitude_m" in df_cells.columns:
+                agg["mean_altitude"] = ("altitude_m", "mean")
             cell_stats = (
                 df_cells.groupby(["grid_lat", "grid_lon"], dropna=False)
-                .agg(
-                    mean_altitude=("altitude_m", "mean"),
-                    max_distance=("distance_km", "max"),
-                )
+                .agg(**agg)
                 .reset_index()
                 .rename(columns={"grid_lat": "lat", "grid_lon": "lon"})
             )

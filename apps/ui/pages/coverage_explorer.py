@@ -117,7 +117,9 @@ def render_coverage_explorer_page(ctx):
         rf_packets = ctx["pd"].DataFrame()
 
     engine_all = RFAnalysisEngine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
-    dataset = engine_all.build_analysis_dataset()
+    dataset_mode_default = st.session_state.get("ce_dataset_mode", "STRICT_RF")
+    dataset_mode = dataset_mode_default if dataset_mode_default in ("STRICT_RF", "STATION_RF", "NETWORK") else "STRICT_RF"
+    dataset = engine_all.build_analysis_dataset(dataset_mode=dataset_mode)
     packets_all = dataset["packets_all"]
     packets_rf = dataset["packets_rf"]
     packets_filtered = dataset["packets_filtered"]
@@ -151,6 +153,24 @@ def render_coverage_explorer_page(ctx):
         compare_default = ctx.get("os").getenv("OGN_COMPARE_STATIONS", "") if ctx.get("os") else ""
 
     st.markdown("### Network Configuration")
+    dataset_mode = st.selectbox(
+        "Dataset mode",
+        ["STRICT_RF", "STATION_RF", "NETWORK"],
+        index=["STRICT_RF", "STATION_RF", "NETWORK"].index(dataset_mode),
+    )
+    st.session_state["ce_dataset_mode"] = dataset_mode
+    dataset = engine_all.build_analysis_dataset(
+        dataset_mode=dataset_mode,
+        station_id=st.session_state.get("ce_active_station") if dataset_mode == "STATION_RF" else None,
+    )
+    packets_all = dataset["packets_all"]
+    packets_rf = dataset["packets_rf"]
+    packets_filtered = dataset["packets_filtered"]
+    radio_events = dataset["radio_events"]
+    rf_grid = dataset["coverage_grid"]
+    station_metrics = dataset["station_metrics"]
+    network_metrics = dataset["network_metrics"]
+    stations = dataset.get("stations", [])
     compare_str = st.text_input("Stations compared (callsign=lat,lon; ...)", value=compare_default)
     st.session_state["ce_compare_stations"] = compare_str
 
@@ -187,7 +207,12 @@ def render_coverage_explorer_page(ctx):
         st.selectbox("Station analyzed", station_choices, key="ce_active_station")
         st.caption(f"Time window: {ctx.get('hours', '—')} hours")
     with col_cfg2:
-        rings_km = st.slider("Analysis radius (km)", 5, 200, int(ctx.get("rings_km", 40)))
+        rings_raw = ctx.get("rings_km", 40)
+        if isinstance(rings_raw, (list, tuple)) and rings_raw:
+            rings_default = int(rings_raw[0])
+        else:
+            rings_default = int(rings_raw) if rings_raw is not None else 40
+        rings_km = st.slider("Analysis radius (km)", 5, 200, rings_default)
         st.caption("Basemap: " + str(ctx.get("basemap_label") or "Default"))
 
     active_station = st.session_state.get("ce_active_station", "(network)")
