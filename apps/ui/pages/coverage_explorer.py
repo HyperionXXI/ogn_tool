@@ -117,14 +117,14 @@ def render_coverage_explorer_page(ctx):
         rf_packets = ctx["pd"].DataFrame()
 
     engine_all = RFAnalysisEngine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
-    analysis_data = engine_all.build_analysis_dataset()
-    packets_all = analysis_data["packets_all"]
-    packets_rf = analysis_data["packets_rf"]
-    packets_filtered = analysis_data["packets_filtered"]
-    radio_events = analysis_data["radio_events"]
-    rf_grid = analysis_data["coverage_grid"]
-    station_metrics = analysis_data["station_metrics"]
-    network_metrics = analysis_data["network_metrics"]
+    dataset = engine_all.build_analysis_dataset()
+    packets_all = dataset["packets_all"]
+    packets_rf = dataset["packets_rf"]
+    packets_filtered = dataset["packets_filtered"]
+    radio_events = dataset["radio_events"]
+    rf_grid = dataset["coverage_grid"]
+    station_metrics = dataset["station_metrics"]
+    network_metrics = dataset["network_metrics"]
 
     st.markdown("### Dataset Debug Panel")
     st.write(f"Packets total: {ctx['fmt_int'](len(packets_all))}")
@@ -417,17 +417,8 @@ def render_coverage_explorer_page(ctx):
             cell = grid[grid["label"] == selected_cell].iloc[0]
             cell_size = float(grid["cell_size_deg"].iloc[0]) if "cell_size_deg" in grid.columns else 0.01
             zone_info = cell.to_dict()
-            if packets_filtered is not None and "lat" in packets_filtered.columns and "lon" in packets_filtered.columns:
-                lat_min, lat_max = cell["lat"], cell["lat"] + cell_size
-                lon_min, lon_max = cell["lon"], cell["lon"] + cell_size
-                subset = packets_filtered[
-                    (packets_filtered["lat"] >= lat_min)
-                    & (packets_filtered["lat"] < lat_max)
-                    & (packets_filtered["lon"] >= lon_min)
-                    & (packets_filtered["lon"] < lon_max)
-                ]
-                zone_info["mean_altitude"] = subset["altitude_m"].mean() if "altitude_m" in subset.columns else None
-                zone_info["max_distance"] = subset["distance_km"].max() if "distance_km" in subset.columns else None
+            zone_info["mean_altitude"] = zone_info.get("mean_altitude")
+            zone_info["max_distance"] = zone_info.get("max_distance")
     if zone_info is None:
         st.info("No dataset available")
     else:

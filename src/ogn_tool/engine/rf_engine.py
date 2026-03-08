@@ -36,6 +36,24 @@ class RFAnalysisEngine:
         distance_df, _grid = build_rf_dataset(packets_filtered, self.station_lat, self.station_lon)
         coverage_grid = build_rf_probability_field(distance_df)
 
+        # enrich coverage_grid with per-cell altitude statistics
+        if not distance_df.empty and "lat" in distance_df.columns and "lon" in distance_df.columns:
+            cell_size = float(coverage_grid["cell_size_deg"].iloc[0]) if not coverage_grid.empty and "cell_size_deg" in coverage_grid.columns else 0.01
+            df_cells = distance_df.copy()
+            df_cells["grid_lat"] = (pd.to_numeric(df_cells.get("lat"), errors="coerce") // cell_size) * cell_size
+            df_cells["grid_lon"] = (pd.to_numeric(df_cells.get("lon"), errors="coerce") // cell_size) * cell_size
+            cell_stats = (
+                df_cells.groupby(["grid_lat", "grid_lon"], dropna=False)
+                .agg(
+                    mean_altitude=("altitude_m", "mean"),
+                    max_distance=("distance_km", "max"),
+                )
+                .reset_index()
+                .rename(columns={"grid_lat": "lat", "grid_lon": "lon"})
+            )
+            if not coverage_grid.empty:
+                coverage_grid = coverage_grid.merge(cell_stats, on=["lat", "lon"], how="left")
+
         # radio_events: group same transmission heard by multiple stations
         radio_events = pd.DataFrame()
         if not packets_all.empty and "src" in packets_all.columns:
