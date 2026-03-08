@@ -1292,7 +1292,7 @@ ui_ctx = {
 with content_container:
     if page == "Overview":
         render_overview_tab(ui_ctx)
-    elif page == "RF Map":
+    elif page == "Coverage Explorer":
         render_coverage_explorer_tab(ui_ctx)
     elif page == "Propagation":
         render_signal_tab(ui_ctx)

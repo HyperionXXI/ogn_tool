@@ -1,0 +1,3 @@
+streamlit>=1.39
+streamlit-folium>=0.18
+folium>=0.17

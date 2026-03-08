@@ -24,6 +24,23 @@ class RFAnalysisEngine:
         self.station_lat = station_lat
         self.station_lon = station_lon
 
+
+    def build_analysis_dataset(self) -> dict:
+        packets_all = self.packets.copy()
+        packets_filtered = packets_all
+        packets_rf = packets_all.iloc[0:0].copy()
+        if "qas" in packets_all.columns:
+            qas_upper = packets_all["qas"].astype(str).str.upper()
+            packets_rf = packets_all[qas_upper.isin(["QAR", "QAO"])].copy()
+        distance_df, _grid = build_rf_dataset(packets_filtered, self.station_lat, self.station_lon)
+        coverage_grid = build_rf_probability_field(distance_df)
+        return {
+            "packets_all": packets_all,
+            "packets_rf": packets_rf,
+            "packets_filtered": packets_filtered,
+            "coverage_grid": coverage_grid,
+        }
+
     def run(self) -> RFAnalysisResult:
         distance_df, grid = build_rf_dataset(self.packets, self.station_lat, self.station_lon)
         azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, self.station_lat, self.station_lon)

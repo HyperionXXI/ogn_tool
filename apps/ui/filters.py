@@ -4,6 +4,8 @@ from typing import Dict, Any
 import streamlit as st
 
 
+AIRCRAFT_TYPES = ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"]
+
 def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn, has_rf: bool = True) -> Dict[str, Any]:
     if "filters_apply" not in st.session_state:
         st.session_state["filters_apply"] = default_filters.copy()
@@ -35,8 +37,9 @@ def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn, has_rf: 
             st.markdown("## Aircraft types")
             dst_types = st.multiselect(
                 "Aircraft types",
-                ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
-                default=st.session_state["filters_edit"]["dst_types"],
+                AIRCRAFT_TYPES,
+                default=AIRCRAFT_TYPES,
+                disabled=True,
             )
 
             st.caption("Filters are applied only when clicking 'Apply filters'.")
@@ -58,7 +61,7 @@ def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn, has_rf: 
                 "hours": int(hours),
                 "data_source": data_source,
                 "source_mode": source_mode,
-                "dst_types": list(dst_types),
+                "dst_types": list(AIRCRAFT_TYPES),
                 "only_local_radio": bool(only_local_radio),
                 "only_heard_by": bool(only_heard_by),
                 "igate_filter": igate_filter,

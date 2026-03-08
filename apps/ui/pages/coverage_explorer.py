@@ -158,55 +158,72 @@ def _compute_network_contribution(packets_window, station_callsign, station_engi
 
 def render_coverage_explorer_page(ctx):
     st.markdown("<h2>Coverage Explorer</h2>", unsafe_allow_html=True)
+    st.success("Coverage Explorer loaded")
 
     rf_packets = ctx.get("rf_packets")
     packets_window = ctx.get("packets_window")
-    dataset = rf_packets if rf_packets is not None and not rf_packets.empty else packets_window
-
-    rf_local_count = int(ctx.get("rf_local_count", 0))
-    readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
-
-    st.markdown("**RF DATASET STATUS**")
-    st.write(f"Packets heard by station: {ctx['fmt_int'](rf_local_count)}")
-    st.write("Recommended minimum: 2000")
-    st.write(f"Coverage readiness: {readiness}")
-    if rf_local_count < 2000:
-        st.warning("Dataset too small for reliable RF coverage analysis")
-
-    if dataset is None or (hasattr(dataset, "empty") and dataset.empty):
-        st.info("No packets available for coverage explorer.")
-        return
 
     if folium is None or st_folium is None:
         st.error("Missing dependency: streamlit-folium. Install: pip install streamlit-folium")
         return
 
-    engine_result = compute_rf_engine(dataset, ctx.get("station_lat"), ctx.get("station_lon"))
-    rf_grid = engine_result.coverage_grid
+    st.subheader("DEBUG MAP TEST")
+    test_map = folium.Map(location=[47.3, 7.3], zoom_start=8, tiles=_map_tiles(ctx))
+    st_folium(test_map, height=500, use_container_width=True)
+
+    rf_local_count = int(ctx.get("rf_local_count", 0))
+    readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
+
+    total_packets = len(packets_window) if packets_window is not None else 0
+    total_rf = len(rf_packets) if rf_packets is not None else 0
+    filtered_packets = total_rf if total_rf > 0 else total_packets
+
+    st.info(
+        f"packets_total = {total_packets}\n"
+        f"packets_rf = {total_rf}\n"
+        f"packets_filtered = {filtered_packets}"
+    )
+
+    st.markdown("**RF DATASET STATUS**")
+    st.write(f"Packets heard by station: {ctx['fmt_int'](rf_local_count)}")
+    st.write("Recommended minimum: 2000")
+    st.write(f"Coverage readiness: {readiness}")
+    if total_rf == 0:
+        st.warning("No RF packets detected. Showing traffic map.")
+    if rf_local_count < 2000:
+        st.warning("Dataset too small for reliable RF coverage analysis")
+
+    if packets_window is None:
+        packets_window = ctx["pd"].DataFrame()
+    if rf_packets is None:
+        rf_packets = ctx["pd"].DataFrame()
+
+    engine_all = RFAnalysisEngine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
+    analysis_data = engine_all.build_analysis_dataset()
+    packets_all = analysis_data["packets_all"]
+    packets_rf = analysis_data["packets_rf"]
+    packets_filtered = analysis_data["packets_filtered"]
+    rf_grid = analysis_data["coverage_grid"]
 
     if "ce_active_station" not in st.session_state:
         st.session_state["ce_active_station"] = "(network)"
     if "ce_active_cell" not in st.session_state:
         st.session_state["ce_active_cell"] = None
 
-    st.markdown("### Network Configuration")
+    st.markdown("### MAP")
+    show_traffic = st.checkbox("Traffic", value=True, key="ce_layer_traffic")
+    show_reception = st.checkbox("Reception", value=True, key="ce_layer_reception")
+    show_prob = st.checkbox("Coverage probability", value=True, key="ce_layer_prob")
+    show_conf = st.checkbox("Confidence", value=True, key="ce_layer_conf")
+    show_stations = st.checkbox("Stations", value=True, key="ce_layer_stations")
+    show_rings = st.checkbox("Range rings", value=True, key="ce_layer_rings")
+
     compare_default = st.session_state.get("ce_compare_stations")
     if compare_default is None:
         compare_default = ctx.get("os").getenv("OGN_COMPARE_STATIONS", "") if ctx.get("os") else ""
-    compare_str = st.text_input("Stations compared (callsign=lat,lon; ...)", value=compare_default)
-    st.session_state["ce_compare_stations"] = compare_str
 
-    station_points = _compute_station_points(ctx, packets_window, compare_str)
+    station_points = _compute_station_points(ctx, packets_window, compare_default)
     station_choices = ["(network)"] + [s["callsign"] for s in station_points] if station_points else ["(network)"]
-
-    col_cfg1, col_cfg2 = st.columns(2)
-    with col_cfg1:
-        st.selectbox("Station analyzed", station_choices, key="ce_active_station")
-        st.caption(f"Time window: {ctx.get('hours', '—')} hours")
-    with col_cfg2:
-        rings_km = st.slider("Analysis radius (km)", 5, 200, int(ctx.get("rings_km", 40)))
-        st.caption("Basemap: " + str(ctx.get("basemap_label") or "Default"))
-
     active_station = st.session_state.get("ce_active_station", "(network)")
 
     if active_station != "(network)":
@@ -219,18 +236,10 @@ def render_coverage_explorer_page(ctx):
         if station_meta and (station_packets is not None and not station_packets.empty):
             station_engine = compute_rf_engine(station_packets, station_meta["lat"], station_meta["lon"])
         else:
-            station_engine = engine_result
+            station_engine = compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
     else:
         station_meta = None
-        station_engine = engine_result
-
-    st.markdown("### MAP")
-    show_traffic = st.checkbox("Traffic", value=True, key="ce_layer_traffic")
-    show_reception = st.checkbox("Reception", value=True, key="ce_layer_reception")
-    show_prob = st.checkbox("Coverage probability", value=True, key="ce_layer_prob")
-    show_conf = st.checkbox("Confidence", value=True, key="ce_layer_conf")
-    show_stations = st.checkbox("Stations", value=True, key="ce_layer_stations")
-    show_rings = st.checkbox("Range rings", value=True, key="ce_layer_rings")
+        station_engine = compute_rf_engine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
 
     m = folium.Map(
         location=[ctx.get("station_lat"), ctx.get("station_lon")],
@@ -295,22 +304,22 @@ def render_coverage_explorer_page(ctx):
 
     if show_traffic:
         traffic_group = folium.FeatureGroup(name="Traffic", show=True)
-        points = packets_window.dropna(subset=["lat", "lon"]) if packets_window is not None else None
+        points = packets_all.dropna(subset=["lat", "lon"]) if packets_all is not None else None
         if points is not None and not points.empty:
             for _, row in points.iterrows():
                 folium.CircleMarker(
                     location=[row["lat"], row["lon"]],
-                    radius=4,
+                    radius=6,
                     color="#f97316",
                     fill=True,
-                    fill_opacity=0.7,
+                    fill_opacity=0.75,
                     weight=0,
                 ).add_to(traffic_group)
         traffic_group.add_to(m)
 
     if show_reception:
         reception_group = folium.FeatureGroup(name="Reception", show=True)
-        reception_points = rf_packets if rf_packets is not None and not rf_packets.empty else None
+        reception_points = packets_rf if packets_rf is not None and not packets_rf.empty else None
         if station_meta is not None and packets_window is not None and "igate" in packets_window.columns:
             reception_points = packets_window[packets_window["igate"].astype(str) == active_station]
         if reception_points is not None and not reception_points.empty:
@@ -318,10 +327,10 @@ def render_coverage_explorer_page(ctx):
             for _, row in points.iterrows():
                 folium.CircleMarker(
                     location=[row["lat"], row["lon"]],
-                    radius=5,
+                    radius=7,
                     color="#22c55e",
                     fill=True,
-                    fill_opacity=0.8,
+                    fill_opacity=0.85,
                     weight=0,
                 ).add_to(reception_group)
         reception_group.add_to(m)
@@ -349,7 +358,7 @@ def render_coverage_explorer_page(ctx):
 
     if show_rings and station_meta:
         rings_group = folium.FeatureGroup(name="Range rings", show=True)
-        for r_km in (10, 20, 40, rings_km):
+        for r_km in (10, 20, 40):
             folium.Circle(
                 location=[station_meta["lat"], station_meta["lon"]],
                 radius=r_km * 1000,
@@ -360,7 +369,6 @@ def render_coverage_explorer_page(ctx):
         rings_group.add_to(m)
 
     folium.LayerControl().add_to(m)
-
     map_data = st_folium(m, height=700, use_container_width=True)
 
     clicked = map_data.get("last_clicked") if isinstance(map_data, dict) else None
@@ -388,6 +396,18 @@ def render_coverage_explorer_page(ctx):
                         updated = True
             if updated:
                 st.rerun()
+
+    st.markdown("### Network Configuration")
+    compare_str = st.text_input("Stations compared (callsign=lat,lon; ...)", value=compare_default)
+    st.session_state["ce_compare_stations"] = compare_str
+
+    col_cfg1, col_cfg2 = st.columns(2)
+    with col_cfg1:
+        st.selectbox("Station analyzed", station_choices, key="ce_active_station")
+        st.caption(f"Time window: {ctx.get('hours', '—')} hours")
+    with col_cfg2:
+        rings_km = st.slider("Analysis radius (km)", 5, 200, int(ctx.get("rings_km", 40)))
+        st.caption("Basemap: " + str(ctx.get("basemap_label") or "Default"))
 
     st.markdown("### Station Summary")
     range_summary = (station_engine.metrics.get("station_range") or {}).get("summary") or {}
@@ -435,14 +455,14 @@ def render_coverage_explorer_page(ctx):
             cell = grid[grid["label"] == selected_cell].iloc[0]
             cell_size = float(grid["cell_size_deg"].iloc[0]) if "cell_size_deg" in grid.columns else 0.01
             zone_info = cell.to_dict()
-            if dataset is not None and "lat" in dataset.columns and "lon" in dataset.columns:
+            if packets_filtered is not None and "lat" in packets_filtered.columns and "lon" in packets_filtered.columns:
                 lat_min, lat_max = cell["lat"], cell["lat"] + cell_size
                 lon_min, lon_max = cell["lon"], cell["lon"] + cell_size
-                subset = dataset[
-                    (dataset["lat"] >= lat_min)
-                    & (dataset["lat"] < lat_max)
-                    & (dataset["lon"] >= lon_min)
-                    & (dataset["lon"] < lon_max)
+                subset = packets_filtered[
+                    (packets_filtered["lat"] >= lat_min)
+                    & (packets_filtered["lat"] < lat_max)
+                    & (packets_filtered["lon"] >= lon_min)
+                    & (packets_filtered["lon"] < lon_max)
                 ]
                 zone_info["mean_altitude"] = subset["altitude_m"].mean() if "altitude_m" in subset.columns else None
                 zone_info["max_distance"] = subset["distance_km"].max() if "distance_km" in subset.columns else None
