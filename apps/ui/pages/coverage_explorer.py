@@ -129,11 +129,20 @@ def render_coverage_explorer_page(ctx):
         compare_default = ctx.get("os").getenv("OGN_COMPARE_STATIONS", "") if ctx.get("os") else ""
 
     st.markdown("### Network Configuration")
-    dataset_mode = st.selectbox(
+    dataset_mode_labels = {
+        "STRICT_RF": "Local RF coverage",
+        "STATION_RF": "Station coverage",
+        "NETWORK": "Network coverage",
+    }
+    label_options = [dataset_mode_labels[k] for k in ("STRICT_RF", "STATION_RF", "NETWORK")]
+    current_label = dataset_mode_labels.get(dataset_mode, "Local RF coverage")
+    selected_label = st.selectbox(
         "Dataset mode",
-        ["STRICT_RF", "STATION_RF", "NETWORK"],
-        index=["STRICT_RF", "STATION_RF", "NETWORK"].index(dataset_mode),
+        label_options,
+        index=label_options.index(current_label),
     )
+    inverse_labels = {v: k for k, v in dataset_mode_labels.items()}
+    dataset_mode = inverse_labels.get(selected_label, "STRICT_RF")
     st.session_state["ce_dataset_mode"] = dataset_mode
     dataset = engine_all.build_analysis_dataset(
         dataset_mode=dataset_mode,
