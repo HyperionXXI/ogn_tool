@@ -4,7 +4,7 @@ from typing import Dict, Any
 import streamlit as st
 
 
-def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn) -> Dict[str, Any]:
+def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn, has_rf: bool = True) -> Dict[str, Any]:
     if "filters_apply" not in st.session_state:
         st.session_state["filters_apply"] = default_filters.copy()
     if "filters_edit" not in st.session_state:
@@ -23,26 +23,32 @@ def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn) -> Dict[
             st.markdown("## Time window")
             hours = st.slider("Time window (hours)", 1, 72, int(st.session_state["filters_edit"]["hours"]))
 
-            st.markdown("## Data filters")
-            source_mode = st.selectbox(
-                "Packet source",
-                ["Heard-by station", "Radio station view"],
-                index=["Heard-by station", "Radio station view"].index(st.session_state["filters_edit"]["source_mode"]),
+            st.markdown("## Data source")
+            data_source = st.selectbox(
+                "Data source mode",
+                ["APRS-IS gated", "Receiver-only RF", "FANET local", "OGN live tracking"],
+                index=["APRS-IS gated", "Receiver-only RF", "FANET local", "OGN live tracking"].index(
+                    st.session_state["filters_edit"].get("data_source", "APRS-IS gated")
+                ),
             )
+
+            st.markdown("## Aircraft types")
             dst_types = st.multiselect(
                 "Aircraft types",
                 ["OGNFNT", "OGFLR", "OGFLR7", "OGNSDR", "OGNDVS"],
                 default=st.session_state["filters_edit"]["dst_types"],
             )
-            only_heard_by = st.checkbox("Coverage heard-by", value=bool(st.session_state["filters_edit"]["only_heard_by"]))
-            only_local_radio = st.checkbox("Local radio only", value=bool(st.session_state["filters_edit"]["only_local_radio"]))
-            igate_filter = st.text_input("IGate filter (optional)", value=st.session_state["filters_edit"]["igate_filter"])
-            use_cov_grid = st.checkbox("Use coverage grid (recommended)", value=bool(st.session_state["filters_edit"].get("use_cov_grid", True)))
 
             st.caption("Filters are applied only when clicking 'Apply filters'.")
             apply_button = st.form_submit_button("Apply filters")
 
         if apply_button:
+            # Preserve advanced filters from existing state
+            source_mode = st.session_state["filters_edit"]["source_mode"]
+            only_heard_by = bool(st.session_state["filters_edit"]["only_heard_by"])
+            only_local_radio = bool(st.session_state["filters_edit"]["only_local_radio"])
+            igate_filter = st.session_state["filters_edit"]["igate_filter"]
+            use_cov_grid = bool(st.session_state["filters_edit"].get("use_cov_grid", True))
             st.session_state["filters_edit"] = {
                 **st.session_state["filters_edit"],
                 "db_path": db_path,
@@ -50,6 +56,7 @@ def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn) -> Dict[
                 "station_lat": float(station_lat),
                 "station_lon": float(station_lon),
                 "hours": int(hours),
+                "data_source": data_source,
                 "source_mode": source_mode,
                 "dst_types": list(dst_types),
                 "only_local_radio": bool(only_local_radio),

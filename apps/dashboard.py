@@ -41,7 +41,15 @@ from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
 from ui.filters import render_sidebar_filters
 from ui import charts as ui_charts
-from ui.sections import render_coverage_tab, render_signal_tab, render_rf_tab, render_debug_tab
+from ui.sections import (
+    render_overview_tab,
+    render_rf_coverage_tab,
+    render_signal_tab,
+    render_directional_rf_tab,
+    render_terrain_tab,
+    render_network_tab,
+    render_diagnostics_tab,
+)
 
 from ogn_tool.config import get_config
 from ogn_tool.db import connect
@@ -56,17 +64,17 @@ from ogn_tool.analysis import station_compare as analysis_station_compare
 from ogn_tool.analysis import station_quality as analysis_station_quality
 from ogn_tool.analysis import antenna_health as analysis_antenna_health
 from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
+from ogn_tool.analysis import terrain_visibility as analysis_terrain_visibility
 from ogn_tool.analysis.grid_loader import load_coverage_grid as load_coverage_grid_base
 from ogn_tool.analysis.pipeline import build_rf_dataset
+from ogn_tool.analysis import azimuth as analysis_azimuth
+from ogn_tool.analysis.network_analysis import (
+    station_aircraft_matrix,
+    station_overlap,
+    aircraft_redundancy,
+)
+from ogn_tool.analysis.azimuth_footprint import compute_azimuth_footprint
 
-try:
-    from streamlit_folium import st_folium
-    import folium
-    from folium.features import DivIcon
-    from folium.plugins import HeatMap, MarkerCluster
-except Exception as e:  # pragma: no cover
-    st.error("Missing dependency: streamlit-folium / folium. Install: pip install streamlit-folium folium")
-    raise
 
 # Optional profiling (enable with OGN_PROFILE=1)
 _PROFILE_ENABLED = os.getenv("OGN_PROFILE", "0") in ("1", "true", "True")
@@ -243,6 +251,25 @@ def _db_meta_raw(db_path: str, query_log: Optional[List[Dict]] = None) -> Tuple[
 @st.cache_data(ttl=30, show_spinner=False)
 def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
     return _db_meta_raw(db_path)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def db_max_ts_epoch(db_path: str) -> Optional[int]:
+    if not os.path.exists(db_path):
+        return None
+    con = get_db_connection(db_path)
+    cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
+    if "ts_epoch" in cols:
+        row = con.execute("SELECT MAX(ts_epoch) FROM packets").fetchone()
+        return int(row[0]) if row and row[0] is not None else None
+    if "ts_utc" in cols:
+        row = con.execute("SELECT MAX(ts_utc) FROM packets").fetchone()
+        if row and row[0]:
+            try:
+                return int(pd.to_datetime(row[0], utc=True).timestamp())
+            except Exception:
+                return None
+    return None
 
 def optimize_db(db_path: str, vacuum: bool = False) -> None:
     con = sqlite3.connect(db_path, timeout=30)
@@ -435,9 +462,39 @@ def _load_packets_window_raw(
     if query_log is not None:
         query_log.append({"query": "load_packets_window", "ms": round(dt_ms, 2), "rows": int(len(df))})
 
-    if "igate" in df.columns and station_callsign:
-        igate_series = df["igate"].fillna("")
-        df = df[igate_series.eq(station_callsign) | igate_series.str.contains(station_callsign)]
+    # Optional diagnostics for timestamp filtering (enable with OGN_DEBUG=1)
+    if os.getenv("OGN_DEBUG", "0") in ("1", "true", "True"):
+        try:
+            print("[debug] timestamp columns:", list(df.columns))
+            if "timestamp" in df.columns:
+                print("[debug] min timestamp:", df["timestamp"].min(), "max timestamp:", df["timestamp"].max())
+            if "ts_epoch" in df.columns:
+                print("[debug] min ts_epoch:", df["ts_epoch"].min(), "max ts_epoch:", df["ts_epoch"].max())
+            print("[debug] cutoff epoch:", since_epoch)
+            if "raw" in df.columns:
+                print("[debug] qAR count:", df["raw"].str.contains("qAR", na=False, regex=False).sum())
+                print("[debug] qAO count:", df["raw"].str.contains("qAO", na=False, regex=False).sum())
+                print("[debug] qAC count:", df["raw"].str.contains("qAC", na=False, regex=False).sum())
+                print("[debug] example packets:")
+                print(df["raw"].head(5))
+            print("[debug] columns:", list(df.columns))
+            if "igate" in df.columns:
+                print("[debug] igate values:")
+                print(df["igate"].value_counts().head(20))
+            if "qas" in df.columns:
+                print("[debug] qas values:")
+                print(df["qas"].value_counts())
+                print("[debug] qAR count (qas):", (df["qas"] == "qAR").sum())
+                print("[debug] qAO count (qas):", (df["qas"] == "qAO").sum())
+            if "raw" in df.columns:
+                station = str(station_callsign).upper()
+                print("[debug] packets containing station:")
+                print(df[df["raw"].str.contains(station, na=False, regex=False)].head())
+                print("[debug] station count:", df["raw"].str.contains(station, na=False, regex=False).sum())
+        except Exception as e:
+            print("[debug] timestamp diagnostics failed:", repr(e))
+
+    # Do not filter by qas here; classification happens downstream for UI sections.
 
     max_packets = 2_000_000
     if len(df) > max_packets:
@@ -634,7 +691,8 @@ default_filters = {
     "since_epoch": int((now_utc() - dt.timedelta(hours=6)).timestamp()),
 }
 
-filters_apply = render_sidebar_filters(default_filters, now_utc)
+has_rf_prev = st.session_state.get("has_rf", True)
+filters_apply = render_sidebar_filters(default_filters, now_utc, has_rf=has_rf_prev)
 
 mode = filters_apply["mode"]
 db_path = filters_apply["db_path"]
@@ -642,6 +700,14 @@ station_callsign = filters_apply["station_callsign"]
 station_lat = filters_apply["station_lat"]
 station_lon = filters_apply["station_lon"]
 hours = max(1, int(filters_apply["hours"]))
+
+latest_ts_epoch = db_max_ts_epoch(db_path)
+if latest_ts_epoch is not None:
+    cutoff_epoch = int(latest_ts_epoch - hours * 3600)
+    filters_apply["since_epoch"] = cutoff_epoch
+    filters_apply["since_iso"] = dt.datetime.fromtimestamp(cutoff_epoch, tz=dt.timezone.utc).isoformat()
+    st.session_state["filters_apply"]["since_epoch"] = cutoff_epoch
+    st.session_state["filters_apply"]["since_iso"] = filters_apply["since_iso"]
 source_mode = filters_apply["source_mode"]
 dst_types = filters_apply["dst_types"]
 igate_filter = filters_apply["igate_filter"]
@@ -763,7 +829,7 @@ else:
 
 last_packet_label = (last_ts[:19] + " UTC") if last_ts else "—"
 
-packets_kpi = _load_packets_window_raw(
+packets_window = _load_packets_window_raw(
     db_path=db_path,
     since_iso=filters_apply["since_iso"],
     since_epoch=filters_apply["since_epoch"],
@@ -775,9 +841,152 @@ packets_kpi = _load_packets_window_raw(
     qas_filter="",
     limit_rows=limit_rows,
 )
-rf_packets, rf_grid = build_rf_cached(packets_kpi, station_lat, station_lon)
-unique_aircraft = packets_kpi["src"].nunique() if "src" in packets_kpi.columns else None
-igate_count = packets_kpi["igate"].nunique() if "igate" in packets_kpi.columns else None
+if "qas" in packets_window.columns:
+    qas_upper = packets_window["qas"].astype(str).str.upper()
+    rf_packets_global = packets_window[qas_upper.isin(["QAR", "QAO"])].copy()
+    internet_packets = packets_window[qas_upper.isin(["QAC", "QAX"])].copy()
+    server_packets = packets_window[qas_upper.isin(["QAS"])].copy()
+else:
+    rf_packets_global = packets_window.iloc[0:0].copy()
+    internet_packets = packets_window.iloc[0:0].copy()
+    server_packets = packets_window.iloc[0:0].copy()
+
+aircraft_packets = packets_window.dropna(subset=["lat", "lon"]).copy() if "lat" in packets_window.columns and "lon" in packets_window.columns else packets_window.iloc[0:0].copy()
+network_packets = packets_window
+
+if "dst" in packets_window.columns:
+    dst_upper = packets_window["dst"].astype(str).str.upper()
+    fanet_packets_global = packets_window[dst_upper == "OGNFNT"].copy()
+else:
+    fanet_packets_global = packets_window.iloc[0:0].copy()
+
+test_igate = str(filters_apply.get("test_igate", "")).strip()
+test_fanet_igate = str(filters_apply.get("test_fanet_igate", "")).strip()
+station_cs_effective = str(test_igate or station_callsign).upper()
+fanet_cs_effective = str(test_fanet_igate or station_callsign).upper()
+station_cs_actual = str(station_callsign).upper()
+rf_local_raw = (
+    rf_packets_global[
+        rf_packets_global["igate"].astype(str).str.upper().eq(station_cs_effective)
+        | rf_packets_global["raw"].astype(str).str.contains(station_cs_effective, na=False, regex=False)
+    ].copy()
+    if "raw" in rf_packets_global.columns and "igate" in rf_packets_global.columns and station_cs_effective
+    else rf_packets_global.iloc[0:0].copy()
+)
+
+fanet_local_raw = (
+    fanet_packets_global[
+        fanet_packets_global["igate"].astype(str).str.upper().eq(fanet_cs_effective)
+        | fanet_packets_global["raw"].astype(str).str.contains(fanet_cs_effective, na=False, regex=False)
+    ].copy()
+    if "raw" in fanet_packets_global.columns and "igate" in fanet_packets_global.columns and fanet_cs_effective
+    else fanet_packets_global.iloc[0:0].copy()
+)
+
+rf_receiver_only_raw = (
+    packets_window[
+        packets_window["raw"].astype(str).str.contains(station_cs_actual, na=False, regex=False)
+    ].copy()
+    if "raw" in packets_window.columns and station_cs_actual
+    else packets_window.iloc[0:0].copy()
+)
+
+rf_gated_packets, rf_gated_grid = build_rf_cached(rf_local_raw, station_lat, station_lon)
+fanet_local, fanet_grid = build_rf_cached(fanet_local_raw, station_lat, station_lon)
+rf_receiver_only_packets, rf_receiver_only_grid = build_rf_cached(rf_receiver_only_raw, station_lat, station_lon)
+
+data_source_mode = filters_apply.get("data_source", "APRS-IS gated")
+if data_source_mode == "Receiver-only RF":
+    rf_packets = rf_receiver_only_packets
+    rf_grid = rf_receiver_only_grid
+elif data_source_mode == "FANET local":
+    rf_packets = fanet_local
+    rf_grid = fanet_grid
+elif data_source_mode == "OGN live tracking":
+    rf_packets = rf_gated_packets.iloc[0:0].copy()
+    rf_grid = rf_gated_grid.iloc[0:0].copy()
+else:
+    rf_packets = rf_gated_packets
+    rf_grid = rf_gated_grid
+
+azimuth_stats = analysis_azimuth.compute_azimuth_radiation(rf_packets, station_lat, station_lon)
+azimuth_footprint = compute_azimuth_footprint(rf_packets, station_lat, station_lon)
+unique_aircraft = rf_packets["src"].nunique() if "src" in rf_packets.columns else None
+igate_count = packets_window["igate"].nunique() if "igate" in packets_window.columns else None
+rf_global_count = int(len(rf_packets_global))
+rf_count = int(len(rf_packets))
+internet_count = int(len(internet_packets))
+server_count = int(len(server_packets))
+has_rf = rf_count > 0
+st.session_state["has_rf"] = has_rf
+rf_packets_heard = (
+    int(rf_gated_packets["igate"].astype(str).str.upper().eq(station_cs_effective).sum())
+    if rf_gated_packets is not None and "igate" in rf_gated_packets.columns and station_cs_effective
+    else None
+)
+rf_local = rf_gated_packets
+rf_local_count = int(len(rf_local))
+rf_local_aircraft = int(rf_local["src"].nunique()) if "src" in rf_local.columns else 0
+rf_global_aircraft = int(rf_packets_global["src"].nunique()) if rf_packets_global is not None and "src" in rf_packets_global.columns else 0
+rf_receiver_only_count = int(len(rf_receiver_only_packets))
+rf_receiver_only_aircraft = int(rf_receiver_only_packets["src"].nunique()) if "src" in rf_receiver_only_packets.columns else 0
+
+station_matrix = station_aircraft_matrix(rf_packets_global)
+overlap = station_overlap(station_matrix)
+redundancy = aircraft_redundancy(station_matrix)
+
+# Dataset status (RF + FANET) for clarity when sample sizes are low
+rf_recommended = 2000
+fanet_packets = int(len(fanet_local)) if fanet_local is not None else 0
+fanet_devices = int(fanet_local["src"].nunique()) if fanet_local is not None and "src" in fanet_local.columns else 0
+rf_quality = "LOW" if rf_local_count < 200 else "MEDIUM" if rf_local_count < rf_recommended else "GOOD"
+fanet_quality = "LOW" if fanet_packets < 50 else "MEDIUM" if fanet_packets < 300 else "GOOD"
+rf_badge = "🔴 LOW" if rf_quality == "LOW" else "🟡 MEDIUM" if rf_quality == "MEDIUM" else "🟢 GOOD"
+fanet_badge = "🔴 LOW" if fanet_quality == "LOW" else "🟡 MEDIUM" if fanet_quality == "MEDIUM" else "🟢 GOOD"
+rf_last_24h = None
+rf_last_7d = None
+if "ts_epoch" in rf_local.columns and not rf_local.empty:
+    ts = pd.to_numeric(rf_local["ts_epoch"], errors="coerce")
+    latest = ts.max()
+    if pd.notna(latest):
+        rf_last_24h = int((ts >= (latest - 24 * 3600)).sum())
+        rf_last_7d = int((ts >= (latest - 7 * 24 * 3600)).sum())
+with st.container():
+    st.markdown("### Dataset status")
+    st.markdown("**RF dataset**")
+    st.write(
+        f"RF packets (local): {fmt_int(rf_local_count)}  \n"
+        f"RF packets last 24h: {fmt_int(rf_last_24h) if rf_last_24h is not None else '—'}  \n"
+        f"RF packets last 7d: {fmt_int(rf_last_7d) if rf_last_7d is not None else '—'}  \n"
+        f"Coverage readiness: **{rf_badge}**  \n"
+        f"Recommended dataset: ≥ {fmt_int(rf_recommended)} packets"
+    )
+    st.markdown("**RF receiver-only (not gated)**")
+    st.write(
+        f"RF receiver-only packets: {fmt_int(rf_receiver_only_count)}  \n"
+        f"RF receiver-only aircraft: {fmt_int(rf_receiver_only_aircraft)}  \n"
+        "Badge: **Receiver-only (not gated)**"
+    )
+    st.markdown("**FANET dataset**")
+    st.write(
+        f"FANET packets (local): {fmt_int(fanet_packets)}  \n"
+        f"FANET devices: {fmt_int(fanet_devices)}  \n"
+        f"Network activity: **{fanet_badge}**"
+    )
+    if rf_local_count < 200:
+        st.warning(
+            f"DATASET TOO SMALL FOR RF COVERAGE ANALYSIS\n\n"
+            f"RF packets heard by this station: {fmt_int(rf_local_count)}\n"
+            f"Recommended RF dataset: ≥ {fmt_int(rf_recommended)} packets"
+        )
+    st.caption("RF dataset completeness")
+    st.progress(min(rf_local_count / rf_recommended, 1.0))
+    if rf_receiver_only_count > 0 and rf_local_count == 0:
+        st.warning(
+            "This station receives RF but does not gate packets to APRS-IS.\n"
+            "RF coverage analysis requires gated packets (qAR/qAO)."
+        )
+    st.caption(f"Analysis source: {data_source_mode}")
 
 with kpi_container:
     k1, k2, k3, k4, k5 = st.columns(DASHBOARD_COLUMNS)
@@ -789,17 +998,17 @@ with kpi_container:
         if rf_packets is not None and "distance_km" in rf_packets.columns and not rf_packets.empty
         else None
     )
-    metric_card(k1, "Packets", fmt_int(packets_total))
+    metric_card(k1, "RF packets", fmt_int(packets_total))
     metric_card(k2, "Aircraft", fmt_int(aircraft_total))
     metric_card(k3, "Max distance", f"{fmt_float(max_dist, 1)} km" if max_dist is not None else "—")
     metric_card(k4, "P95 distance", f"{fmt_float(p95_dist, 1)} km" if p95_dist is not None else "—")
     metric_card(k5, "Grid cells", fmt_int(len(rf_grid)) if rf_grid is not None else "—")
     k6, k7, k8, k9, k10 = st.columns(DASHBOARD_COLUMNS)
-    metric_card(k6, "Unique aircraft", fmt_int(unique_aircraft) if unique_aircraft is not None else "—")
-    metric_card(k7, "IGates in dataset", fmt_int(igate_count) if igate_count is not None else "—")
-    k8.empty()
-    k9.empty()
-    k10.empty()
+    metric_card(k6, "Internet packets", fmt_int(internet_count))
+    metric_card(k7, "Server packets", fmt_int(server_count))
+    metric_card(k8, "RF packets (this station)", fmt_int(rf_packets_heard) if rf_packets_heard is not None else "—")
+    metric_card(k9, "RF global packets", fmt_int(rf_global_count))
+    metric_card(k10, "RF local packets", fmt_int(rf_local_count))
 
 with status_container:
     st.caption(
@@ -818,15 +1027,17 @@ types_str = "/".join(dst_types) if dst_types else "—"
 st.caption(f"Active filters: Station={station_callsign} | Window={hours}h | Types={types_str} | Mode={mode} — Last apply: {apply_time}")
 
 with navigation_container:
-    view = st.segmented_control(
-        "Analysis",
+    page = st.sidebar.radio(
+        "Navigation",
         [
-            "Coverage",
-            "Signal",
-            "RF diagnostics",
-            "Debug",
+            "Overview",
+            "RF Map",
+            "Propagation",
+            "Directional RF",
+            "Terrain",
+            "Network",
+            "Diagnostics",
         ],
-        default="Coverage",
     )
 
 with st.expander("Advanced settings", expanded=False):
@@ -883,6 +1094,16 @@ with st.expander("Advanced settings", expanded=False):
             ["Standard", "Advanced", "Expert"],
             index=["Standard", "Advanced", "Expert"].index(st.session_state["filters_edit"]["mode"]),
         )
+        test_igate_adv = st.text_input(
+            "Test IGate (optional)",
+            st.session_state["filters_edit"].get("test_igate", ""),
+            help="Override IGate callsign used for local RF checks (debug/validation).",
+        )
+        test_fanet_igate_adv = st.text_input(
+            "Test FANET IGate (optional)",
+            st.session_state["filters_edit"].get("test_fanet_igate", ""),
+            help="Override IGate callsign used for FANET local checks (debug/validation).",
+        )
         debug_sql_adv = st.checkbox("Debug SQL timings", value=bool(st.session_state["filters_edit"]["debug_sql"]))
         raw_packets_mode_adv = st.checkbox("Raw packets mode (Debug only)", value=bool(st.session_state["filters_edit"].get("raw_packets_mode", False)))
 
@@ -902,6 +1123,8 @@ with st.expander("Advanced settings", expanded=False):
             "do_autorefresh": bool(do_autorefresh_adv),
             "perf_cache": bool(perf_cache_adv),
             "mode": mode_adv,
+            "test_igate": test_igate_adv.strip(),
+            "test_fanet_igate": test_fanet_igate_adv.strip(),
             "debug_sql": bool(debug_sql_adv),
             "raw_packets_mode": bool(raw_packets_mode_adv),
         }
@@ -918,6 +1141,8 @@ with st.expander("Advanced settings", expanded=False):
             "do_autorefresh": bool(do_autorefresh_adv),
             "perf_cache": bool(perf_cache_adv),
             "mode": mode_adv,
+            "test_igate": test_igate_adv.strip(),
+            "test_fanet_igate": test_fanet_igate_adv.strip(),
             "debug_sql": bool(debug_sql_adv),
             "raw_packets_mode": bool(raw_packets_mode_adv),
         }
@@ -996,6 +1221,8 @@ ui_ctx = {
     "station_callsign": station_callsign,
     "station_lat": station_lat,
     "station_lon": station_lon,
+    "data_source": filters_apply.get("data_source", "APRS-IS gated"),
+    "test_fanet_igate": filters_apply.get("test_fanet_igate", ""),
     "BASEMAPS": BASEMAPS,
     "basemap_label": basemap_label,
     "max_distance_grid": max_distance_grid,
@@ -1011,14 +1238,38 @@ ui_ctx = {
     "raw_packets_mode": raw_packets_mode,
     "grid_df_kpi": grid_df_kpi,
     "rf_packets": rf_packets,
+    "rf_packets_global": rf_packets_global,
+    "rf_gated_packets": rf_gated_packets,
+    "rf_local": rf_local,
+    "rf_receiver_only_raw": rf_receiver_only_raw,
+    "rf_receiver_only_packets": rf_receiver_only_packets,
+    "fanet_packets_global": fanet_packets_global,
+    "fanet_local": fanet_local,
     "rf_grid": rf_grid,
+    "packets_window": packets_window,
+    "rf_packets": rf_packets,
+    "aircraft_packets": aircraft_packets,
+    "network_packets": network_packets,
+    "internet_packets": internet_packets,
+    "server_packets": server_packets,
+    "rf_count": rf_count,
+    "rf_global_count": rf_global_count,
+    "rf_receiver_only_count": rf_receiver_only_count,
+    "rf_receiver_only_aircraft": rf_receiver_only_aircraft,
+    "rf_local_count": rf_local_count,
+    "rf_local_aircraft": rf_local_aircraft,
+    "rf_global_aircraft": rf_global_aircraft,
+    "internet_count": internet_count,
+    "server_count": server_count,
+    "has_rf": has_rf,
+    "station_matrix": station_matrix,
+    "station_overlap": overlap,
+    "redundancy": redundancy,
+    "azimuth_stats": azimuth_stats,
+    "azimuth_footprint": azimuth_footprint,
     "pd": pd,
     "np": np,
     "os": os,
-    "folium": folium,
-    "st_folium": st_folium,
-    "DivIcon": DivIcon,
-    "MarkerCluster": MarkerCluster,
     "load_coverage_grid": load_coverage_grid,
     "_load_packets_window_raw": _load_packets_window_raw,
     "analysis_shadow_map": analysis_shadow_map,
@@ -1028,6 +1279,7 @@ ui_ctx = {
     "analysis_station_quality": analysis_station_quality,
     "analysis_polar": analysis_polar,
     "analysis_terrain": analysis_terrain,
+    "analysis_terrain_visibility": analysis_terrain_visibility,
     "analysis_antenna_health": analysis_antenna_health,
     "analysis_radio_horizon": analysis_radio_horizon,
     "analysis_station_compare": analysis_station_compare,
@@ -1039,14 +1291,20 @@ ui_ctx = {
 
 
 with content_container:
-    if view == "Coverage":
-        render_coverage_tab(ui_ctx)
-    elif view == "Signal":
+    if page == "Overview":
+        render_overview_tab(ui_ctx)
+    elif page == "RF Map":
+        render_rf_coverage_tab(ui_ctx)
+    elif page == "Propagation":
         render_signal_tab(ui_ctx)
-    elif view == "RF diagnostics":
-        render_rf_tab(ui_ctx)
-    elif view == "Debug":
-        render_debug_tab(ui_ctx)
+    elif page == "Directional RF":
+        render_directional_rf_tab(ui_ctx)
+    elif page == "Terrain":
+        render_terrain_tab(ui_ctx)
+    elif page == "Network":
+        render_network_tab(ui_ctx)
+    elif page == "Diagnostics":
+        render_diagnostics_tab(ui_ctx)
 if _PROFILER:
     _PROFILER.disable()
     st.caption("Profiling enabled (results printed to console).")

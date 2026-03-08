@@ -1,213 +1,338 @@
-from typing import Optional, Tuple
+from typing import Optional
 
-import numpy as np
 import pandas as pd
 import streamlit as st
-
-import folium
-from folium.features import DivIcon
-from folium.plugins import FastMarkerCluster
-from streamlit_folium import st_folium
 
 try:
     import plotly.graph_objects as go
 except Exception:  # pragma: no cover
     go = None
 
-MAX_MAP_POINTS = 50000
-MAX_GRID_CELLS = 20000
-LEGEND = {
-    "packets": "packet density",
-    "aircraft": "unique aircraft",
-    "max_distance": "maximum reception distance",
-    "shadow": "terrain shadow proxy",
-}
-SHADOW_COLORS = {
-    True: "#222222",   # shadow
-    False: "#00aa55",  # received
-}
+try:
+    import pydeck as pdk
+except Exception:  # pragma: no cover
+    pdk = None
+
+MAX_MAP_POINTS = 10000
 
 
-@st.cache_data(show_spinner=False)
-def prepare_map_dataset(dataset: pd.DataFrame) -> pd.DataFrame:
-    return dataset
+def _map_style(ctx: dict):
+    if pdk is None:
+        return None
+    label = str(ctx.get("basemap_label") or "")
+    if "Positron" in label or "clair" in label:
+        return pdk.map_styles.CARTO_LIGHT
+    if "Dark" in label or "dark" in label:
+        return pdk.map_styles.CARTO_DARK
+    return pdk.map_styles.ROAD
 
 
-def _color_from_value(val: float, vmin: float, vmax: float) -> str:
-    if val is None or (isinstance(val, float) and np.isnan(val)):
-        return "#999999"
-    if vmax <= vmin:
-        t = 0.5
-    else:
-        t = (val - vmin) / (vmax - vmin)
-        t = max(0.0, min(1.0, t))
-    if t < 0.25:
-        return "#2563eb"
-    if t < 0.5:
-        return "#06b6d4"
-    if t < 0.75:
-        return "#22c55e"
-    if t < 0.9:
-        return "#eab308"
-    return "#ef4444"
-
-
-def render_map(title: str, dataset, ctx: dict) -> None:
-    with st.container():
-        st.subheader(title)
-        with st.spinner("Loading map..."):
-            bm = ctx["BASEMAPS"][ctx["basemap_label"]]
-            m = folium.Map(
-                location=[ctx["station_lat"], ctx["station_lon"]],
-                zoom_start=8,
-                tiles=None,
-                control_scale=True,
-                prefer_canvas=True,
-            )
-            folium.TileLayer(tiles=bm.tiles, attr=bm.attr, name=bm.name, control=False).add_to(m)
-            folium.CircleMarker(
-                location=[ctx["station_lat"], ctx["station_lon"]],
-                radius=7,
-                weight=2,
-                color="#000000",
-                fill=True,
-                fill_opacity=1.0,
-                popup=f"{ctx['station_callsign']} (ref)",
-            ).add_to(m)
-            max_range_km = ctx.get("max_distance_grid")
-            max_range_label = ctx["fmt_float"](max_range_km, 1)
-            folium.Marker(
-                location=[ctx["station_lat"], ctx["station_lon"]],
-                icon=DivIcon(
-                    icon_size=(200, 36),
-                    icon_anchor=(0, -10),
-                    html=(
-                        '<div style="font-size:12px;color:#111;background:rgba(255,255,255,0.8);'
-                        'padding:2px 6px;border-radius:4px;border:1px solid #ddd;">'
-                        f"Max range: {max_range_label} km</div>"
-                    ),
-                ),
-            ).add_to(m)
-            if ctx["show_rings"] and ctx["rings_km"]:
-                for rkm in sorted(set(ctx["rings_km"])):
-                    folium.Circle(
-                        location=[ctx["station_lat"], ctx["station_lon"]],
-                        radius=float(rkm) * 1000.0,
-                        color="#3b82f6",
-                        weight=1,
-                        fill=False,
-                        opacity=0.6,
-                    ).add_to(m)
-            folium_key = f"folium_{title.replace(' ', '_').lower()}"
-            if not ctx["use_cov_grid"]:
-                st.warning("Coverage grid is required for maps. Enable it in filters.")
-                st_folium(m, height=750, use_container_width=True, key=folium_key)
-                return
-            if dataset is None or len(dataset) == 0:
-                st.info("No packets found for this station in the selected time window.")
-                return
-            if "lat" not in dataset.columns or "lon" not in dataset.columns:
-                st.warning("Coverage grid missing or invalid (lat/lon columns not found).")
-                st_folium(m, height=750, use_container_width=True, key=folium_key)
-                return
-            df_points = prepare_map_dataset(dataset)
-            map_bounds: Optional[Tuple[float, float, float, float]] = ctx.get("map_bounds")
-            if map_bounds is not None:
-                min_lat, min_lon, max_lat, max_lon = map_bounds
-                df_points = df_points[
-                    (df_points["lat"] >= min_lat)
-                    & (df_points["lat"] <= max_lat)
-                    & (df_points["lon"] >= min_lon)
-                    & (df_points["lon"] <= max_lon)
-                ]
-            df_points = df_points[df_points["lat"].notna() & df_points["lon"].notna()]
-            if df_points.empty:
-                st.warning("No packets in the selected time window.")
-                st_folium(m, height=750, use_container_width=True, key=folium_key)
-                return
-            if "heatmap" in title.lower() or "coverage map" in title.lower():
-                if len(df_points) > MAX_GRID_CELLS:
-                    df_points = df_points.sample(n=MAX_GRID_CELLS, random_state=42)
-            original_len = len(df_points)
-            if original_len > MAX_MAP_POINTS:
-                df_points = df_points.sample(n=MAX_MAP_POINTS, random_state=42)
-                st.warning(
-                    f"Map limited to {MAX_MAP_POINTS:,} points "
-                    f"(dataset contains {original_len:,})."
-                )
-            if not df_points.empty:
-                coords = df_points[["lat", "lon"]].values.tolist()
-                FastMarkerCluster(coords).add_to(m)
-            st_folium(m, height=750, use_container_width=True, key=folium_key)
-
-
-def render_grid_map(grid: pd.DataFrame, value: str, title: str, ctx: dict) -> None:
-    if grid is None or len(grid) == 0:
-        st.info("No packets found for this station in the selected time window.")
+def render_rf_map(df: pd.DataFrame, ctx: dict) -> None:
+    if pdk is None:
+        st.error("Missing dependency: pydeck. Install: pip install pydeck")
         return
-    if value not in grid.columns:
-        st.info(f"Missing column: {value}")
+    if df is None or len(df) == 0:
+        st.info("No packets available.")
         return
-
-    data = grid.copy()
-    if len(data) > MAX_MAP_POINTS:
-        data = data.sample(n=MAX_MAP_POINTS, random_state=42)
-
-    bm = ctx["BASEMAPS"][ctx["basemap_label"]]
-    m = folium.Map(
-        location=[ctx["station_lat"], ctx["station_lon"]],
-        zoom_start=8,
-        tiles=None,
-        control_scale=True,
-        prefer_canvas=True,
+    df = df.dropna(subset=["lat", "lon"])
+    if df.empty:
+        st.info("No packets available.")
+        return
+    if len(df) > MAX_MAP_POINTS:
+        df = df.sample(MAX_MAP_POINTS, random_state=42)
+    view = pdk.ViewState(
+        latitude=ctx["station_lat"],
+        longitude=ctx["station_lon"],
+        zoom=8,
+        pitch=35,
     )
-    folium.TileLayer(tiles=bm.tiles, attr=bm.attr, name=bm.name, control=False).add_to(m)
-    folium.CircleMarker(
-        location=[ctx["station_lat"], ctx["station_lon"]],
-        radius=7,
-        weight=2,
-        color="#000000",
-        fill=True,
-        fill_opacity=1.0,
-        popup=f"{ctx['station_callsign']} (ref)",
-    ).add_to(m)
+    heat = pdk.Layer(
+        "HeatmapLayer",
+        data=df,
+        get_position=["lon", "lat"],
+        radius_pixels=60,
+    )
+    scatter = pdk.Layer(
+        "ScatterplotLayer",
+        data=df,
+        get_position=["lon", "lat"],
+        get_radius=200,
+        get_fill_color=[255, 80, 0, 120],
+    )
+    deck = pdk.Deck(
+        layers=[heat, scatter],
+        initial_view_state=view,
+        map_style=_map_style(ctx),
+    )
+    st.pydeck_chart(deck, use_container_width=True)
 
-    vals = pd.to_numeric(data[value], errors="coerce")
-    vmin = float(np.nanpercentile(vals.to_numpy(), 10)) if vals.notna().any() else 0.0
-    vmax = float(np.nanpercentile(vals.to_numpy(), 90)) if vals.notna().any() else 1.0
 
-    for _, row in data.iterrows():
-        lat = row.get("grid_lat", row.get("lat"))
-        lon = row.get("grid_lon", row.get("lon"))
-        if pd.isna(lat) or pd.isna(lon):
-            continue
-        val = row.get(value)
-        if value == "shadow":
-            color = SHADOW_COLORS.get(bool(val), "#999999")
-        else:
-            val = float(val) if val == val else None
-            color = _color_from_value(val, vmin, vmax) if val is not None else "#999999"
-        tooltip = (
-            f"Packets: {row.get('packets', '—')}\n"
-            f"Aircraft: {row.get('aircraft', '—')}\n"
-            f"Max distance: {ctx['fmt_float'](row.get('max_distance'), 1)} km\n"
-            f"Shadow: {bool(row.get('shadow'))}"
+def render_rf_hex(df: pd.DataFrame, ctx: dict) -> None:
+    if pdk is None:
+        st.error("Missing dependency: pydeck. Install: pip install pydeck")
+        return
+    if df is None or len(df) == 0:
+        st.info("No packets available.")
+        return
+    df = df.dropna(subset=["lat", "lon"])
+    if df.empty:
+        st.info("No packets available.")
+        return
+    layer = pdk.Layer(
+        "HexagonLayer",
+        data=df,
+        get_position=["lon", "lat"],
+        radius=1500,
+        elevation_scale=50,
+        extruded=True,
+        coverage=0.8,
+    )
+    deck = pdk.Deck(
+        layers=[layer],
+        initial_view_state=pdk.ViewState(
+            latitude=ctx["station_lat"],
+            longitude=ctx["station_lon"],
+            zoom=8,
+        ),
+        map_style=_map_style(ctx),
+    )
+    st.pydeck_chart(deck, use_container_width=True)
+
+
+def render_probability_layer(grid: pd.DataFrame, ctx: dict) -> None:
+    if pdk is None:
+        st.error("Missing dependency: pydeck. Install: pip install pydeck")
+        return
+    if grid is None or len(grid) == 0:
+        st.info("No packets available.")
+        return
+    layer = pdk.Layer(
+        "HexagonLayer",
+        data=grid,
+        get_position=["lon", "lat"],
+        get_elevation_weight="probability",
+        elevation_scale=80,
+        radius=1500,
+        extruded=True,
+    )
+    deck = pdk.Deck(
+        layers=[layer],
+        initial_view_state=pdk.ViewState(
+            latitude=ctx["station_lat"],
+            longitude=ctx["station_lon"],
+            zoom=8,
+        ),
+        map_style=_map_style(ctx),
+    )
+    st.pydeck_chart(deck, use_container_width=True)
+
+
+def render_rf_cartography(grid: pd.DataFrame, ctx: dict, layers: list[str]) -> None:
+    if pdk is None:
+        st.error("Missing dependency: pydeck. Install: pip install pydeck")
+        return
+    if grid is None or len(grid) == 0:
+        st.info("No packets available.")
+        return
+    grid = grid.dropna(subset=["lat", "lon"])
+    if grid.empty:
+        st.info("No packets available.")
+        return
+
+    view = pdk.ViewState(
+        latitude=ctx["station_lat"],
+        longitude=ctx["station_lon"],
+        zoom=8,
+        pitch=35,
+    )
+
+    deck_layers = []
+
+    # Build square polygons from fixed grid cells (scientific, comparable)
+    cell_size_deg = float(grid["cell_size_deg"].iloc[0]) if "cell_size_deg" in grid.columns else 0.01
+    poly_df = grid.copy()
+    poly_df["polygon"] = poly_df.apply(
+        lambda r: [
+            [r["lon"], r["lat"]],
+            [r["lon"] + cell_size_deg, r["lat"]],
+            [r["lon"] + cell_size_deg, r["lat"] + cell_size_deg],
+            [r["lon"], r["lat"] + cell_size_deg],
+        ],
+        axis=1,
+    )
+    # Precompute stable color bins
+    prob_bins = pd.cut(
+        pd.to_numeric(poly_df.get("probability"), errors="coerce").fillna(0.0),
+        bins=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+        include_lowest=True,
+        right=True,
+    )
+    prob_colors = [
+        [220, 38, 38, 110],
+        [249, 115, 22, 120],
+        [234, 179, 8, 130],
+        [132, 204, 22, 140],
+        [34, 197, 94, 150],
+    ]
+    poly_df["probability_color"] = [
+        prob_colors[i] if i is not None else [153, 153, 153, 80]
+        for i in prob_bins.cat.codes
+    ]
+    conf_bins = pd.cut(
+        pd.to_numeric(poly_df.get("confidence"), errors="coerce").fillna(0.0),
+        bins=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+        include_lowest=True,
+        right=True,
+    )
+    conf_colors = [
+        [148, 163, 184, 90],
+        [125, 211, 252, 100],
+        [59, 130, 246, 110],
+        [37, 99, 235, 120],
+        [30, 64, 175, 130],
+    ]
+    poly_df["confidence_color"] = [
+        conf_colors[i] if i is not None else [153, 153, 153, 80]
+        for i in conf_bins.cat.codes
+    ]
+    max_dist = pd.to_numeric(poly_df.get("max_distance"), errors="coerce").fillna(0.0)
+    dist_bins = pd.cut(
+        max_dist,
+        bins=[0.0, 10.0, 20.0, 40.0, 80.0, 120.0, 160.0, 250.0, float("inf")],
+        include_lowest=True,
+        right=True,
+    )
+    dist_colors = [
+        [226, 232, 240, 90],
+        [191, 219, 254, 110],
+        [147, 197, 253, 120],
+        [96, 165, 250, 130],
+        [59, 130, 246, 140],
+        [37, 99, 235, 150],
+        [30, 64, 175, 160],
+        [17, 24, 39, 170],
+    ]
+    poly_df["max_distance_color"] = [
+        dist_colors[i] if i is not None else [153, 153, 153, 80]
+        for i in dist_bins.cat.codes
+    ]
+
+    if "RF probability" in layers:
+        deck_layers.append(
+            pdk.Layer(
+                "PolygonLayer",
+                data=poly_df,
+                get_polygon="polygon",
+                get_fill_color="probability_color",
+                get_line_color=[255, 255, 255, 30],
+                line_width_min_pixels=1,
+                stroked=True,
+                filled=True,
+                opacity=0.7,
+            )
         )
-        folium.CircleMarker(
-            location=[float(lat), float(lon)],
-            radius=4.0,
-            weight=1,
-            color=color,
-            fill=True,
-            fill_opacity=0.75,
-            tooltip=tooltip,
-        ).add_to(m)
+    if "Confidence" in layers and "confidence" in grid.columns:
+        deck_layers.append(
+            pdk.Layer(
+                "PolygonLayer",
+                data=poly_df,
+                get_polygon="polygon",
+                get_fill_color="confidence_color",
+                get_line_color=[255, 255, 255, 30],
+                line_width_min_pixels=1,
+                stroked=True,
+                filled=True,
+                opacity=0.7,
+            )
+        )
+    if "Max distance footprint" in layers and "max_distance" in grid.columns:
+        deck_layers.append(
+            pdk.Layer(
+                "PolygonLayer",
+                data=poly_df,
+                get_polygon="polygon",
+                get_fill_color="max_distance_color",
+                get_line_color=[255, 255, 255, 30],
+                line_width_min_pixels=1,
+                stroked=True,
+                filled=True,
+                opacity=0.7,
+            )
+        )
 
-    st.caption(f"{title} — {LEGEND.get(value, value)}")
-    st_folium(m, height=750, use_container_width=True, key=f"grid_{value}")
+    if "RF contours" in layers:
+        # approximate contours via fixed probability bins and stable colors
+        probs = pd.to_numeric(grid["probability"], errors="coerce").fillna(0.0)
+        bin_edges = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+        bins = pd.cut(probs, bins=bin_edges, include_lowest=True, right=True)
+        colors = [
+            [220, 38, 38, 120],
+            [249, 115, 22, 120],
+            [234, 179, 8, 120],
+            [132, 204, 22, 120],
+            [34, 197, 94, 120],
+        ]
+        contour_df = poly_df.copy()
+        contour_df["contour_color"] = [
+            colors[i] if i is not None else [153, 153, 153, 80]
+            for i in bins.cat.codes
+        ]
+        deck_layers.append(
+            pdk.Layer(
+                "PolygonLayer",
+                data=contour_df,
+                get_polygon="polygon",
+                get_fill_color="contour_color",
+                get_line_color=[255, 255, 255, 20],
+                line_width_min_pixels=1,
+                stroked=True,
+                filled=True,
+                opacity=0.6,
+            )
+        )
+
+    if "Coverage cloud" in layers:
+        deck_layers.append(
+            pdk.Layer(
+                "HeatmapLayer",
+                data=grid,
+                get_position=["lon", "lat"],
+                radius_pixels=60,
+            )
+        )
+
+    # Station marker + range rings (km)
+    station = {"lat": ctx.get("station_lat"), "lon": ctx.get("station_lon")}
+    if station["lat"] is not None and station["lon"] is not None:
+        deck_layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=[station],
+                get_position=["lon", "lat"],
+                get_radius=300,
+                get_fill_color=[37, 99, 235, 200],
+            )
+        )
+        for r_km in (10, 20, 40):
+            deck_layers.append(
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=[station],
+                    get_position=["lon", "lat"],
+                    get_radius=r_km * 1000,
+                    get_fill_color=[0, 0, 0, 0],
+                    get_line_color=[37, 99, 235, 120],
+                    line_width_min_pixels=1,
+                    stroked=True,
+                    filled=False,
+                )
+            )
+
+    deck = pdk.Deck(layers=deck_layers, initial_view_state=view, map_style=_map_style(ctx))
+    st.pydeck_chart(deck, use_container_width=True)
 
 
-def plot_rssi_distance(data_plot, binned=None, x_max: Optional[float] = None):
+def plot_rssi_distance(data_plot, binned=None, x_max: Optional[float] = None, distance_markers=None):
     if go is None:
         return None
     fig = go.Figure()
@@ -239,10 +364,24 @@ def plot_rssi_distance(data_plot, binned=None, x_max: Optional[float] = None):
         yaxis_title="RSSI (dB)",
         xaxis=dict(range=[0, x_max] if x_max else None),
     )
+    if distance_markers:
+        for marker in distance_markers:
+            value = marker.get("value")
+            if value is None:
+                continue
+            try:
+                fig.add_vline(
+                    x=value,
+                    line=dict(color=marker.get("color", "#64748b"), width=2, dash="dash"),
+                    annotation_text=marker.get("label", ""),
+                    annotation_position="top left",
+                )
+            except Exception:
+                pass
     return fig
 
 
-def plot_altitude_distance(data_plot, med, x_max: Optional[float] = None):
+def plot_altitude_distance(data_plot, med, x_max: Optional[float] = None, distance_markers=None):
     if go is None:
         return None
     fig = go.Figure()
@@ -275,6 +414,53 @@ def plot_altitude_distance(data_plot, med, x_max: Optional[float] = None):
         # limit altitude axis for readability; extreme outliers remain in table/statistics
         xaxis=dict(range=[0, x_max] if x_max else None),
         yaxis=dict(range=[0, 5000]),
+    )
+    if distance_markers:
+        for marker in distance_markers:
+            value = marker.get("value")
+            if value is None:
+                continue
+            try:
+                fig.add_vline(
+                    x=value,
+                    line=dict(color=marker.get("color", "#64748b"), width=2, dash="dash"),
+                    annotation_text=marker.get("label", ""),
+                    annotation_position="top left",
+                )
+            except Exception:
+                pass
+    return fig
+
+
+def plot_polar_p95(az_stats: pd.DataFrame):
+    if go is None or az_stats is None or az_stats.empty:
+        return None
+    df = az_stats.copy()
+    if "az_bin" in df.columns:
+        df = df.sort_values("az_bin")
+        theta = df["az_bin"].astype(float)
+    else:
+        return None
+    r = pd.to_numeric(df.get("p95_distance_km"), errors="coerce").fillna(0.0)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatterpolar(
+            r=r,
+            theta=theta,
+            mode="lines+markers",
+            marker=dict(size=4, color="#0ea5e9"),
+            line=dict(width=2, color="#0ea5e9"),
+            name="P95 distance",
+        )
+    )
+    fig.update_layout(
+        height=380,
+        margin=dict(l=20, r=20, t=30, b=20),
+        showlegend=False,
+        polar=dict(
+            angularaxis=dict(direction="clockwise", rotation=90),
+            radialaxis=dict(title="Distance (km)", angle=90),
+        ),
     )
     return fig
 
