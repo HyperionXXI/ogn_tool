@@ -16,6 +16,7 @@ from ogn_tool.engine.rf_engine import RFAnalysisEngine
 
 from ui.metrics import metric_card
 from ui import charts as ui_charts
+from ui import map_engine as ui_map
 
 
 @st.cache_data(show_spinner=False)
@@ -240,6 +241,8 @@ def render_coverage_explorer_page(ctx):
     show_stations = st.checkbox("Stations", value=True, key="ce_layer_stations")
     show_rings = st.checkbox("Range rings", value=True, key="ce_layer_rings")
 
+    click_lat = None
+    click_lon = None
     if folium is None or st_folium is None:
         st.warning("Map rendering disabled: streamlit-folium not available.")
         map_data = {}
@@ -415,33 +418,29 @@ def render_coverage_explorer_page(ctx):
             rings_group.add_to(m)
 
         folium.LayerControl().add_to(m)
-        map_data = st_folium(m, height=700, use_container_width=True)
+        click_lat, click_lon = ui_map.render_map_click(m)
 
-    clicked = map_data.get("last_clicked") if isinstance(map_data, dict) else None
-    if clicked:
-        click_lat = clicked.get("lat")
-        click_lon = clicked.get("lng")
+    if click_lat is not None and click_lon is not None:
         updated = False
-        if click_lat is not None and click_lon is not None:
-            station_hit = _closest_station(click_lat, click_lon, station_points)
-            if station_hit is not None and station_hit["callsign"] != st.session_state.get("ce_active_station"):
-                st.session_state["ce_active_station"] = station_hit["callsign"]
-                updated = True
-            elif grid_df is not None and not grid_df.empty:
-                mask = (
-                    (grid_df["lat"] <= click_lat)
-                    & (grid_df["lat"] + cell_size > click_lat)
-                    & (grid_df["lon"] <= click_lon)
-                    & (grid_df["lon"] + cell_size > click_lon)
-                )
-                if mask.any():
-                    cell = grid_df[mask].iloc[0]
-                    label = f"{cell['lat']:.3f}, {cell['lon']:.3f}"
-                    if label != st.session_state.get("ce_active_cell"):
-                        st.session_state["ce_active_cell"] = label
-                        updated = True
-            if updated:
-                st.rerun()
+        station_hit = _closest_station(click_lat, click_lon, station_points)
+        if station_hit is not None and station_hit["callsign"] != st.session_state.get("ce_active_station"):
+            st.session_state["ce_active_station"] = station_hit["callsign"]
+            updated = True
+        elif grid_df is not None and not grid_df.empty:
+            mask = (
+                (grid_df["lat"] <= click_lat)
+                & (grid_df["lat"] + cell_size > click_lat)
+                & (grid_df["lon"] <= click_lon)
+                & (grid_df["lon"] + cell_size > click_lon)
+            )
+            if mask.any():
+                cell = grid_df[mask].iloc[0]
+                label = f"{cell['lat']:.3f}, {cell['lon']:.3f}"
+                if label != st.session_state.get("ce_active_cell"):
+                    st.session_state["ce_active_cell"] = label
+                    updated = True
+        if updated:
+            st.rerun()
 
     st.markdown("### Station Summary")
     max_dist = None
@@ -477,33 +476,25 @@ def render_coverage_explorer_page(ctx):
             st.info("No station metrics available for this station.")
 
     st.markdown("### Zone Inspector")
-    zone_info = None
-    if rf_grid is not None and not rf_grid.empty:
+    zone_radius = st.slider("Zone radius (km)", 1, 50, 5)
+    zone_lat = None
+    zone_lon = None
+    if st.session_state.get("ce_active_cell") and rf_grid is not None and not rf_grid.empty:
         grid = rf_grid.dropna(subset=["lat", "lon"]).copy()
         grid["label"] = grid.apply(lambda r: f"{r['lat']:.3f}, {r['lon']:.3f}", axis=1)
-        default_cell = st.session_state.get("ce_active_cell")
-        if default_cell not in grid["label"].values:
-            default_cell = grid["label"].iloc[0]
-        st.selectbox(
-            "Select grid cell",
-            grid["label"],
-            key="ce_active_cell",
-            index=int(grid["label"].tolist().index(default_cell)),
-        )
         selected_cell = st.session_state.get("ce_active_cell")
         if selected_cell in grid["label"].values:
             cell = grid[grid["label"] == selected_cell].iloc[0]
-            cell_size = float(grid["cell_size_deg"].iloc[0]) if "cell_size_deg" in grid.columns else 0.01
-            zone_info = cell.to_dict()
-            zone_info["mean_altitude"] = zone_info.get("mean_altitude")
-            zone_info["max_distance"] = zone_info.get("max_distance")
-    if zone_info is None:
-        st.info("No dataset available")
+            zone_lat = float(cell["lat"])
+            zone_lon = float(cell["lon"])
+    if zone_lat is None or zone_lon is None:
+        st.info("Click a zone on the map to inspect.")
     else:
-        st.write(f"Packet density: {ctx['fmt_int'](zone_info.get('packets'))}")
-        st.write(f"Dataset confidence: {ctx['fmt_float'](zone_info.get('confidence'), 2)}")
-        st.write(f"Mean aircraft altitude: {ctx['fmt_float'](zone_info.get('mean_altitude'), 0)}")
-        st.write(f"Max reception distance: {ctx['fmt_float'](zone_info.get('max_distance'), 1)}")
+        zone_result = engine_all.inspect_zone(zone_lat, zone_lon, radius_km=zone_radius)
+        st.write(f"Events: {ctx['fmt_int'](zone_result.get('events_count', 0))}")
+        st.write(f"Stations hearing: {ctx['fmt_int'](len(zone_result.get('stations', [])))}")
+        st.write(f"Redundancy mean: {ctx['fmt_float'](zone_result.get('redundancy_mean'), 2)}")
+        st.write(f"Max distance: {ctx['fmt_float'](zone_result.get('max_distance_km'), 1)}")
 
     st.markdown("### Propagation")
     if station_engine.metrics.get("rf_packets", 0) < 200:

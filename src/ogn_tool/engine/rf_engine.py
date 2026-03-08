@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import pandas as pd
+import numpy as np
 
 from ogn_tool.analysis.pipeline import build_rf_dataset
 from ogn_tool.analysis import azimuth as analysis_azimuth
@@ -23,6 +24,9 @@ class RFAnalysisEngine:
         self.packets = packets_df if packets_df is not None else pd.DataFrame()
         self.station_lat = station_lat
         self.station_lon = station_lon
+        self._last_dataset: Optional[dict] = None
+        self._last_dataset_mode: Optional[str] = None
+        self._last_station_id: Optional[str] = None
 
     @staticmethod
     def filter_packets_by_station(packets_rf: pd.DataFrame, station_id: str) -> pd.DataFrame:
@@ -171,7 +175,7 @@ class RFAnalysisEngine:
             "network_resilience_score": (redundancy_cells / coverage_cells * 100.0) if coverage_cells else 0.0,
         }
 
-        return {
+        dataset = {
             "packets_all": packets_all,
             "packets_rf": packets_rf,
             "packets_filtered": packets_filtered,
@@ -184,6 +188,76 @@ class RFAnalysisEngine:
             "station_overlap_matrix": station_overlap_matrix,
             "blind_cells": blind_cells,
             "stations": stations,
+        }
+        self._last_dataset = dataset
+        self._last_dataset_mode = dataset_mode
+        self._last_station_id = station_id
+        return dataset
+
+    def inspect_zone(self, lat: float, lon: float, radius_km: float = 5.0) -> dict:
+        if lat is None or lon is None:
+            return {
+                "events_count": 0,
+                "stations": [],
+                "redundancy_mean": 0.0,
+                "max_distance_km": None,
+            }
+
+        dataset = self._last_dataset or self.build_analysis_dataset(
+            dataset_mode=self._last_dataset_mode or "STRICT_RF",
+            station_id=self._last_station_id,
+        )
+        radio_events = dataset.get("radio_events") or pd.DataFrame()
+        station_reception = dataset.get("station_reception") or pd.DataFrame()
+
+        if radio_events.empty or "lat" not in radio_events.columns or "lon" not in radio_events.columns:
+            return {
+                "events_count": 0,
+                "stations": [],
+                "redundancy_mean": 0.0,
+                "max_distance_km": None,
+            }
+
+        lat_r = np.radians(pd.to_numeric(radio_events["lat"], errors="coerce"))
+        lon_r = np.radians(pd.to_numeric(radio_events["lon"], errors="coerce"))
+        lat0 = np.radians(float(lat))
+        lon0 = np.radians(float(lon))
+        dlat = lat_r - lat0
+        dlon = lon_r - lon0
+        a = np.sin(dlat / 2) ** 2 + np.cos(lat0) * np.cos(lat_r) * np.sin(dlon / 2) ** 2
+        c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+        dist_km = 6371.0 * c
+        mask = dist_km <= float(radius_km)
+        events_zone = radio_events[mask]
+
+        if events_zone.empty:
+            return {
+                "events_count": 0,
+                "stations": [],
+                "redundancy_mean": 0.0,
+                "max_distance_km": None,
+            }
+
+        stations = []
+        max_distance = None
+        if not station_reception.empty and "event_key" in station_reception.columns:
+            subset = station_reception[station_reception["event_key"].isin(events_zone["event_key"])]
+            if "station_id" in subset.columns:
+                stations = sorted(subset["station_id"].astype(str).dropna().unique().tolist())
+            if "distance_km" in subset.columns:
+                max_distance = pd.to_numeric(subset["distance_km"], errors="coerce").max()
+
+        redundancy_mean = (
+            pd.to_numeric(events_zone.get("station_count"), errors="coerce").mean()
+            if "station_count" in events_zone.columns
+            else 0.0
+        )
+
+        return {
+            "events_count": int(len(events_zone)),
+            "stations": stations,
+            "redundancy_mean": float(redundancy_mean) if pd.notna(redundancy_mean) else 0.0,
+            "max_distance_km": max_distance,
         }
 
     @staticmethod
