@@ -27,104 +27,6 @@ def _map_style(ctx: dict):
     return pdk.map_styles.ROAD
 
 
-def render_rf_map(df: pd.DataFrame, ctx: dict) -> None:
-    if pdk is None:
-        st.error("Missing dependency: pydeck. Install: pip install pydeck")
-        return
-    if df is None or len(df) == 0:
-        st.info("No packets available.")
-        return
-    df = df.dropna(subset=["lat", "lon"])
-    if df.empty:
-        st.info("No packets available.")
-        return
-    if len(df) > MAX_MAP_POINTS:
-        df = df.sample(MAX_MAP_POINTS, random_state=42)
-    view = pdk.ViewState(
-        latitude=ctx["station_lat"],
-        longitude=ctx["station_lon"],
-        zoom=8,
-        pitch=35,
-    )
-    heat = pdk.Layer(
-        "HeatmapLayer",
-        data=df,
-        get_position=["lon", "lat"],
-        radius_pixels=60,
-    )
-    scatter = pdk.Layer(
-        "ScatterplotLayer",
-        data=df,
-        get_position=["lon", "lat"],
-        get_radius=200,
-        get_fill_color=[255, 80, 0, 120],
-    )
-    deck = pdk.Deck(
-        layers=[heat, scatter],
-        initial_view_state=view,
-        map_style=_map_style(ctx),
-    )
-    st.pydeck_chart(deck, use_container_width=True)
-
-
-def render_rf_hex(df: pd.DataFrame, ctx: dict) -> None:
-    if pdk is None:
-        st.error("Missing dependency: pydeck. Install: pip install pydeck")
-        return
-    if df is None or len(df) == 0:
-        st.info("No packets available.")
-        return
-    df = df.dropna(subset=["lat", "lon"])
-    if df.empty:
-        st.info("No packets available.")
-        return
-    layer = pdk.Layer(
-        "HexagonLayer",
-        data=df,
-        get_position=["lon", "lat"],
-        radius=1500,
-        elevation_scale=50,
-        extruded=True,
-        coverage=0.8,
-    )
-    deck = pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(
-            latitude=ctx["station_lat"],
-            longitude=ctx["station_lon"],
-            zoom=8,
-        ),
-        map_style=_map_style(ctx),
-    )
-    st.pydeck_chart(deck, use_container_width=True)
-
-
-def render_probability_layer(grid: pd.DataFrame, ctx: dict) -> None:
-    if pdk is None:
-        st.error("Missing dependency: pydeck. Install: pip install pydeck")
-        return
-    if grid is None or len(grid) == 0:
-        st.info("No packets available.")
-        return
-    layer = pdk.Layer(
-        "HexagonLayer",
-        data=grid,
-        get_position=["lon", "lat"],
-        get_elevation_weight="probability",
-        elevation_scale=80,
-        radius=1500,
-        extruded=True,
-    )
-    deck = pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(
-            latitude=ctx["station_lat"],
-            longitude=ctx["station_lon"],
-            zoom=8,
-        ),
-        map_style=_map_style(ctx),
-    )
-    st.pydeck_chart(deck, use_container_width=True)
 
 
 def render_rf_cartography(grid: pd.DataFrame, ctx: dict, layers: list[str]) -> None:
@@ -394,7 +296,12 @@ def plot_altitude_distance(data_plot, med, x_max: Optional[float] = None, distan
             marker=dict(size=2, opacity=0.15),
         )
     )
-    if med is not None and not med.empty:
+    if (
+        med is not None
+        and not med.empty
+        and "distance_bin_km" in med.columns
+        and "altitude_median" in med.columns
+    ):
         fig.add_trace(
             go.Scatter(
                 x=med["distance_bin_km"],
@@ -465,46 +372,3 @@ def plot_polar_p95(az_stats: pd.DataFrame):
     return fig
 
 
-def plot_radio_horizon(data, med=None):
-    if go is None:
-        return None
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=data["horizon_km"],
-            y=data["distance_km"],
-            mode="markers",
-            name="Packets",
-            marker=dict(size=2, opacity=0.15),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=[0, 400],
-            y=[0, 400],
-            mode="lines",
-            name="Theoretical horizon",
-            line=dict(width=2, color="#f97316"),
-        )
-    )
-    if med is not None and not med.empty:
-        fig.add_trace(
-            go.Scatter(
-                x=med["horizon_bin_km"],
-                y=med["distance_median"],
-                mode="lines",
-                name="Median observed",
-                line=dict(width=3, color="#0ea5e9"),
-            )
-        )
-    fig.update_layout(
-        height=420,
-        margin=dict(l=20, r=20, t=30, b=20),
-        showlegend=True,
-        legend=dict(orientation="h", x=0, y=1.02),
-        xaxis_title="Horizon (km)",
-        yaxis_title="Distance (km)",
-        xaxis=dict(range=[0, 400]),
-        yaxis=dict(range=[0, 400]),
-    )
-    return fig
