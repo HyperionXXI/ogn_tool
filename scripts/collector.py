@@ -51,7 +51,6 @@ elif _HOST_ENV:
     HOSTS = [_HOST_ENV] + [h for h in DEFAULT_HOSTS if h != _HOST_ENV]
 else:
     HOSTS = DEFAULT_HOSTS[:]
-HOST = HOSTS[0]
 PORT = int(os.getenv("OGN_PORT", "14580"))
 DB_PATH = os.getenv("OGN_DB_PATH") or os.getenv("OGN_DB") or "ogn_log.sqlite3"
 FILTER = os.getenv("OGN_FILTER", "")
@@ -235,7 +234,6 @@ def collect_forever() -> None:
     db_path_abs = os.path.abspath(DB_PATH)
     print(f"[collector] DB path: {db_path_abs}")
     pending: list[Dict[str, Any]] = []
-    rejected_sample = 0
     host_index = 0
 
     inserted_total = 0
