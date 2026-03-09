@@ -7,6 +7,7 @@ from ui.metrics import metric_card
 from ui import charts as ui_charts
 from ui.charts import render_rf_cartography
 from ogn_tool.rf_probability_field import build_rf_probability_field
+import sqlite3
 
 
 def render_debug_page(filters):
@@ -34,3 +35,21 @@ def render_debug_page(filters):
         result = ctx['analysis_station_quality'].analyze(ctx['grid_df_kpi'])
         if not result.get("implemented"):
             st.info("Feature not implemented yet")
+
+    def show_station_stats(con, station):
+        q = """
+        SELECT COUNT(*)
+        FROM packets
+        WHERE igate = :station
+        """
+        return con.execute(q, {"station": station}).fetchone()[0]
+
+    station = ctx.get("station_callsign")
+    if station:
+        try:
+            con = sqlite3.connect(ctx["db_path"])
+            count = show_station_stats(con, station)
+            con.close()
+            st.metric("Packets received via station", count)
+        except Exception:
+            st.info("Station stats unavailable.")

@@ -20,6 +20,9 @@ def compute_rf_engine(packets, station_lat, station_lon):
 def render_propagation_page(filters):
     ctx = filters
     st.markdown("<h2>Propagation</h2>", unsafe_allow_html=True)
+    if ctx.get("rf_packets") is None or getattr(ctx.get("rf_packets"), "empty", False):
+        st.warning("No packets for this station in APRS-IS dataset.")
+        return
     
     db_path = ctx['db_path']
     filters_apply = ctx['filters_apply']
@@ -33,7 +36,7 @@ def render_propagation_page(filters):
     section_altitude = st.container()
     section_distribution = st.container()
 
-    df_grid = ctx['load_coverage_grid'](db_path, filters_apply["since_epoch"])
+    df_grid = ctx['load_coverage_grid'](db_path)
     packets_signal = ctx['_load_packets_window_raw'](
         db_path=db_path,
         since_iso=filters_apply["since_iso"],

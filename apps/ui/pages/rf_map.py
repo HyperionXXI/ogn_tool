@@ -35,6 +35,9 @@ def render_rf_map_page(ctx):
         dataset = packets_window
     else:
         dataset = rf_packets
+    if dataset is None or (hasattr(dataset, "empty") and dataset.empty):
+        st.warning("No packets for this station in APRS-IS dataset.")
+        return
     st.caption(f"Data source: {data_source}")
     if dataset is None or (hasattr(dataset, "empty") and dataset.empty):
         st.info("No packets available for coverage map.")

@@ -1,3 +1,5 @@
+This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+
 # Product Positioning
 
 ## What existing OGN tools do well
@@ -35,3 +37,4 @@ Local RF analysis toolkit for OGN / FLARM / FANET ground stations.
 - paragliding / gliding clubs
 - RF hobbyists experimenting with GXAirCom / T-Beam / OGN receivers
 - people optimizing antenna placement and site coverage
+

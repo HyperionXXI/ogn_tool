@@ -19,6 +19,9 @@ def compute_rf_engine(packets, station_lat, station_lon):
 
 def render_directional_rf_page(ctx):
     st.markdown("<h2>Directional RF Analysis</h2>", unsafe_allow_html=True)
+    if ctx.get("rf_packets") is None or getattr(ctx.get("rf_packets"), "empty", False):
+        st.warning("No packets for this station in APRS-IS dataset.")
+        return
     rf_local_count = int(ctx.get("rf_local_count", 0))
     readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
     st.markdown("**RF DATASET STATUS**")

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import pandas as pd
 
-
-def deduplicate_packets(df: pd.DataFrame) -> pd.DataFrame:
+def station_packets_query() -> str:
+    return """
+    SELECT
+        lat,
+        lon,
+        ts_epoch,
+        src AS aircraft
+    FROM packets
+    WHERE igate = :station
+    AND lat IS NOT NULL
+    AND lon IS NOT NULL
     """
-    Remove APRS duplicates caused by multiple IGates hearing the same packet.
-    """
-    if df is None or df.empty:
-        return df
-
-    df = df.sort_values("ts_epoch")
-    df = df.drop_duplicates(subset=["src", "ts_epoch", "lat", "lon"], keep="first")
-    return df

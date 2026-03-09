@@ -32,6 +32,18 @@ def render_overview_page(ctx):
     if rf_packets_count < 2000:
         st.warning("Dataset too small for reliable RF coverage analysis")
 
+    st.info(
+        """
+Dataset source: APRS-IS
+
+Station packets are filtered using the APRS igate field.
+
+Note:
+APRS-IS shows the station that injected the packet into the network,
+not necessarily the RF receiver.
+"""
+    )
+
     aircraft_seen = rf_packets["src"].nunique() if rf_packets is not None and "src" in rf_packets.columns else None
     max_range = engine_result.metrics.get("max_range_km")
     health = engine_result.metrics.get("health")

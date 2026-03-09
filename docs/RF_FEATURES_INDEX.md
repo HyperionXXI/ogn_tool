@@ -1,3 +1,5 @@
+This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+
 # RF Features Index
 
 - 01 Polar coverage: docs/rf_features/01_polar_coverage.md
@@ -13,3 +15,4 @@
 - 08 Terrain analysis: docs/rf_features/08_terrain_analysis.md
 - 09 Station comparison: docs/rf_features/09_station_comparison.md
 - 10 Station quality: docs/rf_features/10_station_quality.md
+
