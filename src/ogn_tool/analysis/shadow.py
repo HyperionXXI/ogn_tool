@@ -1,13 +1,9 @@
-from __future__ import annotations
+"""Legacy entry point for experimental shadow diagnostics.
 
-import pandas as pd
+This module is retained for backwards compatibility with existing imports.
+The actual implementation lives under `ogn_tool.analysis.experimental`.
+"""
 
+from .experimental.shadow import compute_shadow_proxy
 
-def compute_shadow_proxy(grid: pd.DataFrame, packets_threshold: int = 3) -> pd.DataFrame:
-    if grid is None or grid.empty:
-        return grid
-
-    grid = grid.copy()
-    grid["coverage"] = grid["packets"] > packets_threshold
-    grid["shadow"] = ~grid["coverage"]
-    return grid
+__all__ = ["compute_shadow_proxy"]
