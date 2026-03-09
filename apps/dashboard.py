@@ -43,18 +43,15 @@ from ui.filters import render_sidebar_filters
 from ui import charts as ui_charts
 from ui.sections import (
     render_overview_tab,
-    render_rf_coverage_tab,
     render_coverage_explorer_tab,
     render_signal_tab,
-    render_directional_rf_tab,
-    render_terrain_tab,
     render_network_tab,
     render_diagnostics_tab,
 )
 
 from ogn_tool.config import get_config
 from ogn_tool.db import connect
-from ogn_tool.rf_analysis import compute_azimuth_stats, compute_distance_probability, reliable_distance_km
+from ogn_tool.rf_analysis import compute_distance_probability
 from ogn_tool.analysis import polar as analysis_polar
 from ogn_tool.analysis import signal_distance as analysis_signal_distance
 from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
@@ -115,11 +112,7 @@ CALLSIGN_DEFAULT = _config.station_callsign
 ROOF_LAT_DEFAULT = 47.33593787391701
 ROOF_LON_DEFAULT = 7.272825467967339
 
-DB_STALE_WARN_S = 90  # warning if last packet older than that
-DB_STALE_ERR_S = 900  # "frozen" if last packet older than that
-
 RE_DB = re.compile(r"(?P<db>\d+(?:\.\d+)?)\s*dB\b")
-RE_COORD = re.compile(r"(?P<lat>\d{2})(?P<latm>\d{2}\.\d{2})(?P<NS>[NS])[/\\](?P<lon>\d{3})(?P<lonm>\d{2}\.\d{2})(?P<EW>[EW])")
 
 
 @dataclass(frozen=True)
@@ -148,6 +141,7 @@ BASEMAPS: Dict[str, Basemap] = {
 }
 
 DEFAULT_BASEMAP = "CARTO Positron (clair)"
+load_coverage_grid = load_coverage_grid_base
 
 
 def haversine_km(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
@@ -198,12 +192,6 @@ def fmt_float(x: Optional[float], nd: int = 1) -> str:
 
 def now_utc() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
-
-
-def iso_utc(dtobj: dt.datetime) -> str:
-    if dtobj.tzinfo is None:
-        dtobj = dtobj.replace(tzinfo=dt.timezone.utc)
-    return dtobj.isoformat().replace("+00:00", "Z")
 
 
 def _parse_compare_stations(env_value: str) -> Dict[str, Tuple[float, float]]:
@@ -504,73 +492,9 @@ def _load_packets_window_raw(
     return df
 
 
-@st.cache_data(ttl=30, show_spinner=False)
-def load_packets_window(
-    db_path: str,
-    since_iso: str,
-    since_epoch: int,
-    dst_types: List[str],
-    station_callsign: str,
-    only_heard_by: bool,
-    igate_filter: str,
-    source_mode: str,
-    qas_filter: str,
-    limit_rows: int,
-) -> pd.DataFrame:
-    return _load_packets_window_raw(
-        db_path=db_path,
-        since_iso=since_iso,
-        since_epoch=since_epoch,
-        dst_types=dst_types,
-        station_callsign=station_callsign,
-        only_heard_by=only_heard_by,
-        igate_filter=igate_filter,
-        source_mode=source_mode,
-        qas_filter=qas_filter,
-        limit_rows=limit_rows,
-    )
-
-
 @st.cache_data(show_spinner=False)
 def build_rf_cached(df_packets: pd.DataFrame, station_lat: float, station_lon: float):
     return build_rf_dataset(df_packets, station_lat, station_lon)
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def load_coverage_grid(db_path: str, since_epoch: int) -> pd.DataFrame:
-    if not os.path.exists(db_path):
-        return pd.DataFrame()
-    con = sqlite3.connect(db_path)
-    try:
-        cols = {row[1] for row in con.execute("PRAGMA table_info(coverage_grid)")}
-        if not cols:
-            return pd.DataFrame()
-        sql = """
-        SELECT
-            cell_x, cell_y, lat, lon, max_distance_km, best_rssi_db, packet_count, last_ts_epoch
-        FROM coverage_grid
-        WHERE last_ts_epoch >= ?
-        ORDER BY last_ts_epoch DESC
-        """
-        return pd.read_sql_query(sql, con, params=(int(since_epoch),))
-    except sqlite3.OperationalError:
-        return pd.DataFrame()
-    finally:
-        con.close()
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def coverage_grid_exists(db_path: str) -> bool:
-    if not os.path.exists(db_path):
-        return False
-    con = sqlite3.connect(db_path)
-    try:
-        row = con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='coverage_grid'"
-        ).fetchone()
-        return row is not None
-    finally:
-        con.close()
 
 
 # ---------------------------
@@ -726,8 +650,6 @@ map_max_points = filters_apply["map_max_points"]
 scatter_max_points = filters_apply["scatter_max_points"]
 debug_sql = filters_apply["debug_sql"]
 do_autorefresh = filters_apply["do_autorefresh"]
-btn_refresh = False
-raw_packets_mode = filters_apply.get("raw_packets_mode", False)
 
 if do_autorefresh:
     st.caption("Auto-refresh active (30s)")
@@ -736,9 +658,9 @@ if do_autorefresh:
 
 query_log: List[Dict] = []
 if debug_sql:
-    rows_total, last_ts = _db_meta_raw(db_path, query_log=query_log)
+    _, last_ts = _db_meta_raw(db_path, query_log=query_log)
 else:
-    rows_total, last_ts = db_meta(db_path)
+    _, last_ts = db_meta(db_path)
 
 header_container = st.container()
 status_container = st.container()
@@ -751,43 +673,18 @@ with header_container:
     st.caption(f"Station {station_callsign}")
     st.markdown(f"DB: `{db_path}`")
 
-# Freshness banner
-fresh_state = "unknown"
-age_s = None
-if last_ts:
-    try:
-        last_dt = dt.datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
-        age_s = (now_utc() - last_dt).total_seconds()
-        if age_s <= DB_STALE_WARN_S:
-            fresh_state = "ok"
-        elif age_s <= DB_STALE_ERR_S:
-            fresh_state = "warn"
-        else:
-            fresh_state = "err"
-    except Exception:
-        fresh_state = "unknown"
-
 # Precompute coverage probability KPIs (fast on grid)
 grid_df_kpi = pd.DataFrame()
 try:
-    grid_df_kpi = load_coverage_grid(db_path, filters_apply["since_epoch"])
+    grid_df_kpi = load_coverage_grid(db_path)
 except Exception:
     grid_df_kpi = pd.DataFrame()
 packets_received = None
 max_distance_grid = None
-d90 = None
-p95_distance_grid = None
 if not grid_df_kpi.empty:
     packets_received = int(np.nansum(pd.to_numeric(grid_df_kpi.get("packet_count"), errors="coerce")))
     max_distance_grid = float(pd.to_numeric(grid_df_kpi.get("max_distance_km"), errors="coerce").max())
-    dist_bins_kpi = pd.to_numeric(grid_df_kpi.get("max_distance_km", pd.Series(dtype=float)), errors="coerce").to_numpy()
-    pkt_bins_kpi = pd.to_numeric(grid_df_kpi.get("packet_count", pd.Series(dtype=float)), errors="coerce").to_numpy()
-    centers_kpi, probs_kpi = compute_distance_probability(dist_bins_kpi, pkt_bins_kpi, bin_size_km=5.0)
-    if centers_kpi.size > 0:
-        d90 = reliable_distance_km(centers_kpi, probs_kpi, threshold=0.9)
-    dist_series = pd.to_numeric(grid_df_kpi.get("max_distance_km"), errors="coerce")
-    if dist_series.notna().any():
-        p95_distance_grid = float(dist_series.quantile(0.95))
+
 
 # DB status logic (green/yellow/red)
 db_error = False
@@ -912,8 +809,6 @@ else:
 
 azimuth_stats = analysis_azimuth.compute_azimuth_radiation(rf_packets, station_lat, station_lon)
 azimuth_footprint = compute_azimuth_footprint(rf_packets, station_lat, station_lon)
-unique_aircraft = rf_packets["src"].nunique() if "src" in rf_packets.columns else None
-igate_count = packets_window["igate"].nunique() if "igate" in packets_window.columns else None
 rf_global_count = int(len(rf_packets_global))
 rf_count = int(len(rf_packets))
 internet_count = int(len(internet_packets))
@@ -1026,6 +921,8 @@ apply_ts = st.session_state.get("last_apply_ts")
 apply_time = apply_ts.strftime("%H:%M:%S") if apply_ts else "—"
 types_str = "/".join(dst_types) if dst_types else "—"
 st.caption(f"Active filters: Station={station_callsign} | Window={hours}h | Types={types_str} | Mode={mode} — Last apply: {apply_time}")
+
+raw_packets_mode = bool(st.session_state.get("filters_apply", {}).get("raw_packets_mode", False))
 
 with navigation_container:
     page = st.sidebar.radio(
@@ -1178,23 +1075,6 @@ with st.expander("Advanced settings", expanded=False):
                     st.error(f"Index creation failed: {e!r}")
 
 
-def _color_from_value(val: float, vmin: float, vmax: float) -> str:
-    if val is None or (isinstance(val, float) and math.isnan(val)):
-        return "#999999"
-    if vmax <= vmin:
-        t = 0.5
-    else:
-        t = (val - vmin) / (vmax - vmin)
-        t = max(0.0, min(1.0, t))
-    if t < 0.25:
-        return "#2563eb"
-    if t < 0.5:
-        return "#06b6d4"
-    if t < 0.75:
-        return "#22c55e"
-    if t < 0.9:
-        return "#eab308"
-    return "#ef4444"
 
 
 def get_packets_context() -> AnalysisContext:
@@ -1312,7 +1192,7 @@ if _PROFILER:
 # Footer
 with st.container():
     st.divider()
-    grid_df = load_coverage_grid(db_path, filters_apply["since_epoch"])
+    grid_df = load_coverage_grid(db_path)
     st.caption(
         f"Packets processed: {fmt_int(packets_received) if packets_received is not None else '—'} • "
         f"Grid cells: {fmt_int(len(grid_df)) if not grid_df.empty else '—'} • "
