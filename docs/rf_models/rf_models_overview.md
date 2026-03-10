@@ -26,6 +26,23 @@ rf_receptions
     → propagation_model
     → probability_field
 
+## Implemented models
+
+- signal_distance.py
+- polar.py
+- polar_coverage.py
+- rf_diagnosis.py
+
+These are empirical, observation-driven models derived from reception data.
+
+## Future models
+
+- rf_probability_field.py
+- antenna_pattern_estimator.py
+- propagation_model.py
+
+The probability field is the next step for coverage inference.
+
 ## Implementation
 
 This document provides the conceptual overview. Model-specific implementations

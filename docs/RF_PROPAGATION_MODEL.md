@@ -48,6 +48,10 @@ Based on:
 - distance
 - packet statistics
 
+Clarification:
+Current models are empirical and observation-driven. The probability field
+model is the next step for coverage inference.
+
 ## 5. Future modules
 
 Planned modules include:
