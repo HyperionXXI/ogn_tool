@@ -25,3 +25,11 @@ Directional patterns are driven by:
 By estimating SNR distributions per sector, the model can identify
 anisotropy and weak directions that are not visible in distance-only
 analysis.
+
+## Implementation
+
+src/ogn_tool/analysis/polar.py
+src/ogn_tool/analysis/polar_coverage.py
+
+Description:
+Sector-based RF coverage estimation using azimuth binning.

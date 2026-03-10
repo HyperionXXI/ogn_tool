@@ -25,3 +25,8 @@ rf_receptions
     → rf_metrics
     → propagation_model
     → probability_field
+
+## Implementation
+
+This document provides the conceptual overview. Model-specific implementations
+are documented in the individual model files in this directory.

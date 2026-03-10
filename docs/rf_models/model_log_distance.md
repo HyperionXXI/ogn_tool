@@ -23,3 +23,11 @@ Where:
 
 This model provides a simple baseline for propagation and is used to build
 probability fields when additional predictors are not available.
+
+## Implementation
+
+src/ogn_tool/analysis/signal_distance.py
+
+Description:
+The RSSI vs distance analysis estimates propagation behavior empirically using
+packet observations.

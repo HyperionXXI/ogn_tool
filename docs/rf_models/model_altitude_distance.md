@@ -22,3 +22,11 @@ Where:
 As altitude increases, the probability of line-of-sight improves, often
 increasing effective SNR at a given distance. The altitude coefficient c
 captures this effect and is fitted using multi-variable regression.
+
+## Implementation
+
+src/ogn_tool/analysis/signal_distance.py
+
+Description:
+Altitude-aware distance analysis is derived from reception observations and is
+integrated into the RF propagation metric pipeline.

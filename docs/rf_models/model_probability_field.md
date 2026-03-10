@@ -27,3 +27,12 @@ Coverage probability
 
 - Locations where P_rx is high are considered reliable coverage zones
 - Low P_rx indicates fragile or blind areas
+
+## Implementation
+
+Planned module:
+src/ogn_tool/analysis/rf_probability_field.py
+
+Description:
+Future probabilistic coverage estimation using distance, altitude, SNR and
+direction.
