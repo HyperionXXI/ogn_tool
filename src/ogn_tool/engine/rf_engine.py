@@ -541,12 +541,8 @@ class RFAnalysisEngine:
         overlap = incidence.T.dot(incidence)
         return overlap
 
-    def run(self) -> RFAnalysisResult:
+    def _build_observations(self) -> tuple[pd.DataFrame, pd.DataFrame]:
         distance_df, grid = build_rf_dataset(self.packets, self.station_lat, self.station_lon)
-        azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, self.station_lat, self.station_lon)
-
-        coverage_grid = build_rf_probability_field(distance_df)
-        shadow_map = None
 
         grid_for_analysis = grid.copy()
         if "packets" in grid_for_analysis.columns:
@@ -560,6 +556,13 @@ class RFAnalysisEngine:
         if "best_rssi_db" not in grid_for_analysis.columns:
             grid_for_analysis["best_rssi_db"] = pd.NA
 
+        return distance_df, grid_for_analysis
+
+    def _compute_metrics(
+        self,
+        distance_df: pd.DataFrame,
+        grid_for_analysis: pd.DataFrame,
+    ) -> tuple[Dict[str, Any], Dict[str, Any]]:
         range_stats = analysis_station_range.analyze(grid_for_analysis)
         quality_stats = analysis_station_quality.analyze(grid_for_analysis)
         signal_stats = analysis_signal_distance.analyze(distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
@@ -589,6 +592,45 @@ class RFAnalysisEngine:
             }
         )
 
+        return metrics, terrain_stats
+
+    def _run_rf_models(
+        self,
+        distance_df: pd.DataFrame,
+    ) -> Dict[str, Any]:
+        azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, self.station_lat, self.station_lon)
+        coverage_grid = build_rf_probability_field(distance_df)
+        return {
+            "azimuth_df": azimuth_df,
+            "coverage_grid": coverage_grid,
+        }
+
+    def _run_diagnostics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        _ = metrics
+        return {}
+
+    def _run_network_analysis(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        _ = metrics
+        return {}
+
+    def run(self) -> RFAnalysisResult:
+        # Stage 1: observation building
+        distance_df, grid_for_analysis = self._build_observations()
+
+        # Stage 2: metric computation
+        metrics, terrain_stats = self._compute_metrics(distance_df, grid_for_analysis)
+
+        # Stage 3: RF propagation analysis
+        rf_models = self._run_rf_models(distance_df)
+        azimuth_df = rf_models.get("azimuth_df")
+        coverage_grid = rf_models.get("coverage_grid")
+
+        # Stage 4: diagnostics
+        _ = self._run_diagnostics(metrics)
+
+        # Stage 5: network intelligence (no-op for run)
+        _ = self._run_network_analysis(metrics)
+
         terrain_mask = terrain_stats.get("data") if terrain_stats.get("implemented") else None
 
         return RFAnalysisResult(
@@ -599,6 +641,7 @@ class RFAnalysisEngine:
             terrain_mask=terrain_mask,
             metrics=metrics,
         )
+
 
 
 from typing import Iterable, List
