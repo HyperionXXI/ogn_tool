@@ -24,6 +24,7 @@ from ogn_tool.analysis.observation_pipeline import build_observations_from_packe
 from ogn_tool.engine.observation_builder import ObservationBuilder
 from ogn_tool.engine.station_registry import StationRegistry
 from ogn_tool.rf_probability_field import build_rf_probability_field
+from ogn_tool.models.rf.rf_model_adapter import run_rf_model
 
 from .results import RFAnalysisResult
 
@@ -565,11 +566,11 @@ class RFAnalysisEngine:
     ) -> tuple[Dict[str, Any], Dict[str, Any]]:
         range_stats = analysis_station_range.analyze(grid_for_analysis)
         quality_stats = analysis_station_quality.analyze(grid_for_analysis)
-        signal_stats = analysis_signal_distance.analyze(distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
-        altitude_stats = analysis_altitude_distance.analyze(distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
-        horizon_stats = analysis_radio_horizon.analyze(distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
-        terrain_stats = analysis_terrain.analyze(grid_for_analysis, station_lat=self.station_lat, station_lon=self.station_lon)
-        visibility_stats = analysis_terrain_visibility.analyze(distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
+        signal_stats = run_rf_model(analysis_signal_distance.analyze, df_observations=distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
+        altitude_stats = run_rf_model(analysis_altitude_distance.analyze, df_observations=distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
+        horizon_stats = run_rf_model(analysis_radio_horizon.analyze, df_observations=distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
+        terrain_stats = run_rf_model(analysis_terrain.analyze, df_grid=grid_for_analysis, station_lat=self.station_lat, station_lon=self.station_lon)
+        visibility_stats = run_rf_model(analysis_terrain_visibility.analyze, df_observations=distance_df, station_lat=self.station_lat, station_lon=self.station_lon)
 
         metrics: Dict[str, Any] = {
             "station_range": range_stats,
