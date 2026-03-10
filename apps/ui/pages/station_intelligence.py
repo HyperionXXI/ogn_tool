@@ -4,7 +4,6 @@ import pandas as pd
 import streamlit as st
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
-from ui.viewmodels.rf_models_vm import build_rf_models_view
 
 
 try:
@@ -61,36 +60,31 @@ def render_propagation_models(rf_models: dict) -> None:
         st.info("No RF models available")
         return
 
-    view = build_rf_models_view({"rf_models": rf_models})
-    models = view.get("models", [])
-    if not models:
-        st.info("No RF models available")
-        return
-
-    for model in models:
-        name = model.get("name", "unknown")
+    for name, model in rf_models.items():
         st.markdown(f"### {name}")
-        summary = model.get("summary") or {}
-        if summary:
-            st.json(summary, expanded=False)
-
-        chart_data = model.get("chart_data")
-        if isinstance(chart_data, pd.DataFrame) and not chart_data.empty:
-            st.line_chart(chart_data)
-
-        binned = model.get("binned_data")
-        if isinstance(binned, pd.DataFrame) and not binned.empty:
-            st.line_chart(binned)
+        if isinstance(model, dict):
+            summary = model.get("summary") or {}
+            if summary:
+                st.json(summary, expanded=False)
+            data = model.get("data")
+            if isinstance(data, pd.DataFrame) and not data.empty:
+                st.line_chart(data)
+            binned = model.get("binned_data")
+            if isinstance(binned, pd.DataFrame) and not binned.empty:
+                st.line_chart(binned)
+        else:
+            st.write(model)
 
 
 def render_diagnostics(diagnostics: dict) -> None:
+(diagnostics: dict) -> None:
     st.subheader("RF Diagnostics")
 
     if not diagnostics:
         st.info("No diagnostics available")
         return
 
-    for name, value in diagnostics.items():
+    for name, value in vars(diagnostics).items():
         st.write(f"**{name}** : {value}")
 
 

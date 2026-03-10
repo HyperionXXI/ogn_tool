@@ -49,7 +49,11 @@ from ui.sections import (
     render_station_intelligence_tab,
 )
 
-from ogn_tool.services import rf_analysis_service as rf_service
+from ogn_tool.config import get_config
+from ogn_tool.data.db_repository import db_meta as repo_db_meta, db_max_ts_epoch, optimize_db, create_indexes, rf_sanity_check, table_exists_db
+from ogn_tool.data.packets_repository import load_packets_window
+from ogn_tool.data.receptions_repository import load_rf_receptions
+from ogn_tool.engine.rf_engine import RFAnalysisEngine
 
 
 # Optional profiling (enable with OGN_PROFILE=1)
@@ -84,7 +88,7 @@ section[data-testid="stSidebar"] { width: 320px !important; }
 )
 
 
-_config = rf_service.get_config()
+_config = get_config()
 DB_DEFAULT = str(_config.db_path)
 CALLSIGN_DEFAULT = _config.station_callsign
 # Reference location provided (Google Maps)
@@ -209,7 +213,7 @@ def _parse_compare_stations(env_value: str) -> Dict[str, Tuple[float, float]]:
 # ---------------------------
 
 def _db_meta_raw(db_path: str, query_log: Optional[List[Dict]] = None) -> Tuple[int, Optional[str]]:
-    return rf_service.db_meta(db_path, query_log=query_log)
+    return repo_db_meta(db_path, query_log=query_log)
 
 
 @st.cache_data(ttl=30, show_spinner=False)
@@ -219,10 +223,10 @@ def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
 
 @st.cache_data(ttl=30, show_spinner=False)
 def db_max_ts_epoch(db_path: str) -> Optional[int]:
-    return rf_service.db_max_ts_epoch(db_path)
+    return db_max_ts_epoch(db_path)
 
 def optimize_db(db_path: str, vacuum: bool = False) -> None:
-    rf_service.optimize_db(db_path, vacuum=vacuum)
+    optimize_db(db_path, vacuum=vacuum)
 
 def _set_query_ts(ts: str) -> None:
     # Streamlit API compatibility
@@ -241,10 +245,10 @@ def _autorefresh(interval_ms: int, key: str) -> None:
         _set_query_ts(str(int(dt.datetime.now().timestamp())))
 
 def create_indexes(db_path: str) -> None:
-    rf_service.create_indexes(db_path)
+    create_indexes(db_path)
 
 def rf_sanity_check(db_path: str) -> List[str]:
-    return rf_service.rf_sanity_check(db_path)
+    return rf_sanity_check(db_path)
 
 @st.cache_data(ttl=5, show_spinner=False)
 @st.cache_data(show_spinner=False)
@@ -264,7 +268,7 @@ def _load_packets_window_raw(
     if not os.path.exists(db_path):
         return pd.DataFrame()
 
-    df = rf_service.load_packets_window(
+    df = load_packets_window(
         db_path=db_path,
         since_iso=since_iso,
         since_epoch=since_epoch,
@@ -324,7 +328,7 @@ def _load_rf_receptions_window_raw(
     if not os.path.exists(db_path):
         return pd.DataFrame()
 
-    return rf_service.load_rf_receptions(
+    return load_rf_receptions(
         db_path=db_path,
         since_epoch=since_epoch,
         limit_rows=limit_rows,
@@ -461,7 +465,7 @@ station_callsign = filters_apply["station_callsign"]
 st.session_state["station_callsign"] = station_callsign
 station_lat = filters_apply["station_lat"]
 station_lon = filters_apply["station_lon"]
-rf_receptions_available = rf_service.table_exists(db_path, "rf_receptions")
+rf_receptions_available = table_exists_db(db_path, "rf_receptions")
 hours = max(1, int(filters_apply["hours"]))
 
 latest_ts_epoch = db_max_ts_epoch(db_path)
@@ -614,10 +618,11 @@ elif data_source_mode == "FANET local":
     dataset_mode = "STATION_RF"
 elif data_source_mode == "OGN live tracking":
     dataset_mode = "NETWORK"
-dataset = rf_service.build_rf_dataset(receptions_window, station_lat, station_lon, dataset_mode=dataset_mode, station_id=station_cs_effective)
-station_analysis = rf_service.run_station_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
-network_analysis = rf_service.run_network_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
-rf_diagnostics = rf_service.run_rf_diagnostics(dataset_mode=dataset_mode, station_id=station_cs_effective)
+engine = RFAnalysisEngine(receptions_window, station_lat, station_lon)
+dataset = engine.build_analysis_dataset(dataset_mode=dataset_mode, station_id=station_cs_effective)
+station_analysis = engine.run_station_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
+network_analysis = engine.run_network_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
+rf_diagnostics = engine.run_rf_diagnostics(dataset_mode=dataset_mode, station_id=station_cs_effective)
 # Sync grid status with dataset coverage grid
 grid_df_status = dataset.get("coverage_grid")
 if grid_df_status is None:
