@@ -34,6 +34,21 @@ Notes:
 
 ## Why this project exists
 
+## Research direction
+
+Beyond RF diagnostics, this project is gradually evolving
+towards a **Network Intelligence tool for the Open Glider Network**.
+
+Future work explores:
+
+• RF propagation modelling  
+• probabilistic coverage estimation  
+• station performance analysis  
+• network-level diagnostics  
+
+These experimental capabilities are documented in the `docs/`
+directory.
+
 Many tools exist to track aircraft positions.
 
 Very few tools analyze the **RF performance of ground stations**.
@@ -193,3 +208,4 @@ MIT License
 
 
 ---
+

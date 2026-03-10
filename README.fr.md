@@ -32,6 +32,21 @@ Notes :
 
 ## Pourquoi ce projet existe
 
+## Direction de recherche
+
+Au-delà du diagnostic RF, ce projet évolue progressivement
+vers un **outil d'intelligence réseau pour l'Open Glider Network**.
+
+Les travaux futurs explorent :
+
+• modélisation de propagation RF  
+• estimation probabiliste de la couverture  
+• analyse de performance des stations  
+• diagnostics au niveau réseau  
+
+Ces capacités expérimentales sont documentées dans le
+répertoire `docs/`.
+
 De nombreux outils permettent de suivre les aéronefs.
 
 Très peu permettent d’analyser la **performance RF des stations sol**.
