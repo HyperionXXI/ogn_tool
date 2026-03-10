@@ -33,6 +33,15 @@ This concept can be described as:
 
 ---
 
+## Scientific RF exploration tool
+
+The UI is designed as an exploratory RF analysis tool, not as a BI dashboard.
+
+The primary interaction model is: map-driven exploration, object inspection,
+and iterative hypothesis testing on RF coverage and network topology.
+
+---
+
 ## Key Questions
 
 The platform must allow users to answer:

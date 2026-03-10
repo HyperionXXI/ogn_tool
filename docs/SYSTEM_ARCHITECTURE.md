@@ -8,7 +8,11 @@ collector
 ↓
 database
 ↓
-analysis engine
+rf_receptions
+↓
+rf_metrics
+↓
+network_intelligence
 ↓
 ui
 
@@ -31,11 +35,21 @@ No RF analysis happens here.
 
 SQLite database storing:
 
-- packets
+- packets (raw APRS/APRS-IS traffic)
+- rf_receptions (RF reception events)
 - station information
 - derived coverage grids
 
 The database should remain simple and fast.
+
+---
+
+## RF reception layer
+
+RF analysis is performed on `rf_receptions`, not on raw `packets`.
+
+`packets` represent network traffic, while `rf_receptions` represent
+receiver-level RF events used by the RF metrics pipeline.
 
 ---
 
