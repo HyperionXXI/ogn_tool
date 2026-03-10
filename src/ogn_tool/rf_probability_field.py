@@ -9,7 +9,34 @@ def build_rf_grid(
     cell_size_deg: float = 0.01,
 ) -> pd.DataFrame:
     df = df_packets.copy()
+
+    # If we don’t have positional data, nothing to build.
+    if df.empty or not {"lat", "lon"}.issubset(df.columns):
+        return pd.DataFrame(
+            columns=[
+                "lat",
+                "lon",
+                "cell_size_deg",
+                "packets",
+                "aircraft",
+                "max_distance",
+                "median_rssi",
+            ]
+        )
+
     df = df.dropna(subset=["lat", "lon"])
+    if df.empty:
+        return pd.DataFrame(
+            columns=[
+                "lat",
+                "lon",
+                "cell_size_deg",
+                "packets",
+                "aircraft",
+                "max_distance",
+                "median_rssi",
+            ]
+        )
 
     # grid index
     df["grid_x"] = (df["lon"] / cell_size_deg).astype(int)

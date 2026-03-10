@@ -76,6 +76,12 @@ _POS_RE = re.compile(
 # q-construct token: usually 3 chars (qAS/qAC/qAR/...), occasionally seen as 4.
 _QA_RE = re.compile(r"^qA.{1,2}$")
 
+# RF metric patterns in APRS body
+_SNR_RE = re.compile(r"([-+]?[0-9]*\.?[0-9]+)dB")
+_FREQ_RE = re.compile(r"([-+]?[0-9]*\.?[0-9]+)kHz")
+_BIT_ERRORS_RE = re.compile(r"\s([0-9]+)e\s")
+_ALT_RE = re.compile(r"A=([0-9]+)")
+
 
 def _dm_to_deg(deg: str, minutes: str, hem: str) -> float:
     d = int(deg)
@@ -92,6 +98,46 @@ def parse_position(body: str) -> Tuple[Optional[float], Optional[float]]:
     m = _POS_RE.search(body)
     if not m:
         return None, None
+
+def parse_rf_metrics(body: str) -> Tuple[Optional[float], Optional[float], Optional[int], Optional[int]]:
+    if not body:
+        return None, None, None, None
+
+    snr = None
+    freq_offset = None
+    bit_errors = None
+    altitude = None
+
+    m = _SNR_RE.search(body)
+    if m:
+        try:
+            snr = float(m.group(1))
+        except Exception:
+            snr = None
+
+    m = _FREQ_RE.search(body)
+    if m:
+        try:
+            freq_offset = float(m.group(1))
+        except Exception:
+            freq_offset = None
+
+    m = _BIT_ERRORS_RE.search(body)
+    if m:
+        try:
+            bit_errors = int(m.group(1))
+        except Exception:
+            bit_errors = None
+
+    m = _ALT_RE.search(body)
+    if m:
+        try:
+            altitude = int(m.group(1))
+        except Exception:
+            altitude = None
+
+    return snr, freq_offset, bit_errors, altitude
+
 
     lat = _dm_to_deg(m.group("latdeg"), m.group("latmin"), m.group("lathem"))
     lon = _dm_to_deg(m.group("londeg"), m.group("lonmin"), m.group("lonhem"))
@@ -144,6 +190,7 @@ def parse_line(line: str) -> Optional[Dict[str, Any]]:
 
     qas, igate = parse_path(path)
     lat, lon = parse_position(body)
+    snr, freq_offset, bit_errors, altitude = parse_rf_metrics(body)
 
     return {
         "src": src,
@@ -152,6 +199,10 @@ def parse_line(line: str) -> Optional[Dict[str, Any]]:
         "qas": qas,
         "lat": lat,
         "lon": lon,
+        "snr": snr,
+        "freq_offset": freq_offset,
+        "bit_errors": bit_errors,
+        "altitude": altitude,
         "raw": line,
     }
 
@@ -183,23 +234,56 @@ def db_connect(db_path: str) -> sqlite3.Connection:
     con.execute(
         """
         CREATE TABLE IF NOT EXISTS packets (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts_utc   TEXT    NOT NULL,
-            ts_epoch INTEGER,
-            src      TEXT,
-            dst      TEXT,
-            igate    TEXT,
-            qas      TEXT,
-            lat      REAL,
-            lon      REAL,
-            raw      TEXT    NOT NULL
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts_utc      TEXT    NOT NULL,
+            ts_epoch    INTEGER,
+            src         TEXT,
+            dst         TEXT,
+            igate       TEXT,
+            qas         TEXT,
+            lat         REAL,
+            lon         REAL,
+            snr         REAL,
+            freq_offset REAL,
+            bit_errors  INTEGER,
+            altitude    INTEGER,
+            raw         TEXT    NOT NULL
         )
         """
     )
 
+    con.execute(
+        """
+        CREATE TABLE IF NOT EXISTS rf_receptions (
+            id          INTEGER PRIMARY KEY,
+            packet_id   INTEGER,
+            receiver    TEXT,
+            snr         REAL,
+            freq_offset REAL,
+            bit_errors  INTEGER,
+            altitude    INTEGER,
+            ts_epoch    INTEGER,
+            FOREIGN KEY(packet_id) REFERENCES packets(id)
+        )
+        """
+    )
+
+    con.execute("CREATE INDEX IF NOT EXISTS idx_rf_receptions_packet ON rf_receptions(packet_id);")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_rf_receptions_receiver ON rf_receptions(receiver);")
+    con.execute("CREATE INDEX IF NOT EXISTS idx_rf_receptions_ts ON rf_receptions(ts_epoch DESC);")
+
     cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
     if "ts_epoch" not in cols:
         con.execute("ALTER TABLE packets ADD COLUMN ts_epoch INTEGER;")
+
+    if "snr" not in cols:
+        con.execute("ALTER TABLE packets ADD COLUMN snr REAL;")
+    if "freq_offset" not in cols:
+        con.execute("ALTER TABLE packets ADD COLUMN freq_offset REAL;")
+    if "bit_errors" not in cols:
+        con.execute("ALTER TABLE packets ADD COLUMN bit_errors INTEGER;")
+    if "altitude" not in cols:
+        con.execute("ALTER TABLE packets ADD COLUMN altitude INTEGER;")
 
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_ts    ON packets(ts_utc);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch ON packets(ts_epoch DESC);")
@@ -213,13 +297,33 @@ def db_connect(db_path: str) -> sqlite3.Connection:
 
 
 def insert_many(con: sqlite3.Connection, rows: Iterable[Dict[str, Any]]) -> None:
-    con.executemany(
-        """
-        INSERT INTO packets (ts_utc, ts_epoch, src, dst, igate, qas, lat, lon, raw)
-        VALUES (:ts_utc, :ts_epoch, :src, :dst, :igate, :qas, :lat, :lon, :raw)
-        """,
-        rows,
-    )
+    cur = con.cursor()
+    for row in rows:
+        cur.execute(
+            """
+            INSERT INTO packets (ts_utc, ts_epoch, src, dst, igate, qas, lat, lon, snr, freq_offset, bit_errors, altitude, raw)
+            VALUES (:ts_utc, :ts_epoch, :src, :dst, :igate, :qas, :lat, :lon, :snr, :freq_offset, :bit_errors, :altitude, :raw)
+            """,
+            row,
+        )
+        packet_id = cur.lastrowid
+        receiver = row.get("igate")
+        cur.execute(
+            """
+            INSERT INTO rf_receptions (packet_id, receiver, snr, freq_offset, bit_errors, altitude, ts_epoch)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                packet_id,
+                receiver,
+                row.get("snr"),
+                row.get("freq_offset"),
+                row.get("bit_errors"),
+                row.get("altitude"),
+                row.get("ts_epoch"),
+            ),
+        )
+
 
 
 def _login_line() -> str:

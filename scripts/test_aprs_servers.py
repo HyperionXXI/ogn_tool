@@ -38,7 +38,7 @@ def login_line() -> str:
     return base + "\r\n"
 
 
-def test_host(host: str) -> None:
+def check_host(host: str) -> None:
     print(f"\n== {host}:{PORT} ==")
     try:
         sock = socket.create_connection((host, PORT), timeout=SOCKET_TIMEOUT_S)
@@ -73,7 +73,7 @@ def test_host(host: str) -> None:
 def main() -> None:
     print(f"Login: user={CALLSIGN} pass={PASSCODE} filter={FILTER!r}")
     for host in HOSTS:
-        test_host(host)
+        check_host(host)
         time.sleep(1)
 
 

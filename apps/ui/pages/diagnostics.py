@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import sqlite3
 
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
@@ -54,6 +55,50 @@ def render_diagnostics_page(ctx):
     st.markdown("**Station comparison**")
     st.info("Station comparison is not yet migrated to the engine dataset.")
 
+    st.markdown("**RF reception metrics by station**")
+    rf_receptions = ctx.get("rf_packets")
+    if rf_receptions is None or rf_receptions.empty or "receiver" not in rf_receptions.columns:
+        st.info("No rf_receptions data available for station metrics.")
+    else:
+        df_rx = rf_receptions.copy()
+        df_rx["snr"] = pd.to_numeric(df_rx.get("snr"), errors="coerce")
+        df_rx["freq_offset"] = pd.to_numeric(df_rx.get("freq_offset"), errors="coerce")
+        df_rx["bit_errors"] = pd.to_numeric(df_rx.get("bit_errors"), errors="coerce")
+        summary = (
+            df_rx.groupby("receiver", dropna=False)
+            .agg(
+                packet_count=("receiver", "size"),
+                avg_snr=("snr", "mean"),
+                avg_freq_offset=("freq_offset", "mean"),
+                bit_error_rate=("bit_errors", lambda x: (pd.to_numeric(x, errors="coerce").fillna(0) > 0).mean()),
+            )
+            .reset_index()
+            .sort_values("packet_count", ascending=False)
+        )
+        st.dataframe(summary, use_container_width=True, height=240)
+
+    st.markdown("**Station summary (SQL)**")
+    db_path = ctx.get("db_path")
+    if db_path:
+        try:
+            con = sqlite3.connect(db_path)
+            sql = """
+            SELECT receiver,
+                   COUNT(*) AS packets,
+                   AVG(snr) AS avg_snr,
+                   AVG(freq_offset) AS avg_offset
+            FROM rf_receptions
+            GROUP BY receiver
+            """
+            df_sql = pd.read_sql_query(sql, con)
+            st.dataframe(df_sql, use_container_width=True, height=240)
+        except Exception as e:
+            st.info(f"Unable to query rf_receptions: {e}")
+        finally:
+            try:
+                con.close()
+            except Exception:
+                pass
     polar_coverage = ctx.get("polar_coverage") or []
     if polar_coverage:
         df_polar = pd.DataFrame(polar_coverage)

@@ -77,22 +77,35 @@ def render_propagation_page(filters):
         with c5:
             st.empty()
 
-        if "distance_km" in packets_signal.columns and ("rssi_db" in packets_signal.columns or "rssi" in packets_signal.columns):
-            st.markdown("**RSSI vs distance**")
-            rssi_col = "rssi_db" if "rssi_db" in packets_signal.columns else "rssi"
+        has_rssi = any(col in packets_signal.columns for col in ["snr", "snr_db", "rssi_db", "rssi"])
+        if "distance_km" in packets_signal.columns and has_rssi:
+            st.markdown("**Signal vs distance**")
+            if "snr" in packets_signal.columns:
+                rssi_col = "snr"
+            elif "snr_db" in packets_signal.columns:
+                rssi_col = "snr_db"
+            elif "rssi_db" in packets_signal.columns:
+                rssi_col = "rssi_db"
+            else:
+                rssi_col = "rssi"
             st.scatter_chart(packets_signal, x="distance_km", y=rssi_col)
         else:
-            st.info("RSSI vs distance data missing required columns.")
+            st.info("Signal vs distance data missing required columns.")
 
     st.divider()
     with section_altitude:
         st.subheader("Altitude vs distance")
-        if "altitude_m" not in packets_signal.columns:
+        alt_col = None
+        if "altitude_m" in packets_signal.columns:
+            alt_col = "altitude_m"
+        elif "altitude" in packets_signal.columns:
+            alt_col = "altitude"
+        if alt_col is None:
             st.info("Altitude field not present in packets.")
         elif "distance_km" not in packets_signal.columns:
             st.info("Distance field not present in packets.")
         else:
-            st.scatter_chart(packets_signal, x="distance_km", y="altitude_m")
+            st.scatter_chart(packets_signal, x="distance_km", y=alt_col)
 
     st.divider()
     with section_distribution:
