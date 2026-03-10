@@ -621,6 +621,15 @@ class RFAnalysisEngine:
         # Stage 2: metric computation
         metrics, terrain_stats = self._compute_metrics(distance_df, grid_for_analysis)
 
+        rf_models_results = {
+            "signal_distance": metrics.get("signal_distance"),
+            "radio_horizon": metrics.get("radio_horizon"),
+            "terrain": metrics.get("terrain"),
+            "terrain_visibility": metrics.get("terrain_visibility"),
+            "altitude_distance": metrics.get("altitude_distance"),
+        }
+        metrics["rf_models"] = rf_models_results
+
         # Stage 3: RF propagation analysis
         rf_models = self._run_rf_models(distance_df)
         azimuth_df = rf_models.get("azimuth_df")
