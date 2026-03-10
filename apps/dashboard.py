@@ -68,8 +68,9 @@ if _PROFILER:
 # ---------------------------
 
 st.set_page_config(
-    page_title="OGN / APRS-IS — Dashboard local",
+    page_title="OGN RF Intelligence",
     layout="wide",
+    page_icon="📡",
 )
 
 # Global styling
@@ -940,6 +941,7 @@ with navigation_container:
     page = st.sidebar.radio(
         "Navigation",
         [
+            "Station Intelligence",
             "Overview",
             "Coverage Explorer",
             "Propagation",
@@ -1187,7 +1189,9 @@ ui_ctx = {
 
 
 with content_container:
-    if page == "Overview":
+    if page == "Station Intelligence":
+        render_station_intelligence_tab(ui_ctx)
+    elif page == "Overview":
         render_overview_tab(ui_ctx)
     elif page == "Coverage Explorer":
         render_coverage_explorer_tab(ui_ctx)
