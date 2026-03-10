@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ogn_tool.engine.rf_engine import RFAnalysisEngine
-
 from ui.map_engine import (
     build_aircraft_layer,
     build_coverage_layer,
@@ -13,6 +11,7 @@ from ui.map_engine import (
 
 
 def render_coverage_explorer_page(ctx):
+    dataset = ctx.get("dataset", {})
     st.markdown("<h2>Coverage Explorer</h2>", unsafe_allow_html=True)
 
     rf_packets = ctx.get("rf_packets")
@@ -33,12 +32,10 @@ def render_coverage_explorer_page(ctx):
     if rf_packets is None:
         rf_packets = ctx["pd"].DataFrame()
 
-    engine_all = RFAnalysisEngine(packets_window, ctx.get("station_lat"), ctx.get("station_lon"))
-    dataset = engine_all.build_analysis_dataset()
-    packets_all = dataset["packets_all"]
-    packets_rf = dataset["packets_rf"]
-    rf_grid = dataset["coverage_grid"]
-    station_metrics = dataset["station_metrics"]
+    packets_all = dataset.get("packets_all")
+    packets_rf = dataset.get("packets_rf")
+    rf_grid = dataset.get("coverage_grid")
+    station_metrics = dataset.get("station_metrics")
 
     if "selected_object" not in st.session_state:
         st.session_state["selected_object"] = None

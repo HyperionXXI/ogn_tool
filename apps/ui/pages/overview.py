@@ -1,28 +1,24 @@
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
-
-from ogn_tool.engine.rf_engine import RFAnalysisEngine
 
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
-from ui import charts as ui_charts
-from ui.charts import render_rf_cartography
-from ogn_tool.rf_probability_field import build_rf_probability_field
-
-
-@st.cache_data(show_spinner=False)
-def compute_rf_engine(packets, station_lat, station_lon):
-    engine = RFAnalysisEngine(packets, station_lat, station_lon)
-    return engine.run()
 
 
 def render_overview_page(ctx):
+    dataset = ctx.get("dataset", {})
     st.markdown("<h2>Overview</h2>", unsafe_allow_html=True)
     rf_packets = ctx.get("rf_packets")
-    rf_local_count = int(ctx.get("rf_local_count", 0))
-    engine_result = compute_rf_engine(rf_packets, ctx.get("station_lat"), ctx.get("station_lon"))
-    rf_packets_count = int(engine_result.metrics.get("rf_packets", 0))
+
+    rf_packets_count = 0
+    observations = dataset.get("observations")
+    if isinstance(observations, pd.DataFrame) and not observations.empty:
+        rf_packets_count = int(len(observations))
+    elif isinstance(rf_packets, pd.DataFrame) and not rf_packets.empty:
+        rf_packets_count = int(len(rf_packets))
+
     readiness = "GOOD" if rf_packets_count >= 2000 else "FAIR" if rf_packets_count >= 500 else "LOW"
 
     st.markdown("**RF DATASET STATUS**")
@@ -45,9 +41,15 @@ not necessarily the RF receiver.
     )
 
     aircraft_seen = rf_packets["src"].nunique() if rf_packets is not None and "src" in rf_packets.columns else None
-    max_range = engine_result.metrics.get("max_range_km")
-    health = engine_result.metrics.get("health")
-    health_status = "GOOD" if health is not None and health >= 80 else "FAIR" if health is not None and health >= 50 else "POOR"
+    max_range = None
+    health = None
+    if isinstance(dataset.get("rf_diagnosis"), dict):
+        health = dataset.get("rf_diagnosis", {}).get("health")
+    try:
+        health_val = float(health) if health is not None else None
+    except (TypeError, ValueError):
+        health_val = None
+    health_status = ("GOOD" if health_val is not None and health_val >= 80 else "FAIR" if health_val is not None and health_val >= 50 else "POOR")
 
     st.markdown("<div style='font-size:18px;font-weight:600;'>Key Metrics</div>", unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns(4)

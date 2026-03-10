@@ -11,5 +11,7 @@ from ogn_tool.rf_probability_field import build_rf_probability_field
 
 def render_coverage_page(filters):
     ctx = filters
+    dataset = ctx.get("dataset", {})
     # Late import to avoid circulars; reuse existing logic exactly.
     st.info("RF coverage map is available under the Infrastructure page.")
+

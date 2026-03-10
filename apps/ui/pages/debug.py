@@ -12,6 +12,7 @@ import sqlite3
 
 def render_debug_page(filters):
     ctx = filters
+    dataset = ctx.get("dataset", {})
     
     section_raw = st.container()
     section_stats = st.container()
@@ -32,9 +33,11 @@ def render_debug_page(filters):
 
     with section_stats:
         st.subheader("Dataset statistics")
-        result = ctx['analysis_station_quality'].analyze(ctx['grid_df_kpi'])
-        if not result.get("implemented"):
-            st.info("Feature not implemented yet")
+        station_metrics = dataset.get("station_metrics")
+        if station_metrics is None or getattr(station_metrics, "empty", False):
+            st.info("No station metrics available in dataset.")
+        else:
+            st.write(station_metrics.head(10))
 
     def show_station_stats(con, station):
         q = """
@@ -53,3 +56,4 @@ def render_debug_page(filters):
             st.metric("Packets received via station", count)
         except Exception:
             st.info("Station stats unavailable.")
+

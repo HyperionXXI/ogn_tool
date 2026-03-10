@@ -10,6 +10,7 @@ from ogn_tool.rf_probability_field import build_rf_probability_field
 
 
 def render_network_page(ctx):
+    dataset = ctx.get("dataset", {})
     st.subheader("Network")
     rf_count = ctx.get("rf_count", 0)
     internet_count = ctx.get("internet_count", 0)
@@ -37,3 +38,4 @@ def render_network_page(ctx):
     if redundancy is not None and not redundancy.empty:
         st.subheader("Aircraft redundancy")
         st.bar_chart(redundancy)
+

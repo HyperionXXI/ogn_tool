@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
+import pandas as pd
 
 from ui.layout import DASHBOARD_COLUMNS
 from ui.metrics import metric_card
@@ -10,6 +11,7 @@ from ogn_tool.rf_probability_field import build_rf_probability_field
 
 
 def render_aircraft_page(ctx):
+    dataset = ctx.get("dataset", {})
     st.subheader("Aircraft traffic")
     rf_mode = ctx.get("has_rf", False)
     rf_packets = ctx.get("rf_packets")
@@ -56,7 +58,7 @@ def render_aircraft_page(ctx):
             st.subheader("FANET devices (top 20)")
             st.bar_chart(fanet_local["src"].value_counts().head(20))
         if "ts_epoch" in fanet_local.columns:
-            ts = ctx["pd"].to_datetime(fanet_local["ts_epoch"], unit="s", utc=True, errors="coerce")
+            ts = pd.to_datetime(fanet_local["ts_epoch"], unit="s", utc=True, errors="coerce")
             per_hour = ts.dt.floor("h").value_counts().sort_index()
             if not per_hour.empty:
                 st.subheader("FANET local packets per hour")
@@ -78,7 +80,7 @@ def render_aircraft_page(ctx):
                 st.empty()
             if low_samples > 0:
                 st.info("FANET reliability low in some cells (sample_count < 5).")
-        render_rf_cartography(fanet_grid, ctx, ["RF probability", "Confidence"])
+        render_rf_cartography(fanet_grid, ctx.get("station_lat"), ctx.get("station_lon"), ctx.get("basemap_label"), ["RF probability", "Confidence"])
 
     st.markdown("**OGN vs FANET comparison (local, same grid)**")
     rf_local = ctx.get("rf_local")
@@ -90,10 +92,10 @@ def render_aircraft_page(ctx):
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("**OGN RF (local)**")
-            render_rf_cartography(ogn_grid, ctx, ["RF probability", "Confidence"])
+            render_rf_cartography(ogn_grid, ctx.get("station_lat"), ctx.get("station_lon"), ctx.get("basemap_label"), ["RF probability", "Confidence"])
         with col2:
             st.markdown("**FANET (local)**")
-            render_rf_cartography(fanet_grid, ctx, ["RF probability", "Confidence"])
+            render_rf_cartography(fanet_grid, ctx.get("station_lat"), ctx.get("station_lon"), ctx.get("basemap_label"), ["RF probability", "Confidence"])
 
     st.markdown("**FANET network traffic (dataset)**")
     fanet_global = ctx.get("fanet_packets_global")

@@ -16,10 +16,10 @@ except Exception:  # pragma: no cover
 MAX_MAP_POINTS = 10000
 
 
-def _map_style(ctx: dict):
+def _map_style(basemap_label: str | None):
     if pdk is None:
         return None
-    label = str(ctx.get("basemap_label") or "")
+    label = str(basemap_label or "")
     if "Positron" in label or "clair" in label:
         return pdk.map_styles.CARTO_LIGHT
     if "Dark" in label or "dark" in label:
@@ -27,9 +27,13 @@ def _map_style(ctx: dict):
     return pdk.map_styles.ROAD
 
 
-
-
-def render_rf_cartography(grid: pd.DataFrame, ctx: dict, layers: list[str]) -> None:
+def render_rf_cartography(
+    grid: pd.DataFrame,
+    station_lat: float | None,
+    station_lon: float | None,
+    basemap_label: str | None,
+    layers: list[str],
+) -> None:
     if pdk is None:
         st.error("Missing dependency: pydeck. Install: pip install pydeck")
         return
@@ -42,8 +46,8 @@ def render_rf_cartography(grid: pd.DataFrame, ctx: dict, layers: list[str]) -> N
         return
 
     view = pdk.ViewState(
-        latitude=ctx["station_lat"],
-        longitude=ctx["station_lon"],
+        latitude=station_lat,
+        longitude=station_lon,
         zoom=8,
         pitch=35,
     )
@@ -204,7 +208,7 @@ def render_rf_cartography(grid: pd.DataFrame, ctx: dict, layers: list[str]) -> N
         )
 
     # Station marker + range rings (km)
-    station = {"lat": ctx.get("station_lat"), "lon": ctx.get("station_lon")}
+    station = {"lat": station_lat, "lon": station_lon}
     if station["lat"] is not None and station["lon"] is not None:
         deck_layers.append(
             pdk.Layer(
@@ -230,8 +234,11 @@ def render_rf_cartography(grid: pd.DataFrame, ctx: dict, layers: list[str]) -> N
                 )
             )
 
-    deck = pdk.Deck(layers=deck_layers, initial_view_state=view, map_style=_map_style(ctx))
+    deck = pdk.Deck(layers=deck_layers, initial_view_state=view, map_style=_map_style(basemap_label))
     st.pydeck_chart(deck, use_container_width=True)
+
+
+# --- remaining chart helpers unchanged ---
 
 
 def plot_rssi_distance(data_plot, binned=None, x_max: Optional[float] = None, distance_markers=None):
@@ -370,5 +377,4 @@ def plot_polar_p95(az_stats: pd.DataFrame):
         ),
     )
     return fig
-
 

@@ -52,26 +52,7 @@ from ui.sections import (
 from ogn_tool.config import get_config
 from ogn_tool.db import connect
 from ogn_tool.rf_analysis import compute_distance_probability
-from ogn_tool.analysis import polar as analysis_polar
-from ogn_tool.analysis import signal_distance as analysis_signal_distance
-from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
-from ogn_tool.analysis import shadow_map as analysis_shadow_map
-from ogn_tool.analysis import station_range as analysis_station_range
-from ogn_tool.analysis import terrain as analysis_terrain
-from ogn_tool.analysis import station_compare as analysis_station_compare
-from ogn_tool.analysis import station_quality as analysis_station_quality
-from ogn_tool.analysis import antenna_health as analysis_antenna_health
-from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
-from ogn_tool.analysis import terrain_visibility as analysis_terrain_visibility
-from ogn_tool.analysis.grid_loader import load_coverage_grid as load_coverage_grid_base
-from ogn_tool.analysis.pipeline import build_rf_dataset
-from ogn_tool.analysis import azimuth as analysis_azimuth
-from ogn_tool.analysis.network_analysis import (
-    station_aircraft_matrix,
-    station_overlap,
-    aircraft_redundancy,
-)
-from ogn_tool.analysis.azimuth_footprint import compute_azimuth_footprint
+from ogn_tool.engine.rf_engine import RFAnalysisEngine
 
 
 # Optional profiling (enable with OGN_PROFILE=1)
@@ -141,7 +122,6 @@ BASEMAPS: Dict[str, Basemap] = {
 }
 
 DEFAULT_BASEMAP = "CARTO Positron (clair)"
-load_coverage_grid = load_coverage_grid_base
 
 
 def haversine_km(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
@@ -187,7 +167,19 @@ def fmt_int(n: Optional[int]) -> str:
 def fmt_float(x: Optional[float], nd: int = 1) -> str:
     if x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x))):
         return "—"
+    try:
+        x = float(x)
+    except (TypeError, ValueError):
+        return "—"
     return f"{x:.{nd}f}"
+
+
+def first_valid_df(*dfs):
+    """Return the first DataFrame that is not None and not empty."""
+    for df in dfs:
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            return df
+    return pd.DataFrame()
 
 
 def now_utc() -> dt.datetime:
@@ -332,26 +324,6 @@ def rf_sanity_check(conn: sqlite3.Connection) -> List[str]:
             issues.append("coverage_grid exists but is empty.")
     except sqlite3.Error:
         issues.append("Table 'coverage_grid' not found (run build_coverage_grid.py).")
-
-    # check analysis modules
-    modules = [
-        "polar",
-        "signal_distance",
-        "altitude_distance",
-        "shadow_map",
-        "station_range",
-        "antenna_health",
-        "radio_horizon",
-        "terrain",
-        "station_compare",
-        "station_quality",
-    ]
-    for m in modules:
-        try:
-            __import__(f"ogn_tool.analysis.{m}")
-        except Exception:
-            issues.append(f"Analysis module missing: {m}")
-
     return issues
 
 def _build_where(
@@ -490,11 +462,6 @@ def _load_packets_window_raw(
         df = df.sample(n=max_packets, random_state=42)
 
     return df
-
-
-@st.cache_data(show_spinner=False)
-def build_rf_cached(df_packets: pd.DataFrame, station_lat: float, station_lon: float):
-    return build_rf_dataset(df_packets, station_lat, station_lon)
 
 
 # ---------------------------
@@ -676,7 +643,7 @@ with header_container:
 # Precompute coverage probability KPIs (fast on grid)
 grid_df_kpi = pd.DataFrame()
 try:
-    grid_df_kpi = load_coverage_grid(db_path)
+    grid_df_kpi = pd.DataFrame()
 except Exception:
     grid_df_kpi = pd.DataFrame()
 packets_received = None
@@ -716,11 +683,11 @@ else:
     db_status_label = "DB status: OK"
 
 # Grid status logic
-grid_df_status = load_coverage_grid_base(db_path)
+grid_df_status = pd.DataFrame()
 st.session_state["grid_df"] = grid_df_status if grid_df_status is not None else None
 grid_cells = int(len(grid_df_status)) if grid_df_status is not None else 0
 grid_enabled = bool(use_cov_grid)
-if grid_df_status is not None and grid_enabled:
+if grid_df_status is not None and not grid_df_status.empty and grid_enabled:
     grid_status_label = "GRID READY"
 else:
     grid_status_label = "GRID OFF — coverage grid not built"
@@ -738,7 +705,7 @@ packets_window = _load_packets_window_raw(
     source_mode="Heard-by station",
     qas_filter="",
     limit_rows=limit_rows,
-)
+    )
 if "qas" in packets_window.columns:
     qas_upper = packets_window["qas"].astype(str).str.upper()
     rf_packets_global = packets_window[qas_upper.isin(["QAR", "QAO"])].copy()
@@ -761,54 +728,47 @@ else:
 test_igate = str(filters_apply.get("test_igate", "")).strip()
 test_fanet_igate = str(filters_apply.get("test_fanet_igate", "")).strip()
 station_cs_effective = str(test_igate or station_callsign).upper()
-fanet_cs_effective = str(test_fanet_igate or station_callsign).upper()
-station_cs_actual = str(station_callsign).upper()
-rf_local_raw = (
-    rf_packets_global[
-        rf_packets_global["igate"].astype(str).str.upper().eq(station_cs_effective)
-        | rf_packets_global["raw"].astype(str).str.contains(station_cs_effective, na=False, regex=False)
-    ].copy()
-    if "raw" in rf_packets_global.columns and "igate" in rf_packets_global.columns and station_cs_effective
-    else rf_packets_global.iloc[0:0].copy()
-)
-
-fanet_local_raw = (
-    fanet_packets_global[
-        fanet_packets_global["igate"].astype(str).str.upper().eq(fanet_cs_effective)
-        | fanet_packets_global["raw"].astype(str).str.contains(fanet_cs_effective, na=False, regex=False)
-    ].copy()
-    if "raw" in fanet_packets_global.columns and "igate" in fanet_packets_global.columns and fanet_cs_effective
-    else fanet_packets_global.iloc[0:0].copy()
-)
-
-rf_receiver_only_raw = (
-    packets_window[
-        packets_window["raw"].astype(str).str.contains(station_cs_actual, na=False, regex=False)
-    ].copy()
-    if "raw" in packets_window.columns and station_cs_actual
-    else packets_window.iloc[0:0].copy()
-)
-
-rf_gated_packets, rf_gated_grid = build_rf_cached(rf_local_raw, station_lat, station_lon)
-fanet_local, fanet_grid = build_rf_cached(fanet_local_raw, station_lat, station_lon)
-rf_receiver_only_packets, rf_receiver_only_grid = build_rf_cached(rf_receiver_only_raw, station_lat, station_lon)
+rf_receiver_only_raw = pd.DataFrame()
 
 data_source_mode = filters_apply.get("data_source", "APRS-IS gated")
+dataset_mode = "STRICT_RF"
 if data_source_mode == "Receiver-only RF":
-    rf_packets = rf_receiver_only_packets
-    rf_grid = rf_receiver_only_grid
+    dataset_mode = "STATION_RF"
 elif data_source_mode == "FANET local":
-    rf_packets = fanet_local
-    rf_grid = fanet_grid
+    dataset_mode = "STATION_RF"
 elif data_source_mode == "OGN live tracking":
-    rf_packets = rf_gated_packets.iloc[0:0].copy()
-    rf_grid = rf_gated_grid.iloc[0:0].copy()
-else:
-    rf_packets = rf_gated_packets
-    rf_grid = rf_gated_grid
-
-azimuth_stats = analysis_azimuth.compute_azimuth_radiation(rf_packets, station_lat, station_lon)
-azimuth_footprint = compute_azimuth_footprint(rf_packets, station_lat, station_lon)
+    dataset_mode = "NETWORK"
+engine = RFAnalysisEngine(packets_window, station_lat, station_lon)
+dataset = engine.build_analysis_dataset(dataset_mode=dataset_mode, station_id=station_cs_effective)
+# Sync grid status with dataset coverage grid
+grid_df_status = dataset.get("coverage_grid")
+if grid_df_status is None:
+    grid_df_status = pd.DataFrame()
+st.session_state["grid_df"] = grid_df_status
+grid_cells = int(len(grid_df_status)) if grid_df_status is not None else 0
+grid_status_label = ("GRID READY" if grid_enabled and not grid_df_status.empty else "GRID OFF — coverage grid not built")
+if not grid_df_status.empty and "packet_count" in grid_df_status.columns:
+    packets_received = int(np.nansum(pd.to_numeric(grid_df_status.get("packet_count"), errors="coerce")))
+if not grid_df_status.empty and "max_distance_km" in grid_df_status.columns:
+    max_distance_grid = float(pd.to_numeric(grid_df_status.get("max_distance_km"), errors="coerce").max())
+st.write("packets_window:", len(packets_window)) 
+st.write("rf_packets:", len(dataset.get("packets_rf", []))) 
+st.write("coverage_grid:", len(dataset.get("coverage_grid", [])))
+rf_packets = first_valid_df(
+    dataset.get("observations"),
+    dataset.get("packets_filtered"),
+)
+polar_coverage = []
+rf_grid = first_valid_df(dataset.get("coverage_grid"))
+rf_packets_global = first_valid_df(dataset.get("packets_rf"))
+rf_gated_packets = rf_packets
+rf_gated_grid = rf_grid
+fanet_local = pd.DataFrame()
+fanet_grid = pd.DataFrame()
+rf_receiver_only_packets = pd.DataFrame()
+rf_receiver_only_grid = pd.DataFrame()
+azimuth_stats = None
+azimuth_footprint = None
 rf_global_count = int(len(rf_packets_global))
 rf_count = int(len(rf_packets))
 internet_count = int(len(internet_packets))
@@ -827,9 +787,9 @@ rf_global_aircraft = int(rf_packets_global["src"].nunique()) if rf_packets_globa
 rf_receiver_only_count = int(len(rf_receiver_only_packets))
 rf_receiver_only_aircraft = int(rf_receiver_only_packets["src"].nunique()) if "src" in rf_receiver_only_packets.columns else 0
 
-station_matrix = station_aircraft_matrix(rf_packets_global)
-overlap = station_overlap(station_matrix)
-redundancy = aircraft_redundancy(station_matrix)
+station_matrix = None
+overlap = dataset.get("station_overlap_matrix")
+redundancy = None
 
 # Dataset status (RF + FANET) for clarity when sample sizes are low
 rf_recommended = 2000
@@ -923,6 +883,9 @@ types_str = "/".join(dst_types) if dst_types else "—"
 st.caption(f"Active filters: Station={station_callsign} | Window={hours}h | Types={types_str} | Mode={mode} — Last apply: {apply_time}")
 
 raw_packets_mode = bool(st.session_state.get("filters_apply", {}).get("raw_packets_mode", False))
+st.sidebar.write("Dataset mode:", dataset.get("dataset_mode"))
+st.sidebar.write("Coverage cells:", len(dataset.get("coverage_grid", [])))
+st.sidebar.write("Stations detected:", len(dataset.get("stations", [])))
 
 with navigation_container:
     page = st.sidebar.radio(
@@ -933,7 +896,7 @@ with navigation_container:
             "Propagation",
             "Network",
             "Diagnostics",
-        ],
+        ]
     )
 
 with st.expander("Advanced settings", expanded=False):
@@ -981,8 +944,14 @@ with st.expander("Advanced settings", expanded=False):
             int(st.session_state["filters_edit"]["scatter_max_points"]),
             help="Maximum number of points rendered in charts",
         )
-        do_autorefresh_adv = st.checkbox("Auto-refresh (30s)", value=bool(st.session_state["filters_edit"]["do_autorefresh"]))
-        perf_cache_adv = st.checkbox("Enable cache", value=bool(st.session_state["filters_edit"].get("perf_cache", True)))
+        do_autorefresh_adv = st.checkbox(
+            "Auto-refresh (30s)",
+            value=bool(st.session_state["filters_edit"]["do_autorefresh"]),
+        )
+        perf_cache_adv = st.checkbox(
+            "Enable cache",
+            value=bool(st.session_state["filters_edit"].get("perf_cache", True)),
+        )
 
         st.subheader("Developer")
         mode_adv = st.selectbox(
@@ -1000,8 +969,14 @@ with st.expander("Advanced settings", expanded=False):
             st.session_state["filters_edit"].get("test_fanet_igate", ""),
             help="Override IGate callsign used for FANET local checks (debug/validation).",
         )
-        debug_sql_adv = st.checkbox("Debug SQL timings", value=bool(st.session_state["filters_edit"]["debug_sql"]))
-        raw_packets_mode_adv = st.checkbox("Raw packets mode (Debug only)", value=bool(st.session_state["filters_edit"].get("raw_packets_mode", False)))
+        debug_sql_adv = st.checkbox(
+            "Debug SQL timings",
+            value=bool(st.session_state["filters_edit"]["debug_sql"]),
+        )
+        raw_packets_mode_adv = st.checkbox(
+            "Raw packets mode (Debug only)",
+            value=bool(st.session_state["filters_edit"].get("raw_packets_mode", False)),
+        )
 
         apply_adv = st.form_submit_button("Apply advanced settings")
 
@@ -1115,6 +1090,7 @@ ui_ctx = {
     "limit_rows": limit_rows,
     "hours": hours,
     "raw_packets_mode": raw_packets_mode,
+    "dataset": dataset,
     "grid_df_kpi": grid_df_kpi,
     "rf_packets": rf_packets,
     "rf_packets_global": rf_packets_global,
@@ -1146,22 +1122,11 @@ ui_ctx = {
     "redundancy": redundancy,
     "azimuth_stats": azimuth_stats,
     "azimuth_footprint": azimuth_footprint,
+    "polar_coverage": polar_coverage,
     "pd": pd,
     "np": np,
     "os": os,
-    "load_coverage_grid": load_coverage_grid,
     "_load_packets_window_raw": _load_packets_window_raw,
-    "analysis_shadow_map": analysis_shadow_map,
-    "analysis_signal_distance": analysis_signal_distance,
-    "analysis_station_range": analysis_station_range,
-    "analysis_altitude_distance": analysis_altitude_distance,
-    "analysis_station_quality": analysis_station_quality,
-    "analysis_polar": analysis_polar,
-    "analysis_terrain": analysis_terrain,
-    "analysis_terrain_visibility": analysis_terrain_visibility,
-    "analysis_antenna_health": analysis_antenna_health,
-    "analysis_radio_horizon": analysis_radio_horizon,
-    "analysis_station_compare": analysis_station_compare,
     "get_packets_context": get_packets_context,
     "parse_compare_stations": _parse_compare_stations,
     "fmt_int": fmt_int,
@@ -1192,11 +1157,14 @@ if _PROFILER:
 # Footer
 with st.container():
     st.divider()
-    grid_df = load_coverage_grid(db_path)
+    grid_df = rf_grid if isinstance(rf_grid, pd.DataFrame) else pd.DataFrame()
     st.caption(
         f"Packets processed: {fmt_int(packets_received) if packets_received is not None else '—'} • "
         f"Grid cells: {fmt_int(len(grid_df)) if not grid_df.empty else '—'} • "
         f"Last update: {(last_ts[:19] + 'Z') if last_ts else '—'}"
     )
+
+
+
 
 
