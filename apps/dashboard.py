@@ -458,6 +458,7 @@ filters_apply = render_sidebar_filters(default_filters, now_utc, has_rf=has_rf_p
 mode = filters_apply["mode"]
 db_path = filters_apply["db_path"]
 station_callsign = filters_apply["station_callsign"]
+st.session_state["station_callsign"] = station_callsign
 station_lat = filters_apply["station_lat"]
 station_lon = filters_apply["station_lon"]
 rf_receptions_available = rf_service.table_exists(db_path, "rf_receptions")
