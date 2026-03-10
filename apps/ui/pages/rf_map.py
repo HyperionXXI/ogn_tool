@@ -9,7 +9,6 @@ def render_rf_map_page(ctx):
     dataset = ctx.get("dataset", {})
     st.markdown("<h2>RF Coverage</h2>", unsafe_allow_html=True)
     rf_packets = ctx.get("rf_packets")
-    packets_window = ctx.get("packets_window")
     data_source = ctx.get("data_source", "APRS-IS gated")
     rf_local_count = int(ctx.get("rf_local_count", 0))
     readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
@@ -20,14 +19,13 @@ def render_rf_map_page(ctx):
     if rf_local_count < 2000:
         st.warning("Dataset too small for reliable RF coverage analysis")
 
-    if rf_packets is None or getattr(rf_packets, "empty", False):
-        st.warning("No RF-gated packets detected (qAR / qAO). Showing APRS-IS network coverage instead.")
-        dataset_packets = packets_window
-    else:
-        dataset_packets = rf_packets
-    if dataset_packets is None or (hasattr(dataset_packets, "empty") and dataset_packets.empty):
+    if rf_packets is None or (hasattr(rf_packets, "empty") and rf_packets.empty):
         st.warning("No packets for this station in APRS-IS dataset.")
         return
+
+    dataset_packets = rf_packets
+    if len(dataset_packets) > 2000:
+        dataset_packets = dataset_packets.sample(2000, random_state=42)
 
     coverage_grid = dataset.get("coverage_grid")
     if coverage_grid is None or (hasattr(coverage_grid, "empty") and coverage_grid.empty):
