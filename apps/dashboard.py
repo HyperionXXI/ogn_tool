@@ -51,7 +51,6 @@ from ui.sections import (
 
 from ogn_tool.config import get_config
 from ogn_tool.db import connect
-from ogn_tool.rf_analysis import compute_distance_probability
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
 
 
@@ -464,6 +463,48 @@ def _load_packets_window_raw(
     return df
 
 
+@st.cache_data(show_spinner=False)
+def _load_rf_receptions_window_raw(
+    db_path: str,
+    since_epoch: int,
+    limit_rows: int,
+    query_log: Optional[List[Dict]] = None,
+) -> pd.DataFrame:
+    if not os.path.exists(db_path):
+        return pd.DataFrame()
+
+    con = get_db_connection(db_path)
+    sql = """
+    SELECT
+        r.packet_id,
+        r.receiver,
+        r.snr,
+        r.freq_offset,
+        r.bit_errors,
+        r.altitude,
+        r.ts_epoch,
+        p.src,
+        p.dst,
+        p.igate,
+        p.qas,
+        p.lat,
+        p.lon,
+        p.raw
+    FROM rf_receptions r
+    JOIN packets p ON p.id = r.packet_id
+    WHERE r.ts_epoch >= ?
+    ORDER BY r.ts_epoch DESC
+    LIMIT ?
+    """
+    params = [int(since_epoch), int(limit_rows)]
+    t0 = time.perf_counter()
+    df = pd.read_sql_query(sql, con, params=params)
+    dt_ms = (time.perf_counter() - t0) * 1000.0
+    if query_log is not None:
+        query_log.append({"query": "load_rf_receptions_window", "ms": round(dt_ms, 2), "rows": int(len(df))})
+    return df
+
+
 # ---------------------------
 # Derived computations
 # ---------------------------
@@ -706,6 +747,12 @@ packets_window = _load_packets_window_raw(
     qas_filter="",
     limit_rows=limit_rows,
     )
+receptions_window = _load_rf_receptions_window_raw(
+    db_path=db_path,
+    since_epoch=filters_apply["since_epoch"],
+    limit_rows=limit_rows,
+)
+
 if "qas" in packets_window.columns:
     qas_upper = packets_window["qas"].astype(str).str.upper()
     rf_packets_global = packets_window[qas_upper.isin(["QAR", "QAO"])].copy()
@@ -738,8 +785,11 @@ elif data_source_mode == "FANET local":
     dataset_mode = "STATION_RF"
 elif data_source_mode == "OGN live tracking":
     dataset_mode = "NETWORK"
-engine = RFAnalysisEngine(packets_window, station_lat, station_lon)
+engine = RFAnalysisEngine(receptions_window, station_lat, station_lon)
 dataset = engine.build_analysis_dataset(dataset_mode=dataset_mode, station_id=station_cs_effective)
+station_analysis = engine.run_station_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
+network_analysis = engine.run_network_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
+rf_diagnostics = engine.run_rf_diagnostics(dataset_mode=dataset_mode, station_id=station_cs_effective)
 # Sync grid status with dataset coverage grid
 grid_df_status = dataset.get("coverage_grid")
 if grid_df_status is None:
@@ -754,10 +804,9 @@ if not grid_df_status.empty and "max_distance_km" in grid_df_status.columns:
 st.write("packets_window:", len(packets_window)) 
 st.write("rf_packets:", len(dataset.get("packets_rf", []))) 
 st.write("coverage_grid:", len(dataset.get("coverage_grid", [])))
-rf_packets = first_valid_df(
-    dataset.get("observations"),
-    dataset.get("packets_filtered"),
-)
+rf_packets = dataset.get("rf_receptions")
+if rf_packets is None:
+    rf_packets = pd.DataFrame()
 polar_coverage = []
 rf_grid = first_valid_df(dataset.get("coverage_grid"))
 rf_packets_global = first_valid_df(dataset.get("packets_rf"))
@@ -1091,6 +1140,9 @@ ui_ctx = {
     "hours": hours,
     "raw_packets_mode": raw_packets_mode,
     "dataset": dataset,
+    "station_analysis": station_analysis,
+    "network_analysis": network_analysis,
+    "rf_diagnostics": rf_diagnostics,
     "grid_df_kpi": grid_df_kpi,
     "rf_packets": rf_packets,
     "rf_packets_global": rf_packets_global,

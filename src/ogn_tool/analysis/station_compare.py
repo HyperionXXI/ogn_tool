@@ -36,14 +36,14 @@ def _norm(series: pd.Series) -> pd.Series:
 
 
 def analyze(
-    df_packets: pd.DataFrame,
+    df_observations: pd.DataFrame,
     station_coords: Dict[str, tuple[float, float]] | None = None,
     station_callsigns: Iterable[str] | None = None,
     **_: Any,
 ) -> Dict[str, Any]:
-    if df_packets is None or not isinstance(df_packets, pd.DataFrame):
+    if df_observations is None or not isinstance(df_observations, pd.DataFrame):
         return {"implemented": False, "summary": {"reason": "no_packets"}, "data": None}
-    if df_packets.empty:
+    if df_observations.empty:
         return {"implemented": False, "summary": {"reason": "no_packets"}, "data": None}
 
     if station_coords is None:
@@ -66,7 +66,7 @@ def analyze(
             "data": None,
         }
 
-    df = df_packets.copy()
+    df = df_observations.copy()
     for col in ("lat", "lon", "raw", "igate"):
         if col not in df.columns:
             return {"implemented": False, "summary": {}, "data": None}

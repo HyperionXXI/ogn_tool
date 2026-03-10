@@ -10,21 +10,12 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
+from ogn_tool.analysis.rf_metrics import compute_bearing
 
-def _bearing_deg(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
-    lat1_r = np.radians(lat1)
-    lon1_r = np.radians(lon1)
-    lat2_r = np.radians(lat2)
-    lon2_r = np.radians(lon2)
-    dlon = lon2_r - lon1_r
-    y = np.sin(dlon) * np.cos(lat2_r)
-    x = np.cos(lat1_r) * np.sin(lat2_r) - np.sin(lat1_r) * np.cos(lat2_r) * np.cos(dlon)
-    brng = np.degrees(np.arctan2(y, x))
-    return (brng + 360.0) % 360.0
 
 
 def analyze(
-    df_packets: pd.DataFrame,
+    df_observations: pd.DataFrame,
     station_lat: float | None = None,
     station_lon: float | None = None,
     bin_deg: int = 10,
@@ -32,18 +23,18 @@ def analyze(
     altitude_offset_m: float = 400.0,
     **_: Any,
 ) -> Dict[str, Any]:
-    if df_packets is None or not isinstance(df_packets, pd.DataFrame) or df_packets.empty:
+    if df_observations is None or not isinstance(df_observations, pd.DataFrame) or df_observations.empty:
         return {"implemented": False, "summary": {"reason": "no_packets"}, "data": None}
     if station_lat is None or station_lon is None:
         return {"implemented": False, "summary": {"reason": "no_station_coords"}, "data": None}
     required = {"lat", "lon", "altitude_m"}
-    if not required.issubset(set(df_packets.columns)):
+    if not required.issubset(set(df_observations.columns)):
         return {"implemented": False, "summary": {"reason": "missing_columns"}, "data": None}
 
-    lat = pd.to_numeric(df_packets["lat"], errors="coerce").to_numpy()
-    lon = pd.to_numeric(df_packets["lon"], errors="coerce").to_numpy()
-    alt = pd.to_numeric(df_packets["altitude_m"], errors="coerce").to_numpy()
-    dist = pd.to_numeric(df_packets.get("distance_km"), errors="coerce").to_numpy()
+    lat = pd.to_numeric(df_observations["lat"], errors="coerce").to_numpy()
+    lon = pd.to_numeric(df_observations["lon"], errors="coerce").to_numpy()
+    alt = pd.to_numeric(df_observations["altitude_m"], errors="coerce").to_numpy()
+    dist = pd.to_numeric(df_observations.get("distance_km"), errors="coerce").to_numpy()
 
     mask = np.isfinite(lat) & np.isfinite(lon) & np.isfinite(alt)
     if not mask.any():
@@ -54,7 +45,7 @@ def analyze(
     alt = alt[mask]
     dist = dist[mask] if dist.size == mask.size else np.full_like(alt, np.nan, dtype=float)
 
-    az = _bearing_deg(float(station_lat), float(station_lon), lat, lon)
+    az = compute_bearing(float(station_lat), float(station_lon), lat, lon)
     az_bin = (az // bin_deg) * bin_deg
     az_center = az_bin + (bin_deg / 2.0)
 

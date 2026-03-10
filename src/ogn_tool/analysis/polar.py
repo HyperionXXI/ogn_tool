@@ -12,17 +12,8 @@ import os
 import numpy as np
 import pandas as pd
 
+from ogn_tool.analysis.rf_metrics import compute_bearing
 
-def _bearing_deg(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:
-    lat1_r = np.radians(lat1)
-    lon1_r = np.radians(lon1)
-    lat2_r = np.radians(lat2)
-    lon2_r = np.radians(lon2)
-    dlon = lon2_r - lon1_r
-    y = np.sin(dlon) * np.cos(lat2_r)
-    x = np.cos(lat1_r) * np.sin(lat2_r) - np.sin(lat1_r) * np.cos(lat2_r) * np.cos(dlon)
-    brng = np.degrees(np.arctan2(y, x))
-    return (brng + 360.0) % 360.0
 
 
 def _weighted_percentile(values: np.ndarray, weights: np.ndarray, q: float) -> float:
@@ -84,7 +75,7 @@ def analyze(
     dist = dist[mask]
     rssi = rssi[mask]
 
-    az = _bearing_deg(station_lat, station_lon, lat, lon)
+    az = compute_bearing(station_lat, station_lon, lat, lon)
     bin_size = 15.0
     bins = (az // bin_size).astype(int)
     centers = bins * bin_size + (bin_size / 2.0)

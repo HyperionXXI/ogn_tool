@@ -29,16 +29,16 @@ def _haversine_km(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) 
 
 
 def analyze(
-    df_packets: pd.DataFrame,
+    df_observations: pd.DataFrame,
     station_lat: float | None = None,
     station_lon: float | None = None,
     station_alt_m: float | None = None,
     **_: Any,
 ) -> Dict[str, Any]:
-    if df_packets is None or df_packets.empty or station_lat is None or station_lon is None:
+    if df_observations is None or df_observations.empty or station_lat is None or station_lon is None:
         return {"implemented": False, "summary": {}, "data": None}
 
-    df = df_packets.copy()
+    df = df_observations.copy()
     if "raw" not in df.columns or "lat" not in df.columns or "lon" not in df.columns:
         return {"implemented": False, "summary": {}, "data": None}
 

@@ -30,28 +30,37 @@ def _haversine_km(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) 
 
 
 def analyze(
-    df_packets: pd.DataFrame,
+    df_observations: pd.DataFrame,
     station_lat: float | None = None,
     station_lon: float | None = None,
     **_: Any,
 ) -> Dict[str, Any]:
-    if df_packets is None or df_packets.empty or station_lat is None or station_lon is None:
+    if df_observations is None or df_observations.empty or station_lat is None or station_lon is None:
         return {
             "implemented": False,
             "summary": {"input_rows": 0, "rssi_rows": 0, "distance_rows": 0},
             "data": None,
         }
 
-    df = df_packets.copy()
+    df = df_observations.copy()
     input_rows = int(len(df))
-    if "raw" not in df.columns or "lat" not in df.columns or "lon" not in df.columns:
+    if "lat" not in df.columns or "lon" not in df.columns:
         return {
             "implemented": False,
             "summary": {"input_rows": input_rows, "rssi_rows": 0, "distance_rows": 0},
             "data": None,
         }
 
-    df["rssi_db"] = df["raw"].astype(str).str.extract(RSSI_RE, expand=False).astype(float)
+    if "snr" in df.columns:
+        df["rssi_db"] = pd.to_numeric(df["snr"], errors="coerce")
+    elif "snr_db" in df.columns:
+        df["rssi_db"] = pd.to_numeric(df["snr_db"], errors="coerce")
+    else:
+        return {
+            "implemented": False,
+            "summary": {"input_rows": input_rows, "rssi_rows": 0, "distance_rows": 0},
+            "data": None,
+        }
     df = df.dropna(subset=["rssi_db"])
     rssi_rows = int(len(df))
     if df.empty:
