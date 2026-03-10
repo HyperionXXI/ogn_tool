@@ -23,7 +23,6 @@ import json
 import math
 import os
 import re
-import sqlite3
 import time
 import pstats
 from dataclasses import dataclass, replace
@@ -47,11 +46,10 @@ from ui.sections import (
     render_signal_tab,
     render_network_tab,
     render_diagnostics_tab,
+    render_station_intelligence_tab,
 )
 
-from ogn_tool.config import get_config
-from ogn_tool.db import connect
-from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.services import rf_analysis_service as rf_service
 
 
 # Optional profiling (enable with OGN_PROFILE=1)
@@ -86,7 +84,7 @@ section[data-testid="stSidebar"] { width: 320px !important; }
 )
 
 
-_config = get_config()
+_config = rf_service.get_config()
 DB_DEFAULT = str(_config.db_path)
 CALLSIGN_DEFAULT = _config.station_callsign
 # Reference location provided (Google Maps)
@@ -210,23 +208,8 @@ def _parse_compare_stations(env_value: str) -> Dict[str, Tuple[float, float]]:
 # DB layer
 # ---------------------------
 
-@st.cache_resource
-def get_db_connection(db_path: str) -> sqlite3.Connection:
-    return sqlite3.connect(db_path, check_same_thread=False)
-
-
 def _db_meta_raw(db_path: str, query_log: Optional[List[Dict]] = None) -> Tuple[int, Optional[str]]:
-    """Return (rows_total, max_ts_utc) from packets table, robust."""
-    if not os.path.exists(db_path):
-        return 0, None
-    con = get_db_connection(db_path)
-    sql = "SELECT COUNT(*) AS cnt, MAX(ts_utc) AS max_ts FROM packets"
-    t0 = time.perf_counter()
-    row = con.execute(sql).fetchone()
-    dt_ms = (time.perf_counter() - t0) * 1000.0
-    if query_log is not None:
-        query_log.append({"query": "db_meta", "ms": round(dt_ms, 2), "rows": 1})
-    return int(row[0]), row[1]
+    return rf_service.db_meta(db_path, query_log=query_log)
 
 
 @st.cache_data(ttl=30, show_spinner=False)
@@ -236,34 +219,10 @@ def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
 
 @st.cache_data(ttl=30, show_spinner=False)
 def db_max_ts_epoch(db_path: str) -> Optional[int]:
-    if not os.path.exists(db_path):
-        return None
-    con = get_db_connection(db_path)
-    cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
-    if "ts_epoch" in cols:
-        row = con.execute("SELECT MAX(ts_epoch) FROM packets").fetchone()
-        return int(row[0]) if row and row[0] is not None else None
-    if "ts_utc" in cols:
-        row = con.execute("SELECT MAX(ts_utc) FROM packets").fetchone()
-        if row and row[0]:
-            try:
-                return int(pd.to_datetime(row[0], utc=True).timestamp())
-            except Exception:
-                return None
-    return None
+    return rf_service.db_max_ts_epoch(db_path)
 
 def optimize_db(db_path: str, vacuum: bool = False) -> None:
-    con = sqlite3.connect(db_path, timeout=30)
-    try:
-        con.execute("PRAGMA journal_mode=WAL;")
-        con.execute("PRAGMA synchronous=NORMAL;")
-        con.execute("ANALYZE;")
-        con.execute("PRAGMA optimize;")
-        if vacuum:
-            con.execute("VACUUM;")
-        con.commit()
-    finally:
-        con.close()
+    rf_service.optimize_db(db_path, vacuum=vacuum)
 
 def _set_query_ts(ts: str) -> None:
     # Streamlit API compatibility
@@ -282,95 +241,10 @@ def _autorefresh(interval_ms: int, key: str) -> None:
         _set_query_ts(str(int(dt.datetime.now().timestamp())))
 
 def create_indexes(db_path: str) -> None:
-    con = sqlite3.connect(db_path, timeout=30)
-    try:
-        con.execute("PRAGMA journal_mode=WAL;")
-        con.execute("PRAGMA synchronous=NORMAL;")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch ON packets(ts_epoch DESC);")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch_dst ON packets(ts_epoch DESC, dst);")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch_dst_igate_qas ON packets(ts_epoch DESC, dst, igate, qas);")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_qas_epoch ON packets(qas, ts_epoch DESC);")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_packets_igate_epoch ON packets(igate, ts_epoch DESC);")
-        tables = {row[0] for row in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-        if "coverage_grid" in tables:
-            con.execute("CREATE INDEX IF NOT EXISTS idx_covgrid_ts ON coverage_grid(last_ts_epoch DESC);")
-            con.execute("CREATE INDEX IF NOT EXISTS idx_covgrid_xy ON coverage_grid(cell_x, cell_y);")
-        con.commit()
-    finally:
-        con.close()
+    rf_service.create_indexes(db_path)
 
-def rf_sanity_check(conn: sqlite3.Connection) -> List[str]:
-    """
-    Basic runtime validation for RF analysis environment.
-    Does not modify any analysis logic.
-    """
-    issues: List[str] = []
-    cursor = conn.cursor()
-
-    # check packets table
-    try:
-        cursor.execute("SELECT COUNT(*) FROM packets")
-        packet_count = cursor.fetchone()[0]
-        if packet_count == 0:
-            issues.append("Database contains zero packets.")
-    except sqlite3.Error:
-        issues.append("Table 'packets' not found.")
-
-    # check coverage_grid
-    try:
-        cursor.execute("SELECT COUNT(*) FROM coverage_grid")
-        grid_count = cursor.fetchone()[0]
-        if grid_count == 0:
-            issues.append("coverage_grid exists but is empty.")
-    except sqlite3.Error:
-        issues.append("Table 'coverage_grid' not found (run build_coverage_grid.py).")
-    return issues
-
-def _build_where(
-    since_iso: str,
-    since_epoch: int,
-    use_epoch: bool,
-    dst_types: List[str],
-    station_callsign: str,
-    only_heard_by: bool,
-    igate_filter: str,
-    source_mode: str,
-    qas_filter: str,
-) -> Tuple[str, List]:
-    if use_epoch:
-        where = ["ts_epoch >= ?"]
-        params: List = [int(since_epoch)]
-    else:
-        ts_norm = "(CASE WHEN substr(ts_utc,-1)='Z' THEN substr(ts_utc,1,length(ts_utc)-1)||'+00:00' ELSE ts_utc END)"
-        where = [f"{ts_norm} >= ?"]
-        params = [since_iso]
-
-    if dst_types:
-        where.append("dst IN ({})".format(",".join(["?"] * len(dst_types))))
-        params.extend(dst_types)
-
-    if igate_filter.strip():
-        where.append("igate = ?")
-        params.append(igate_filter.strip())
-
-    if source_mode == "Heard-by station":
-        if only_heard_by:
-            where.append("(igate = ? OR raw LIKE ?)")
-            params.append(station_callsign)
-            params.append(f"%,{station_callsign}:%")
-    else:
-        # Radio station view: filter by qas token and igate signature
-        qas_filter = qas_filter.strip()
-        if qas_filter:
-            if "*" in qas_filter:
-                where.append("qas LIKE ?")
-                params.append(qas_filter.replace("*", "%"))
-            else:
-                where.append("qas = ?")
-                params.append(qas_filter)
-
-    return " AND ".join(where), params
-
+def rf_sanity_check(db_path: str) -> List[str]:
+    return rf_service.rf_sanity_check(db_path)
 
 @st.cache_data(ttl=5, show_spinner=False)
 @st.cache_data(show_spinner=False)
@@ -390,38 +264,19 @@ def _load_packets_window_raw(
     if not os.path.exists(db_path):
         return pd.DataFrame()
 
-    con = get_db_connection(db_path)
-    cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
-    use_epoch = "ts_epoch" in cols
-
-    where_sql, params = _build_where(
+    df = rf_service.load_packets_window(
+        db_path=db_path,
         since_iso=since_iso,
         since_epoch=since_epoch,
-        use_epoch=use_epoch,
         dst_types=dst_types,
         station_callsign=station_callsign,
         only_heard_by=only_heard_by,
         igate_filter=igate_filter,
         source_mode=source_mode,
         qas_filter=qas_filter,
+        limit_rows=limit_rows,
+        query_log=query_log,
     )
-
-    select_cols = "ts_epoch, ts_utc, src, dst, igate, qas, lat, lon, raw"
-    order_col = "ts_epoch" if use_epoch else "ts_utc"
-    sql = f"""
-    SELECT
-        {select_cols}
-    FROM packets
-    WHERE {where_sql}
-    ORDER BY {order_col} DESC
-    LIMIT ?
-    """
-    params2 = params + [int(limit_rows)]
-    t0 = time.perf_counter()
-    df = pd.read_sql_query(sql, con, params=params2)
-    dt_ms = (time.perf_counter() - t0) * 1000.0
-    if query_log is not None:
-        query_log.append({"query": "load_packets_window", "ms": round(dt_ms, 2), "rows": int(len(df))})
 
     # Optional diagnostics for timestamp filtering (enable with OGN_DEBUG=1)
     if os.getenv("OGN_DEBUG", "0") in ("1", "true", "True"):
@@ -455,12 +310,6 @@ def _load_packets_window_raw(
         except Exception as e:
             print("[debug] timestamp diagnostics failed:", repr(e))
 
-    # Do not filter by qas here; classification happens downstream for UI sections.
-
-    max_packets = 2_000_000
-    if len(df) > max_packets:
-        df = df.sample(n=max_packets, random_state=42)
-
     return df
 
 
@@ -469,41 +318,19 @@ def _load_rf_receptions_window_raw(
     db_path: str,
     since_epoch: int,
     limit_rows: int,
+    station_id: str,
     query_log: Optional[List[Dict]] = None,
 ) -> pd.DataFrame:
     if not os.path.exists(db_path):
         return pd.DataFrame()
 
-    con = get_db_connection(db_path)
-    sql = """
-    SELECT
-        r.packet_id,
-        r.receiver,
-        r.snr,
-        r.freq_offset,
-        r.bit_errors,
-        r.altitude,
-        r.ts_epoch,
-        p.src,
-        p.dst,
-        p.igate,
-        p.qas,
-        p.lat,
-        p.lon,
-        p.raw
-    FROM rf_receptions r
-    JOIN packets p ON p.id = r.packet_id
-    WHERE r.ts_epoch >= ?
-    ORDER BY r.ts_epoch DESC
-    LIMIT ?
-    """
-    params = [int(since_epoch), int(limit_rows)]
-    t0 = time.perf_counter()
-    df = pd.read_sql_query(sql, con, params=params)
-    dt_ms = (time.perf_counter() - t0) * 1000.0
-    if query_log is not None:
-        query_log.append({"query": "load_rf_receptions_window", "ms": round(dt_ms, 2), "rows": int(len(df))})
-    return df
+    return rf_service.load_rf_receptions(
+        db_path=db_path,
+        since_epoch=since_epoch,
+        limit_rows=limit_rows,
+        station_id=station_id,
+        query_log=query_log,
+    )
 
 
 # ---------------------------
@@ -633,6 +460,7 @@ db_path = filters_apply["db_path"]
 station_callsign = filters_apply["station_callsign"]
 station_lat = filters_apply["station_lat"]
 station_lon = filters_apply["station_lon"]
+rf_receptions_available = rf_service.table_exists(db_path, "rf_receptions")
 hours = max(1, int(filters_apply["hours"]))
 
 latest_ts_epoch = db_max_ts_epoch(db_path)
@@ -703,15 +531,9 @@ if not db_reachable:
 
 if db_reachable:
     try:
-        _rf_conn = sqlite3.connect(db_path)
-        rf_issues = rf_sanity_check(_rf_conn)
-    except sqlite3.Error:
+        rf_issues = rf_sanity_check(db_path)
+    except Exception:
         rf_issues = ["Database connection failed."]
-    finally:
-        try:
-            _rf_conn.close()
-        except Exception:
-            pass
 else:
     rf_issues = ["Database not found."]
 rows_in_window = 0
@@ -748,10 +570,15 @@ packets_window = _load_packets_window_raw(
     qas_filter="",
     limit_rows=limit_rows,
     )
+test_igate = str(filters_apply.get("test_igate", "")).strip()
+test_fanet_igate = str(filters_apply.get("test_fanet_igate", "")).strip()
+station_cs_effective = str(test_igate or station_callsign).upper()
+
 receptions_window = _load_rf_receptions_window_raw(
     db_path=db_path,
     since_epoch=filters_apply["since_epoch"],
     limit_rows=limit_rows,
+    station_id=station_cs_effective,
 )
 
 if "qas" in packets_window.columns:
@@ -773,24 +600,23 @@ if "dst" in packets_window.columns:
 else:
     fanet_packets_global = packets_window.iloc[0:0].copy()
 
-test_igate = str(filters_apply.get("test_igate", "")).strip()
-test_fanet_igate = str(filters_apply.get("test_fanet_igate", "")).strip()
-station_cs_effective = str(test_igate or station_callsign).upper()
 rf_receiver_only_raw = pd.DataFrame()
 
 data_source_mode = filters_apply.get("data_source", "APRS-IS gated")
 dataset_mode = "STRICT_RF"
-if data_source_mode == "Receiver-only RF":
+if not rf_receptions_available:
+    data_source_mode = "APRS-IS gated coverage"
+    dataset_mode = "STATION_RF"
+elif data_source_mode == "Receiver-only RF":
     dataset_mode = "STATION_RF"
 elif data_source_mode == "FANET local":
     dataset_mode = "STATION_RF"
 elif data_source_mode == "OGN live tracking":
     dataset_mode = "NETWORK"
-engine = RFAnalysisEngine(receptions_window, station_lat, station_lon)
-dataset = engine.build_analysis_dataset(dataset_mode=dataset_mode, station_id=station_cs_effective)
-station_analysis = engine.run_station_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
-network_analysis = engine.run_network_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
-rf_diagnostics = engine.run_rf_diagnostics(dataset_mode=dataset_mode, station_id=station_cs_effective)
+dataset = rf_service.build_rf_dataset(receptions_window, station_lat, station_lon, dataset_mode=dataset_mode, station_id=station_cs_effective)
+station_analysis = rf_service.run_station_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
+network_analysis = rf_service.run_network_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
+rf_diagnostics = rf_service.run_rf_diagnostics(dataset_mode=dataset_mode, station_id=station_cs_effective)
 # Sync grid status with dataset coverage grid
 grid_df_status = dataset.get("coverage_grid")
 if grid_df_status is None:
@@ -808,6 +634,11 @@ st.write("coverage_grid:", len(dataset.get("coverage_grid", [])))
 rf_packets = dataset.get("rf_receptions")
 if rf_packets is None:
     rf_packets = pd.DataFrame()
+if rf_packets.empty:
+    st.warning(
+        "No RF packets detected for this station in the selected time window."
+    )
+    st.stop()
 polar_coverage = []
 rf_grid = first_valid_df(dataset.get("coverage_grid"))
 rf_packets_global = first_valid_df(dataset.get("packets_rf"))
@@ -893,6 +724,8 @@ with st.container():
             "RF coverage analysis requires gated packets (qAR/qAO)."
         )
     st.caption(f"Analysis source: {data_source_mode}")
+    if not rf_receptions_available:
+        st.caption("Dataset: packets where igate = station")
 
 with kpi_container:
     k1, k2, k3, k4, k5 = st.columns(DASHBOARD_COLUMNS)
