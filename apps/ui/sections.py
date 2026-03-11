@@ -12,6 +12,7 @@ from .pages.aircraft import render_aircraft_page
 from .pages.coverage import render_coverage_page
 from .pages.debug import render_debug_page
 from .pages.station_intelligence import render_station_intelligence_page
+from .pages.network_intelligence import render_network_intelligence
 
 
 def render_overview_tab(ctx):
@@ -60,3 +61,7 @@ def render_debug_tab(ctx):
 
 def render_station_intelligence_tab(ctx):
     return render_station_intelligence_page(ctx)
+
+
+def render_network_intelligence_tab(ctx):
+    return render_network_intelligence()

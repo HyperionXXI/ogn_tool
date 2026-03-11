@@ -47,10 +47,11 @@ from ui.sections import (
     render_network_tab,
     render_diagnostics_tab,
     render_station_intelligence_tab,
+    render_network_intelligence_tab,
 )
 
 from ogn_tool.config import get_config
-from ogn_tool.data.db_repository import db_meta as repo_db_meta, db_max_ts_epoch, optimize_db, create_indexes, rf_sanity_check, table_exists_db
+from ogn_tool.data.db_repository import db_meta as repo_db_meta, db_max_ts_epoch as repo_db_max_ts_epoch, optimize_db as repo_optimize_db, create_indexes as repo_create_indexes, rf_sanity_check as repo_rf_sanity_check, table_exists_db
 from ogn_tool.data.packets_repository import load_packets_window
 from ogn_tool.data.receptions_repository import load_rf_receptions
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
@@ -223,10 +224,10 @@ def db_meta(db_path: str) -> Tuple[int, Optional[str]]:
 
 @st.cache_data(ttl=30, show_spinner=False)
 def db_max_ts_epoch(db_path: str) -> Optional[int]:
-    return db_max_ts_epoch(db_path)
+    return repo_db_max_ts_epoch(db_path)
 
 def optimize_db(db_path: str, vacuum: bool = False) -> None:
-    optimize_db(db_path, vacuum=vacuum)
+    repo_optimize_db(db_path, vacuum=vacuum)
 
 def _set_query_ts(ts: str) -> None:
     # Streamlit API compatibility
@@ -245,10 +246,10 @@ def _autorefresh(interval_ms: int, key: str) -> None:
         _set_query_ts(str(int(dt.datetime.now().timestamp())))
 
 def create_indexes(db_path: str) -> None:
-    create_indexes(db_path)
+    repo_create_indexes(db_path)
 
 def rf_sanity_check(db_path: str) -> List[str]:
-    return rf_sanity_check(db_path)
+    return repo_rf_sanity_check(db_path)
 
 @st.cache_data(ttl=5, show_spinner=False)
 @st.cache_data(show_spinner=False)
@@ -644,7 +645,7 @@ if rf_packets.empty:
     st.warning(
         "No RF packets detected for this station in the selected time window."
     )
-    st.stop()
+    # st.stop()
 polar_coverage = []
 rf_grid = first_valid_df(dataset.get("coverage_grid"))
 rf_packets_global = first_valid_df(dataset.get("packets_rf"))
@@ -786,9 +787,9 @@ with navigation_container:
             "Propagation",
             "Network",
             "Diagnostics",
+            "Network Intelligence",
         ]
     )
-
 with st.expander("Advanced settings", expanded=False):
     with st.form("advanced_settings_form"):
         st.subheader("Map settings")
@@ -1026,20 +1027,39 @@ ui_ctx = {
     "fmt_float": fmt_float,
 }
 
-
 with content_container:
+
+    st.write("DEBUG PAGE VALUE:", page)
+
     if page == "Station Intelligence":
+        st.write("Rendering Station Intelligence")
         render_station_intelligence_tab(ui_ctx)
+
     elif page == "Overview":
+        st.write("Rendering Overview")
         render_overview_tab(ui_ctx)
+
     elif page == "Coverage Explorer":
+        st.write("Rendering Coverage Explorer")
         render_coverage_explorer_tab(ui_ctx)
+
     elif page == "Propagation":
+        st.write("Rendering Propagation")
         render_signal_tab(ui_ctx)
+
     elif page == "Network":
+        st.write("Rendering Network")
         render_network_tab(ui_ctx)
+
     elif page == "Diagnostics":
+        st.write("Rendering Diagnostics")
         render_diagnostics_tab(ui_ctx)
+
+
+
+
+
+
 if _PROFILER:
     _PROFILER.disable()
     st.caption("Profiling enabled (results printed to console).")
