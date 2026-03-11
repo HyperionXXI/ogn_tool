@@ -1,7 +1,7 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # Probability Field Model
 
@@ -39,3 +39,4 @@ src/ogn_tool/analysis/rf_probability_field.py
 Description:
 Future probabilistic coverage estimation using distance, altitude, SNR and
 direction.
+

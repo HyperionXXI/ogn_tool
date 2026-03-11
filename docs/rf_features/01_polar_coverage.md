@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Carte polaire de réception (direction vs distance)
 Objectif
@@ -30,3 +30,4 @@ Ajouter une section dans le dashboard:
 Contraintes
 - utiliser numpy vectorisé
 - limiter les points (échantillonnage possible)
+

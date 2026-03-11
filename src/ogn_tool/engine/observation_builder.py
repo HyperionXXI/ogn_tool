@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ogn_tool.domain.rf_event import RFEvent
 from ogn_tool.domain.rf_observation import RFObservation
+from ogn_tool.engine.station_registry import StationRegistry
 
 
 class ObservationBuilder:
@@ -11,6 +12,9 @@ class ObservationBuilder:
     This class will progressively integrate spatial calculations,
     station registry lookups, and propagation metrics.
     """
+
+    def __init__(self, station_registry: StationRegistry | None = None):
+        self.station_registry = station_registry
 
     def build(self, event: RFEvent) -> RFObservation:
         """

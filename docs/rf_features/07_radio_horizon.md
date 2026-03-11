@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Couverture radio avec relief (analyse terrain)
 Objectif
@@ -129,3 +129,4 @@ les vallées bloquées
 les crêtes qui améliorent la portée
 
 l’effet d’une antenne placée trop bas.
+

@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 # Station FK50887 (Courfaivre)
 
@@ -39,3 +39,4 @@ Altitude: 454 m
 ## Notes
 
 - Station receives REGA helicopters via FLARM.
+

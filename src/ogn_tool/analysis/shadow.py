@@ -7,7 +7,7 @@ The actual implementation lives under `ogn_tool.analysis.experimental`.
 from .experimental.shadow import compute_shadow_proxy
 
 
-def detect_rf_shadows(df, azimuth_histogram=None):
+def detect_rf_shadows(df, azimuth_histogram=None, directional_balance=None, station_lat=None, station_lon=None):
     """
     Compatibility wrapper used by RFAnalysisEngine.
 

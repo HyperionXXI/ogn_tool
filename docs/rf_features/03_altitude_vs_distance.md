@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Analyse altitude vs distance (propagation radio)
 Objectif
@@ -36,3 +36,4 @@ Ajouter section:
 
 Optimisation
 - limiter les données aux 30 derniers jours
+

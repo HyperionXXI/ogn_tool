@@ -64,4 +64,4 @@ def render_station_intelligence_tab(ctx):
 
 
 def render_network_intelligence_tab(ctx):
-    return render_network_intelligence()
+    return render_network_intelligence(ctx)

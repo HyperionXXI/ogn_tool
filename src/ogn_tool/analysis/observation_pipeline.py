@@ -1,36 +1,42 @@
-"""
-Observation pipeline for RF analysis.
+from __future__ import annotations
 
-Converts raw packet dataframe into observation objects used by RFAnalysisEngine.
-"""
+from typing import Iterable, Dict, List
 
-import pandas as pd
+from ogn_tool.analysis.aprs_adapter import packet_row_to_rfevent
+from ogn_tool.engine.observation_builder import ObservationBuilder
+from ogn_tool.domain.rf_observation import RFObservation
 
 
-def build_observations_from_packets(df):
+builder = ObservationBuilder()
+
+
+def build_observations(
+    events: Iterable,
+    builder: ObservationBuilder,
+) -> List[RFObservation]:
     """
-    Convert raw packet dataframe into RF observation dataframe.
-
-    Expected minimal fields:
-        lat
-        lon
-        ts_epoch
-        src
+    Convert RFEvent objects into RFObservation objects.
     """
+    observations: List[RFObservation] = []
+    for event in events:
+        obs = builder.build(event)
+        observations.append(obs)
+    return observations
 
-    if df is None or len(df) == 0:
-        return pd.DataFrame()
 
-    required = {"lat", "lon"}
-    if not required.issubset(df.columns):
-        return pd.DataFrame()
+def build_observations_from_packets(
+    packet_rows: Iterable[Dict],
+    builder: ObservationBuilder | None = None,
+) -> List[RFObservation]:
+    """
+    Convert APRS packet rows directly into RFObservations.
+    """
+    if builder is None:
+        builder = ObservationBuilder()
 
-    obs = df.copy()
+    events = []
+    for row in packet_rows:
+        event = packet_row_to_rfevent(row)
+        events.append(event)
 
-    # ensure numeric coordinates
-    obs["lat"] = pd.to_numeric(obs["lat"], errors="coerce")
-    obs["lon"] = pd.to_numeric(obs["lon"], errors="coerce")
-
-    obs = obs.dropna(subset=["lat", "lon"])
-
-    return obs
+    return build_observations(events, builder)

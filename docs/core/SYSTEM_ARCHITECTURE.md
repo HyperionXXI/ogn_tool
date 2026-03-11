@@ -1,7 +1,7 @@
 STATUS: canonical
 SOURCE_OF_TRUTH: docs/SYSTEM_ARCHITECTURE.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # System Architecture
 
@@ -76,3 +76,4 @@ Streamlit-based interface responsible only for:
 - visualization
 - interaction
 - exploration
+

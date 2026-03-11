@@ -7,8 +7,6 @@ from typing import Optional
 import pandas as pd
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
-from ogn_tool.engine import rf_coverage_engine
-
 from ogn_tool.services import data_service
 from ogn_tool.services.data_service import get_config
 

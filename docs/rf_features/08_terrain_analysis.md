@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Comparaison station vs iGates voisines
 
@@ -79,3 +79,4 @@ Exemple :
 Station FK50887
 rank: 3 / 12
 performance score: 1.18
+

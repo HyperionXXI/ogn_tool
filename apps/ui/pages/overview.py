@@ -8,6 +8,8 @@ from ui.metrics import metric_card
 
 
 def render_overview_page(ctx):
+    import streamlit as st
+    st.write("DEBUG: page renderer executed")
     dataset = ctx.get("dataset", {})
     st.markdown("<h2>Overview</h2>", unsafe_allow_html=True)
     rf_packets = ctx.get("rf_packets")

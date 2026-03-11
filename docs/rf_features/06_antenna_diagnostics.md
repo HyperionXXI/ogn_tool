@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Objectif
 Détecter automatiquement si la station présente un problème
@@ -79,3 +79,4 @@ Afficher :
    ✓ couverture équilibrée
    ⚠ asymétrie de réception
    ⚠ RSSI faible
+

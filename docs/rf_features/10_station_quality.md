@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Reconstruction du radio horizon 3D
 
@@ -57,3 +57,4 @@ Implémentation
 
    efficiency =
       observed_p95_distance / horizon_p95
+

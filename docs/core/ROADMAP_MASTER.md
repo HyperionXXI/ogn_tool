@@ -1,5 +1,5 @@
 STATUS: canonical
-SOURCE_OF_TRUTH: docs/ROADMAP_MASTER.md
+SOURCE_OF_TRUTH: docs/core/ROADMAP_MASTER.md
 
 # ROADMAP MASTER — OGN / FANET RF Network Intelligence Platform
 
@@ -184,3 +184,4 @@ critical_stations
 
 ## Execution rules for future Codex tasks
 - If contradictions exist, update this roadmap or flag the conflict.
+

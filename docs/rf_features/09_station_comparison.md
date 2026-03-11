@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Détection automatique d’un mauvais emplacement de station
 
@@ -75,3 +75,4 @@ Implémentation
 
    <0.4
    → station mal placée
+

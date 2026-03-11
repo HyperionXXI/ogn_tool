@@ -11,6 +11,8 @@ from ui.map_engine import (
 
 
 def render_coverage_explorer_page(ctx):
+    import streamlit as st
+    st.write("DEBUG: page renderer executed")
     dataset = ctx.get("dataset", {})
     st.markdown("<h2>Coverage Explorer</h2>", unsafe_allow_html=True)
 

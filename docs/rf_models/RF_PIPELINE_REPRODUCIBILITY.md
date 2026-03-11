@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 # RF Pipeline Reproducibility
 
@@ -29,3 +29,4 @@ Compare with reference:
 ```
 tests/reference_output/
 ```
+

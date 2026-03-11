@@ -1,7 +1,7 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # RF Propagation Model
 
@@ -62,3 +62,4 @@ Planned modules include:
 - rf_probability_field.py
 - antenna_pattern_estimator.py
 - propagation_model.py
+

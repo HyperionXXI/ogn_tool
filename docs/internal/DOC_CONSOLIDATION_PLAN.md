@@ -1,7 +1,7 @@
 STATUS: temporary
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # Documentation Consolidation Plan
 
@@ -51,3 +51,4 @@ content yet.
 
 - No content changes in this plan.
 - Actual merges should be done in a follow-up change set.
+

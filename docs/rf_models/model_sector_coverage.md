@@ -1,7 +1,7 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # Sector Coverage Model
 
@@ -36,3 +36,4 @@ src/ogn_tool/analysis/polar_coverage.py
 
 Description:
 Sector-based RF coverage estimation using azimuth binning.
+

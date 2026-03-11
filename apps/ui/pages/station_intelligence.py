@@ -149,42 +149,62 @@ def render_station_intelligence_page(ctx: dict) -> None:
         col2.metric("Observed Max Range (km)", f"{visibility['observed_max_km']:.1f}")
         col3.metric("Coverage Efficiency", f"{visibility['coverage_efficiency']:.2f}")
 
+    st.subheader("RF Debug")
+
+    st.write("Packets:", len(rf_packets))
+
+    if "station_candidates" in rf_results:
+        st.write("Candidates:", len(rf_results["station_candidates"]))
+    else:
+        st.write("No station_candidates in pipeline output")
+
     st.subheader("RF Map")
 
-    candidates = rf_results.get("station_candidates")
-
-    layers = []
-
-    if isinstance(df, pd.DataFrame) and not df.empty and "lat" in df.columns and "lon" in df.columns:
+    if rf_packets is None or rf_packets.empty:
+        st.warning("No aircraft positions available for RF map")
+    else:
         aircraft_layer = pdk.Layer(
             "ScatterplotLayer",
-            data=df,
-            get_position="[lon, lat]",
+            data=rf_packets,
+            get_position='[lon, lat]',
             get_radius=1000,
-            get_fill_color=[0, 100, 255],
+            get_fill_color=[0, 120, 255],
+            pickable=True,
         )
-        layers.append(aircraft_layer)
 
-    if candidates is not None and len(candidates) > 0:
-        candidate_layer = pdk.Layer(
-            "ScatterplotLayer",
-            data=candidates,
-            get_position="[lon, lat]",
-            get_radius=5000,
-            get_fill_color=[255, 0, 0],
-        )
-        layers.append(candidate_layer)
+        layers = [aircraft_layer]
 
-    if layers:
+        candidates = rf_results.get("station_candidates")
+
+        if candidates is not None and len(candidates) > 0:
+
+            candidate_layer = pdk.Layer(
+                "ScatterplotLayer",
+                data=candidates,
+                get_position='[lon, lat]',
+                get_radius=5000,
+                get_fill_color=[255, 0, 0],
+                pickable=True,
+            )
+
+            layers.append(candidate_layer)
+
+        lat = float(st.session_state.get("station_lat", rf_packets["lat"].mean()))
+        lon = float(st.session_state.get("station_lon", rf_packets["lon"].mean()))
+
         view = pdk.ViewState(
-            latitude=df["lat"].mean(),
-            longitude=df["lon"].mean(),
+            latitude=lat,
+            longitude=lon,
             zoom=8,
+            pitch=0,
         )
+
         deck = pdk.Deck(
             layers=layers,
             initial_view_state=view,
+            map_style="mapbox://styles/mapbox/light-v9"
         )
+
         st.pydeck_chart(deck)
     st.subheader("RF Visibility Model")
 

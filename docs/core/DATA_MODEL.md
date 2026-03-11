@@ -1,7 +1,7 @@
 STATUS: canonical
 SOURCE_OF_TRUTH: docs/DATA_MODEL.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # Data Model
 
@@ -71,3 +71,4 @@ coverage_ratio
 redundancy_ratio  
 blind_zone_ratio  
 network_resilience_score  
+

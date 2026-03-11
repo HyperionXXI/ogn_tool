@@ -1,7 +1,7 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # Network Intelligence Layer
 
@@ -28,3 +28,4 @@ and coverage beyond single-station metrics.
 ## 4. UI philosophy
 
 The UI is an exploratory RF laboratory, not a simple dashboard.
+

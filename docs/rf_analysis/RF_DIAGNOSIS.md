@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 # RF Diagnosis Layer
 
@@ -52,3 +52,4 @@ A future implementation may produce output such as:
 - `"Weak signal strength detected (RSSI=-85 dBm)."`
 - `"Elevated noise floor suggests local interference."`
 - `"Health classification: FAIR"`
+

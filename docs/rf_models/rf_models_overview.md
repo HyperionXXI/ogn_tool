@@ -1,7 +1,7 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # RF Models Overview
 
@@ -50,3 +50,4 @@ The probability field is the next step for coverage inference.
 
 This document provides the conceptual overview. Model-specific implementations
 are documented in the individual model files in this directory.
+

@@ -7,6 +7,13 @@ class RFDiagnosis:
         self.directional_balance = directional_balance
         self.blind_zones = blind_zones
 
+    def evaluate(self):
+        issues = []
+        return issues
+
+    def health_score(self):
+        return None
+
     def to_dict(self):
         return {
             "directional_balance": self.directional_balance,

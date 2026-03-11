@@ -1027,37 +1027,51 @@ ui_ctx = {
     "fmt_float": fmt_float,
 }
 
-with content_container:
+left_panel, center_panel, right_panel = st.columns([1, 3, 1], gap="large")
 
-    st.write("DEBUG PAGE VALUE:", page)
+with left_panel:
+    st.subheader("Navigation")
+    page = st.radio(
+        "View",
+        [
+            "Station Intelligence",
+            "Overview",
+            "Coverage Explorer",
+            "Propagation",
+            "Network",
+            "Diagnostics",
+            "Network Intelligence",
+        ],
+        key="main_nav_page",
+        label_visibility="collapsed",
+    )
 
+with center_panel:
     if page == "Station Intelligence":
-        st.write("Rendering Station Intelligence")
         render_station_intelligence_tab(ui_ctx)
 
     elif page == "Overview":
-        st.write("Rendering Overview")
         render_overview_tab(ui_ctx)
 
     elif page == "Coverage Explorer":
-        st.write("Rendering Coverage Explorer")
         render_coverage_explorer_tab(ui_ctx)
 
     elif page == "Propagation":
-        st.write("Rendering Propagation")
         render_signal_tab(ui_ctx)
 
     elif page == "Network":
-        st.write("Rendering Network")
         render_network_tab(ui_ctx)
 
     elif page == "Diagnostics":
-        st.write("Rendering Diagnostics")
         render_diagnostics_tab(ui_ctx)
 
+    elif page == "Network Intelligence":
+        render_network_intelligence_tab(ui_ctx)
 
-
-
+with right_panel:
+    st.subheader("Inspector")
+    st.info("Object inspector placeholder")
+    st.caption(f"View: {page}")
 
 
 if _PROFILER:
@@ -1078,6 +1092,11 @@ with st.container():
         f"Grid cells: {fmt_int(len(grid_df)) if not grid_df.empty else '—'} • "
         f"Last update: {(last_ts[:19] + 'Z') if last_ts else '—'}"
     )
+
+
+
+
+
 
 
 

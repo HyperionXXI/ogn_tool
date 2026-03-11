@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Détection automatique de problème d’antenne / station
 Estimation automatique de la portée radio maximale
@@ -75,3 +75,4 @@ Optimisation
 
 - limiter aux 30 derniers jours
 - utiliser pandas vectorisé
+

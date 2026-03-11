@@ -1,7 +1,7 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
-This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # RF Features Index
 
@@ -18,4 +18,5 @@ This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist,
 - 08 Terrain analysis: docs/rf_features/08_terrain_analysis.md
 - 09 Station comparison: docs/rf_features/09_station_comparison.md
 - 10 Station quality: docs/rf_features/10_station_quality.md
+
 

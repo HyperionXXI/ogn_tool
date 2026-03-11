@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Courbe signal RSSI vs distance
 Objectif
@@ -34,3 +34,4 @@ Ajouter un panneau:
 
 Optimisation
 - downsampling scatter (max 10k points)
+

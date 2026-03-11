@@ -1,5 +1,5 @@
 STATUS: derived
-REFERENCE: docs/ROADMAP_MASTER.md
+REFERENCE: docs/core/ROADMAP_MASTER.md
 
 Détection automatique des zones d’ombre radio
 Objectif
@@ -93,3 +93,4 @@ Optimisation
 - limiter analyse aux 30 derniers jours
 - pré-calculer la grille
 - utiliser pandas groupby vectorisé
+
