@@ -4,6 +4,8 @@ import pandas as pd
 import streamlit as st
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.analysis.rf_visibility_model import compute_expected_vs_observed_range
+from ogn_tool.analysis.station_placement_optimizer import find_candidate_station_locations
 
 
 try:
@@ -77,15 +79,28 @@ def render_propagation_models(rf_models: dict) -> None:
 
 
 def render_diagnostics(diagnostics: dict) -> None:
-(diagnostics: dict) -> None:
+
+    st.subheader("RF Visibility Model")
+    visibility = compute_expected_vs_observed_range(rf_packets)
+    st.metric("Radio horizon (km)", visibility.get("radio_horizon_km"))
+    st.metric("Observed max (km)", visibility.get("observed_max_km"))
+    st.metric("Coverage efficiency", visibility.get("coverage_efficiency"))
+
+    st.subheader("Station Placement Optimizer")
+    candidates = find_candidate_station_locations(rf_packets)
+    st.dataframe(candidates)
+
     st.subheader("RF Diagnostics")
 
-    if not diagnostics:
+    if diagnostics is None:
         st.info("No diagnostics available")
         return
 
-    for name, value in vars(diagnostics).items():
-        st.write(f"**{name}** : {value}")
+    if isinstance(diagnostics, dict):
+        for name, value in diagnostics.items():
+            st.write(f"{name}: {value}")
+    else:
+        st.write(diagnostics)
 
 
 def render_station_intelligence_page(ctx: dict) -> None:
