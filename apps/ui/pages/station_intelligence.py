@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
+import pydeck as pdk
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
 from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
@@ -92,6 +93,12 @@ def render_diagnostics(diagnostics: dict) -> None:
         st.write(diagnostics)
 
 
+
+@st.cache_data
+def cached_rf_analysis(df):
+    from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
+    return run_rf_analysis(df)
+
 def render_station_intelligence_page(ctx: dict) -> None:
     st.title("Station Intelligence")
 
@@ -104,7 +111,7 @@ def render_station_intelligence_page(ctx: dict) -> None:
         st.info("No RF packets available")
         return
 
-    rf_results = run_rf_analysis(rf_packets)
+    rf_results = cached_rf_analysis(rf_packets)
 
     station_lat = ctx.get("station_lat")
     station_lon = ctx.get("station_lon")
@@ -132,6 +139,53 @@ def render_station_intelligence_page(ctx: dict) -> None:
 
     render_coverage_radar(results.azimuth_df)
     render_propagation_models(rf_models)
+    st.subheader("RF Metrics Summary")
+
+    visibility = rf_results.get("visibility")
+
+    if visibility:
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Radio Horizon (km)", f"{visibility['radio_horizon_km']:.1f}")
+        col2.metric("Observed Max Range (km)", f"{visibility['observed_max_km']:.1f}")
+        col3.metric("Coverage Efficiency", f"{visibility['coverage_efficiency']:.2f}")
+
+    st.subheader("RF Map")
+
+    candidates = rf_results.get("station_candidates")
+
+    layers = []
+
+    if isinstance(df, pd.DataFrame) and not df.empty and "lat" in df.columns and "lon" in df.columns:
+        aircraft_layer = pdk.Layer(
+            "ScatterplotLayer",
+            data=df,
+            get_position="[lon, lat]",
+            get_radius=1000,
+            get_fill_color=[0, 100, 255],
+        )
+        layers.append(aircraft_layer)
+
+    if candidates is not None and len(candidates) > 0:
+        candidate_layer = pdk.Layer(
+            "ScatterplotLayer",
+            data=candidates,
+            get_position="[lon, lat]",
+            get_radius=5000,
+            get_fill_color=[255, 0, 0],
+        )
+        layers.append(candidate_layer)
+
+    if layers:
+        view = pdk.ViewState(
+            latitude=df["lat"].mean(),
+            longitude=df["lon"].mean(),
+            zoom=8,
+        )
+        deck = pdk.Deck(
+            layers=layers,
+            initial_view_state=view,
+        )
+        st.pydeck_chart(deck)
     st.subheader("RF Visibility Model")
 
     visibility = rf_results.get("visibility")
