@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 import json
 import os
+import pandas as pd
 
 
 def test_rf_pipeline(tmp_path):

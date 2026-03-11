@@ -4,8 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
-from ogn_tool.analysis.rf_visibility_model import compute_expected_vs_observed_range
-from ogn_tool.analysis.station_placement_optimizer import find_candidate_station_locations
+from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
 
 
 try:
@@ -80,16 +79,6 @@ def render_propagation_models(rf_models: dict) -> None:
 
 def render_diagnostics(diagnostics: dict) -> None:
 
-    st.subheader("RF Visibility Model")
-    visibility = compute_expected_vs_observed_range(rf_packets)
-    st.metric("Radio horizon (km)", visibility.get("radio_horizon_km"))
-    st.metric("Observed max (km)", visibility.get("observed_max_km"))
-    st.metric("Coverage efficiency", visibility.get("coverage_efficiency"))
-
-    st.subheader("Station Placement Optimizer")
-    candidates = find_candidate_station_locations(rf_packets)
-    st.dataframe(candidates)
-
     st.subheader("RF Diagnostics")
 
     if diagnostics is None:
@@ -114,6 +103,8 @@ def render_station_intelligence_page(ctx: dict) -> None:
     if rf_packets is None or not isinstance(rf_packets, pd.DataFrame) or rf_packets.empty:
         st.info("No RF packets available")
         return
+
+    rf_results = run_rf_analysis(rf_packets)
 
     station_lat = ctx.get("station_lat")
     station_lon = ctx.get("station_lon")
@@ -141,4 +132,45 @@ def render_station_intelligence_page(ctx: dict) -> None:
 
     render_coverage_radar(results.azimuth_df)
     render_propagation_models(rf_models)
+    st.subheader("RF Visibility Model")
+
+    visibility = rf_results.get("visibility")
+
+    if visibility:
+
+        col1, col2, col3 = st.columns(3)
+
+        col1.metric(
+            "Radio Horizon (km)",
+            f"{visibility['radio_horizon_km']:.1f}"
+        )
+
+        col2.metric(
+            "Observed Max Range (km)",
+            f"{visibility['observed_max_km']:.1f}"
+        )
+
+        col3.metric(
+            "Coverage Efficiency",
+            f"{visibility['coverage_efficiency']:.2f}"
+        )
+
+    st.subheader("RF Blind Zones")
+
+    blind = rf_results.get("blind_zones")
+
+    if blind is not None and len(blind) > 0:
+        st.dataframe(
+            blind.sort_values("blind_score", ascending=False).head(20)
+        )
+
+    st.subheader("Station Placement Optimizer")
+
+    candidates = rf_results.get("station_candidates")
+
+    if candidates is not None and len(candidates) > 0:
+
+        st.dataframe(
+            candidates.sort_values("traffic_score", ascending=False).head(10)
+        )
     render_diagnostics(diagnostics)
