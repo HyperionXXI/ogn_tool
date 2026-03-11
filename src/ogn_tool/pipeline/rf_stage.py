@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 
 
 class RFAnalysisStage:
     """Base class for RF analysis pipeline stages."""
 
-    def run(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
+    name = "base"
+
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
         raise NotImplementedError

@@ -26,3 +26,9 @@ Example:
 
 5. CODEX must not commit documentation that describes implemented functionality unless corresponding modules exist.
 
+
+## Architecture Rules
+
+1. Analysis modules MUST NOT import `rf_kernel` directly.
+2. Geometry kernel usage must remain behind pipeline/engine boundaries.
+3. Analysis modules consume observation-level fields (`distance_km`, `bearing_deg`, `radio_horizon_km`) rather than raw geometry helpers.

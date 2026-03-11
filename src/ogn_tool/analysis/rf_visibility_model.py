@@ -1,11 +1,13 @@
-import pandas as pd
-import numpy as np
+from __future__ import annotations
 
-from ogn_tool.analysis.rf_kernel.geometry import haversine_km_vector, radio_horizon_km
+import numpy as np
+import pandas as pd
 
 
 def compute_radio_horizon(station_height_m, aircraft_height_m):
-    return {"radio_horizon_km": float(radio_horizon_km(station_height_m, aircraft_height_m))}
+    h1 = max(0.0, float(station_height_m))
+    h2 = max(0.0, float(aircraft_height_m))
+    return {"radio_horizon_km": float(3.57 * ((h1 ** 0.5) + (h2 ** 0.5)))}
 
 
 def compute_expected_vs_observed_range(df, station_height_m=10, aircraft_height_m=1200):
@@ -17,31 +19,33 @@ def compute_expected_vs_observed_range(df, station_height_m=10, aircraft_height_
             "coverage_efficiency": None,
         }
 
-    horizon = compute_radio_horizon(station_height_m, aircraft_height_m)["radio_horizon_km"]
+    df_local = pd.DataFrame(df).copy()
 
-    df_local = df.copy()
-    if "distance_km" not in df_local.columns:
-        if all(c in df_local.columns for c in ["lat", "lon"]):
-            lat0 = df_local["lat"].iloc[0]
-            lon0 = df_local["lon"].iloc[0]
-            df_local["distance_km"] = haversine_km_vector(
-                float(lat0),
-                float(lon0),
-                df_local["lat"].astype(float),
-                df_local["lon"].astype(float),
-            )
-        else:
-            df_local["distance_km"] = np.nan
+    # Vector-first: consume observation vectors directly.
+    if "distance_km" in df_local.columns:
+        dist = pd.to_numeric(df_local.get("distance_km"), errors="coerce")
+    elif "distance" in df_local.columns:
+        dist = pd.to_numeric(df_local.get("distance"), errors="coerce")
+    else:
+        dist = pd.Series([np.nan] * len(df_local))
 
-    dist = pd.to_numeric(df_local.get("distance_km"), errors="coerce")
+    if "radio_horizon_km" in df_local.columns:
+        horizon_series = pd.to_numeric(df_local.get("radio_horizon_km"), errors="coerce")
+        horizon = float(horizon_series.dropna().median()) if not horizon_series.dropna().empty else None
+    else:
+        horizon = None
+
+    if horizon is None:
+        horizon = compute_radio_horizon(station_height_m, aircraft_height_m)["radio_horizon_km"]
+
     dist = dist[np.isfinite(dist)]
     observed_max = float(dist.max()) if len(dist) else None
     observed_p95 = float(np.nanpercentile(dist, 95)) if len(dist) else None
 
-    if observed_p95 is None or horizon == 0:
+    if observed_p95 is None or not np.isfinite(horizon) or horizon <= 0:
         efficiency = None
     else:
-        efficiency = float(observed_p95 / horizon)
+        efficiency = float(observed_p95 / float(horizon))
 
     return {
         "radio_horizon_km": float(horizon),

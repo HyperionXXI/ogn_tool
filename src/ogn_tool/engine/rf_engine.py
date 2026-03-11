@@ -24,8 +24,10 @@ from ogn_tool.analysis.observation_pipeline import build_observations
 from ogn_tool.rf_probability_field import build_rf_probability_field
 from ogn_tool.models.rf.rf_model_adapter import run_rf_model
 from ogn_tool.models.rf_types import RFObservationEvent, rf_event_to_dataset_row
+from ogn_tool.models.rf_observation_vector import RFObservationVector
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.pipeline.rf_analysis_pipeline import RFAnalysisPipeline
-from ogn_tool.pipeline.rf_stages import RFCoverageStage, VisibilityModelStage, BlindZoneDetectionStage, RFDiagnosticsStage
+from ogn_tool.pipeline.rf_stages import FeatureMatrixStage, RFCoverageStage, VisibilityModelStage, BlindZoneDetectionStage, RFDiagnosticsStage
 
 from .results import RFAnalysisResult
 
@@ -623,16 +625,19 @@ class RFAnalysisEngine:
         distance_df, grid_for_analysis = self._build_observations()
 
         # Stage 2+: declarative RF analysis pipeline
-        dataset = {
-            "distance_df": distance_df,
-            "grid_for_analysis": grid_for_analysis,
-            "station_lat": self.station_lat,
-            "station_lon": self.station_lon,
-            "metrics": {},
-        }
+        observations: List[RFObservationVector] = []
+        dataset = RFAnalysisDataset(
+            observations=observations,
+        )
+        dataset.distance_df = distance_df
+        dataset.grid_for_analysis = grid_for_analysis
+        dataset.station_lat = self.station_lat
+        dataset.station_lon = self.station_lon
+        dataset.metrics = {}
 
         pipeline = RFAnalysisPipeline(
             [
+                FeatureMatrixStage(),
                 RFCoverageStage(),
                 VisibilityModelStage(),
                 BlindZoneDetectionStage(),
@@ -641,10 +646,10 @@ class RFAnalysisEngine:
         )
         dataset = pipeline.run(dataset)
 
-        metrics = dataset.get("metrics", {})
-        azimuth_df = dataset.get("azimuth_df")
-        coverage_grid = dataset.get("coverage_grid")
-        terrain_stats = dataset.get("terrain") or metrics.get("terrain")
+        metrics = getattr(dataset, "metrics", {}) or {}
+        azimuth_df = getattr(dataset, "azimuth_df", None)
+        coverage_grid = getattr(dataset, "coverage_grid", None)
+        terrain_stats = getattr(dataset, "terrain", None) or metrics.get("terrain")
 
         # Keep existing no-op stage hooks for compatibility.
         _ = self._run_diagnostics(metrics)
@@ -663,14 +668,36 @@ class RFAnalysisEngine:
             metrics=metrics,
         )
 
-def observations_to_rows(observations: Iterable[RFObservationEvent]) -> List[dict]:
-    """Convert canonical RFObservationEvent objects into analysis row dictionaries."""
+def observations_to_rows(observations: Iterable[object]) -> List[dict]:
+    """Convert RF observation objects (vector/event) into analysis row dictionaries."""
     rows: List[dict] = []
-    for event in observations:
-        row = rf_event_to_dataset_row(event)
-        row.update({
-            "aircraft": event.aircraft_id,
-            "station_id": event.station_id,
-        })
-        rows.append(row)
+    for obs in observations:
+        if isinstance(obs, RFObservationVector):
+            rows.append(
+                {
+                    "station_id": obs.station_id,
+                    "aircraft": obs.aircraft_id,
+                    "src": obs.aircraft_id,
+                    "igate": obs.station_id,
+                    "lat": obs.lat,
+                    "lon": obs.lon,
+                    "altitude_m": obs.altitude_m,
+                    "distance_km": obs.distance_km,
+                    "bearing_deg": obs.bearing_deg,
+                    "radio_horizon_km": obs.radio_horizon_km,
+                    "terrain_blocked": obs.terrain_blocked,
+                }
+            )
+            continue
+
+        if isinstance(obs, RFObservationEvent):
+            row = rf_event_to_dataset_row(obs)
+            row.update({"aircraft": obs.aircraft_id, "station_id": obs.station_id})
+            rows.append(row)
+            continue
+
+        # Last-resort compatibility for mapping-like objects.
+        if isinstance(obs, dict):
+            rows.append(dict(obs))
+
     return rows

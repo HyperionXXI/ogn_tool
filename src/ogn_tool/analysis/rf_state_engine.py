@@ -5,8 +5,6 @@ from typing import Any, Dict, Optional
 
 import math
 
-from ogn_tool.analysis.rf_kernel.geometry import altitude_difference
-from ogn_tool.analysis.rf_kernel.spatial_index import RFSpatialIndex
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event
 
 
@@ -32,6 +30,62 @@ def _safe_int(value: Any) -> int | None:
     if not math.isfinite(num):
         return None
     return int(num)
+
+
+def _altitude_difference(aircraft_alt_m: float | None, station_alt_m: float | None) -> float | None:
+    if aircraft_alt_m is None or station_alt_m is None:
+        return None
+    try:
+        return float(aircraft_alt_m) - float(station_alt_m)
+    except (TypeError, ValueError):
+        return None
+
+
+def _compute_distance_bearing_scalar(station_lat: float, station_lon: float, aircraft_lat: float, aircraft_lon: float) -> tuple[float, float]:
+    r_km = 6371.0
+    lat1 = math.radians(float(station_lat))
+    lon1 = math.radians(float(station_lon))
+    lat2 = math.radians(float(aircraft_lat))
+    lon2 = math.radians(float(aircraft_lon))
+
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+
+    a = math.sin(dlat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    distance_km = r_km * c
+
+    x = math.sin(dlon) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
+    bearing = (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
+
+    return distance_km, bearing
+
+
+class _SpatialIndex:
+    def __init__(self, station_coords: Dict[str, tuple[float, float, float | None]], grid_size: float = 0.05):
+        self.station_coords = station_coords
+        self.grid_size = max(1e-6, float(grid_size))
+        self._cache: Dict[tuple[str, int, int], tuple[float, float]] = {}
+
+    def _cell(self, lat: float, lon: float) -> tuple[int, int]:
+        return int(math.floor(float(lat) / self.grid_size)), int(math.floor(float(lon) / self.grid_size))
+
+    def _center(self, c_lat: int, c_lon: int) -> tuple[float, float]:
+        return (float(c_lat) + 0.5) * self.grid_size, (float(c_lon) + 0.5) * self.grid_size
+
+    def get_distance_bearing(self, station_id: str, lat: float, lon: float) -> tuple[float | None, float | None]:
+        coords = self.station_coords.get(str(station_id))
+        if coords is None:
+            return None, None
+        c_lat, c_lon = self._cell(lat, lon)
+        key = (str(station_id), c_lat, c_lon)
+        if key not in self._cache:
+            st_lat, st_lon, _ = coords
+            center_lat, center_lon = self._center(c_lat, c_lon)
+            self._cache[key] = _compute_distance_bearing_scalar(st_lat, st_lon, center_lat, center_lon)
+        d, b = self._cache[key]
+        return float(d), float(b)
 
 
 def _extract_aircraft_id(packet: Dict[str, Any]) -> str | None:
@@ -93,7 +147,7 @@ class RFStateEngine:
         self.aircraft_states: Dict[str, AircraftState] = {}
         self.metrics = IncrementalMetrics()
         self._ingest_counter = 0
-        self.spatial_index = RFSpatialIndex(station_coords=dict(self.station_coords), grid_size=self.grid_cell_deg)
+        self.spatial_index = _SpatialIndex(self.station_coords, self.grid_cell_deg)
 
     def cleanup_states(self, current_timestamp: int | None = None) -> int:
         if not self.aircraft_states:
@@ -102,11 +156,7 @@ class RFStateEngine:
         if current_timestamp is None:
             current_timestamp = max((s.timestamp for s in self.aircraft_states.values()), default=0)
 
-        to_delete = [
-            aid
-            for aid, st in self.aircraft_states.items()
-            if current_timestamp - st.timestamp > self.ttl_seconds
-        ]
+        to_delete = [aid for aid, st in self.aircraft_states.items() if current_timestamp - st.timestamp > self.ttl_seconds]
         for aid in to_delete:
             self.aircraft_states.pop(aid, None)
         return len(to_delete)
@@ -125,13 +175,7 @@ class RFStateEngine:
         if aircraft_id is None or timestamp is None or lat is None or lon is None:
             return None
 
-        state = AircraftState(
-            aircraft_id=aircraft_id,
-            timestamp=timestamp,
-            lat=lat,
-            lon=lon,
-            altitude=altitude,
-        )
+        state = AircraftState(aircraft_id=aircraft_id, timestamp=timestamp, lat=lat, lon=lon, altitude=altitude)
         self.aircraft_states[aircraft_id] = state
         return state
 
@@ -149,16 +193,11 @@ class RFStateEngine:
         st_coords = self.station_coords.get(event.station_id)
         if st_coords is not None:
             _st_lat, _st_lon, st_alt = st_coords
-            distance, bearing = self.spatial_index.get_distance_bearing(
-                station_id=event.station_id,
-                lat=float(state.lat),
-                lon=float(state.lon),
-            )
+            distance, bearing = self.spatial_index.get_distance_bearing(event.station_id, state.lat, state.lon)
             event.distance = distance
             event.bearing = bearing
-            event.altitude_difference = altitude_difference(state.altitude, st_alt)
+            event.altitude_difference = _altitude_difference(state.altitude, st_alt)
 
-        # Fallback to packet-provided geometry if station coordinates are unknown.
         if event.distance is None:
             event.distance = _safe_float(packet.get("distance"))
         if event.distance is None:
@@ -225,10 +264,7 @@ class RFStateEngine:
         return obs
 
     def get_metrics_snapshot(self) -> Dict[str, Any]:
-        coverage_cells_count = {
-            st: len(cells)
-            for st, cells in self.metrics.station_coverage_cells.items()
-        }
+        coverage_cells_count = {st: len(cells) for st, cells in self.metrics.station_coverage_cells.items()}
         return {
             "packet_count": self.metrics.packet_count,
             "station_packet_count": dict(self.metrics.station_packet_count),
@@ -239,9 +275,4 @@ class RFStateEngine:
         }
 
 
-__all__ = [
-    "AircraftState",
-    "RFObservationEvent",
-    "IncrementalMetrics",
-    "RFStateEngine",
-]
+__all__ = ["AircraftState", "RFObservationEvent", "IncrementalMetrics", "RFStateEngine"]

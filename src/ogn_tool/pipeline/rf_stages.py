@@ -1,46 +1,60 @@
 from __future__ import annotations
 
-from typing import Any, Dict
-
 import pandas as pd
 
+from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
 from ogn_tool.analysis import azimuth as analysis_azimuth
+from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
+from ogn_tool.analysis import signal_distance as analysis_signal_distance
 from ogn_tool.analysis import station_quality as analysis_station_quality
 from ogn_tool.analysis import station_range as analysis_station_range
-from ogn_tool.analysis import signal_distance as analysis_signal_distance
-from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
-from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
 from ogn_tool.analysis import terrain as analysis_terrain
 from ogn_tool.analysis import terrain_visibility as analysis_terrain_visibility
 from ogn_tool.analysis.network_analysis import detect_network_blind_zones
 from ogn_tool.models.rf.rf_model_adapter import run_rf_model
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.rf_probability_field import build_rf_probability_field
 
 from .rf_stage import RFAnalysisStage
 
 
+class FeatureMatrixStage(RFAnalysisStage):
+    name = "feature_matrix"
+
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
+        from ogn_tool.analysis.rf_feature_matrix import build_feature_matrix
+
+        dataset.feature_matrix = build_feature_matrix(dataset.observations)
+        return dataset
+
+
 class RFCoverageStage(RFAnalysisStage):
-    def run(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
-        distance_df: pd.DataFrame = dataset.get("distance_df")
+    name = "coverage"
+
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
+        distance_df = getattr(dataset, "distance_df", None)
         if distance_df is None:
             distance_df = pd.DataFrame()
-        station_lat = dataset.get("station_lat")
-        station_lon = dataset.get("station_lon")
+        station_lat = getattr(dataset, "station_lat", None)
+        station_lon = getattr(dataset, "station_lon", None)
 
         azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, station_lat, station_lon)
         coverage_grid = build_rf_probability_field(distance_df)
 
-        dataset["azimuth_df"] = azimuth_df
-        dataset["coverage_grid"] = coverage_grid
+        dataset.coverage = coverage_grid
+        dataset.azimuth_df = azimuth_df
+        dataset.coverage_grid = coverage_grid
         return dataset
 
 
 class VisibilityModelStage(RFAnalysisStage):
-    def run(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
-        distance_df: pd.DataFrame = dataset.get("distance_df")
-        grid_for_analysis: pd.DataFrame = dataset.get("grid_for_analysis")
-        station_lat = dataset.get("station_lat")
-        station_lon = dataset.get("station_lon")
+    name = "visibility"
+
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
+        distance_df = getattr(dataset, "distance_df", None)
+        grid_for_analysis = getattr(dataset, "grid_for_analysis", None)
+        station_lat = getattr(dataset, "station_lat", None)
+        station_lon = getattr(dataset, "station_lon", None)
 
         if distance_df is None:
             distance_df = pd.DataFrame()
@@ -80,7 +94,7 @@ class VisibilityModelStage(RFAnalysisStage):
             station_lon=station_lon,
         )
 
-        metrics = dataset.setdefault("metrics", {})
+        metrics = getattr(dataset, "metrics", {}) or {}
         metrics.update(
             {
                 "station_range": range_stats,
@@ -104,25 +118,35 @@ class VisibilityModelStage(RFAnalysisStage):
             }
         )
 
-        dataset["terrain"] = terrain_stats
-        dataset["metrics"] = metrics
+        dataset.visibility = {
+            "signal_distance": signal_stats,
+            "radio_horizon": horizon_stats,
+            "terrain_visibility": visibility_stats,
+        }
+        dataset.terrain = terrain_stats
+        dataset.metrics = metrics
         return dataset
 
 
 class BlindZoneDetectionStage(RFAnalysisStage):
-    def run(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
-        coverage_grid: pd.DataFrame = dataset.get("coverage_grid")
-        distance_df: pd.DataFrame = dataset.get("distance_df")
+    name = "blind_zone"
+
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
+        coverage_grid = getattr(dataset, "coverage_grid", None)
+        distance_df = getattr(dataset, "distance_df", None)
 
         source = coverage_grid if isinstance(coverage_grid, pd.DataFrame) and not coverage_grid.empty else distance_df
         blind_zone_grid = detect_network_blind_zones(source)
-        dataset["blind_zone_grid"] = blind_zone_grid
+        dataset.blind_zones = blind_zone_grid
+        dataset.blind_zone_grid = blind_zone_grid
         return dataset
 
 
 class RFDiagnosticsStage(RFAnalysisStage):
-    def run(self, dataset: Dict[str, Any]) -> Dict[str, Any]:
-        metrics = dataset.setdefault("metrics", {})
+    name = "diagnostics"
+
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
+        metrics = getattr(dataset, "metrics", {}) or {}
         metrics["rf_models"] = {
             "signal_distance": metrics.get("signal_distance"),
             "radio_horizon": metrics.get("radio_horizon"),
@@ -130,13 +154,16 @@ class RFDiagnosticsStage(RFAnalysisStage):
             "terrain_visibility": metrics.get("terrain_visibility"),
             "altitude_distance": metrics.get("altitude_distance"),
         }
-        if "blind_zone_grid" in dataset:
-            metrics["blind_zone_grid"] = dataset.get("blind_zone_grid")
-        dataset["metrics"] = metrics
+        if getattr(dataset, "blind_zone_grid", None) is not None:
+            metrics["blind_zone_grid"] = getattr(dataset, "blind_zone_grid")
+
+        dataset.diagnostics = metrics
+        dataset.metrics = metrics
         return dataset
 
 
 __all__ = [
+    "FeatureMatrixStage",
     "RFCoverageStage",
     "VisibilityModelStage",
     "BlindZoneDetectionStage",
