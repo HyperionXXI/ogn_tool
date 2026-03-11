@@ -1,3 +1,6 @@
+STATUS: canonical
+SOURCE_OF_TRUTH: docs/CODEX_DEVELOPMENT_RULES.md
+
 This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # Codex Development Rules

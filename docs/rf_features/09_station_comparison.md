@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Détection automatique d’un mauvais emplacement de station
 
 Objectif

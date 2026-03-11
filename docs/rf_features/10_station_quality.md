@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Reconstruction du radio horizon 3D
 
 Objectif

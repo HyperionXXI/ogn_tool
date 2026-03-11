@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Carte polaire de réception (direction vs distance)
 Objectif
 Ajouter une analyse de couverture radio directionnelle pour la station.

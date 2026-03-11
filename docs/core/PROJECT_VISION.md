@@ -1,3 +1,6 @@
+STATUS: canonical
+SOURCE_OF_TRUTH: docs/PROJECT_VISION.md
+
 This document is subordinate to docs/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
 
 # OGN Network Intelligence Platform

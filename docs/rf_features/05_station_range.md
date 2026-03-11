@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Détection automatique de problème d’antenne / station
 Estimation automatique de la portée radio maximale
 Objectif

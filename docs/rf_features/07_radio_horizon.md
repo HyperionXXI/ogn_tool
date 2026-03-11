@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Couverture radio avec relief (analyse terrain)
 Objectif
 Améliorer l’analyse de couverture radio en intégrant le relief

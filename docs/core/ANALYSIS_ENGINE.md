@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 # Analysis Engine
 
 This document describes the RF analysis engine architecture and data flow.

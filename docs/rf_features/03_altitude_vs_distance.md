@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Analyse altitude vs distance (propagation radio)
 Objectif
 Analyser la portée radio en fonction de l'altitude de l'aéronef.

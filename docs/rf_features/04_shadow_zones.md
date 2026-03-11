@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Détection automatique des zones d’ombre radio
 Objectif
 Identifier automatiquement les zones géographiques où des aircraft sont visibles

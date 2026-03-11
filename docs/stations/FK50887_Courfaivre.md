@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 # Station FK50887 (Courfaivre)
 
 **Station:** FK50887

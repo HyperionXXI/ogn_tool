@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Courbe signal RSSI vs distance
 Objectif
 Diagnostiquer la performance radio de la station.

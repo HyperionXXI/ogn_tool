@@ -1,3 +1,6 @@
+STATUS: derived
+REFERENCE: docs/ROADMAP_MASTER.md
+
 Objectif
 Détecter automatiquement si la station présente un problème
 d’antenne ou de positionnement (mauvaise orientation, obstacles, installation).

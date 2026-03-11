@@ -1,3 +1,6 @@
+STATUS: canonical
+SOURCE_OF_TRUTH: docs/ROADMAP_MASTER.md
+
 # ROADMAP MASTER — OGN / FANET RF Network Intelligence Platform
 
 > Canonical reference for project direction, architecture, and execution rules.  
