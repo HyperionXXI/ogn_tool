@@ -1,0 +1,3 @@
+grid_x,grid_y,packets,aircraft,max_distance,lat,lon,cell_size_deg,median_rssi,probability,sample_count,confidence
+727,4733,3,2,0.15211139544920702,47.33,7.2700000000000005,0.01,,1.0,3,1.0
+728,4734,1,1,0.7086617633758641,47.34,7.28,0.01,,0.3333333333333333,1,0.3333333333333333

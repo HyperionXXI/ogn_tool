@@ -1,0 +1,107 @@
+{
+  "station_range": {
+    "implemented": true,
+    "summary": {
+      "grid_cells": 1,
+      "packet_total": 4,
+      "max_distance_km": 0.7086617633758641,
+      "p95_distance_km": 0.7086617633758641
+    },
+    "data": {
+      "distance_km": "[0.70866176]",
+      "packet_count": "[4]"
+    }
+  },
+  "station_quality": {
+    "implemented": true,
+    "summary": {
+      "packet_total": 0,
+      "rssi_best": null,
+      "rssi_mean": null,
+      "quality_score": null
+    },
+    "data": {
+      "rssi_db": "[]",
+      "packet_count": "[]"
+    }
+  },
+  "signal_distance": {
+    "implemented": false,
+    "summary": {
+      "input_rows": 4,
+      "rssi_rows": 0,
+      "distance_rows": 0
+    },
+    "data": null,
+    "binned_data": null
+  },
+  "altitude_distance": {
+    "implemented": false,
+    "summary": {},
+    "data": null,
+    "binned_data": null
+  },
+  "radio_horizon": {
+    "implemented": false,
+    "summary": {},
+    "data": null,
+    "binned_data": null
+  },
+  "terrain": {
+    "implemented": false,
+    "summary": {},
+    "data": "   azimuth_bin  azimuth_center_deg  ...  p95_distance_km  mean_rssi_db\n0            6               195.0  ...         0.708662           NaN\n\n[1 rows x 6 columns]",
+    "binned_data": null
+  },
+  "terrain_visibility": {
+    "implemented": false,
+    "summary": {
+      "reason": "missing_columns"
+    },
+    "data": null,
+    "binned_data": null
+  },
+  "p95_range_km": 0.7086617633758641,
+  "max_range_km": 0.7086617633758641,
+  "rf_packets": 4,
+  "health": null,
+  "grid_base": "   grid_lat  grid_lon  packets  ...   lat   lon  best_rssi_db\n0      47.3      7.25        4  ...  47.3  7.25          <NA>\n\n[1 rows x 13 columns]",
+  "rf_models": {
+    "signal_distance": {
+      "implemented": false,
+      "summary": {
+        "input_rows": 4,
+        "rssi_rows": 0,
+        "distance_rows": 0
+      },
+      "data": null,
+      "binned_data": null
+    },
+    "radio_horizon": {
+      "implemented": false,
+      "summary": {},
+      "data": null,
+      "binned_data": null
+    },
+    "terrain": {
+      "implemented": false,
+      "summary": {},
+      "data": "   azimuth_bin  azimuth_center_deg  ...  p95_distance_km  mean_rssi_db\n0            6               195.0  ...         0.708662           NaN\n\n[1 rows x 6 columns]",
+      "binned_data": null
+    },
+    "terrain_visibility": {
+      "implemented": false,
+      "summary": {
+        "reason": "missing_columns"
+      },
+      "data": null,
+      "binned_data": null
+    },
+    "altitude_distance": {
+      "implemented": false,
+      "summary": {},
+      "data": null,
+      "binned_data": null
+    }
+  }
+}
