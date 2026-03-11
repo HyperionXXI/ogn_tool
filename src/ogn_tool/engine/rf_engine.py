@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 import pandas as pd
 import numpy as np
@@ -20,11 +20,12 @@ from ogn_tool.analysis.network_analysis import detect_network_blind_zones
 from ogn_tool.analysis.rf_diagnosis import RFDiagnosis
 from ogn_tool.analysis.shadow import detect_rf_shadows
 from ogn_tool.analysis.rf_observations import build_rf_observations, compute_distance, compute_bearing
-from ogn_tool.analysis.observation_pipeline import build_observations_from_packets
-from ogn_tool.engine.observation_builder import ObservationBuilder
-from ogn_tool.engine.station_registry import StationRegistry
+from ogn_tool.analysis.observation_pipeline import build_observations
 from ogn_tool.rf_probability_field import build_rf_probability_field
 from ogn_tool.models.rf.rf_model_adapter import run_rf_model
+from ogn_tool.models.rf_types import RFObservationEvent, rf_event_to_dataset_row
+from ogn_tool.pipeline.rf_analysis_pipeline import RFAnalysisPipeline
+from ogn_tool.pipeline.rf_stages import RFCoverageStage, VisibilityModelStage, BlindZoneDetectionStage, RFDiagnosticsStage
 
 from .results import RFAnalysisResult
 
@@ -34,8 +35,6 @@ class RFAnalysisEngine:
         self.packets = packets_df if packets_df is not None else pd.DataFrame()
         self.station_lat = station_lat
         self.station_lon = station_lon
-        self.station_registry = StationRegistry()
-        self.observation_builder = ObservationBuilder(self.station_registry)
         self._last_dataset: Optional[dict] = None
         self._last_dataset_mode: Optional[str] = None
         self._last_station_id: Optional[str] = None
@@ -50,40 +49,45 @@ class RFAnalysisEngine:
 
 
     def build_analysis_dataset(self, dataset_mode: str = "NETWORK", station_id: str | None = None) -> dict:
-        packets_all = self.packets.copy()
-        if "receiver" in packets_all.columns and "igate" not in packets_all.columns:
-            packets_all["igate"] = packets_all["receiver"]
-        packets_all = packets_all.reset_index(drop=False).rename(columns={"index": "_row_id"})
-        packet_rows = packets_all.to_dict("records")
-        observations = build_observations_from_packets(
-            packet_rows,
-            self.observation_builder,
-        )
+        packets_input = self.packets.copy()
+        if "receiver" in packets_input.columns and "igate" not in packets_input.columns:
+            packets_input["igate"] = packets_input["receiver"]
+        packets_input = packets_input.reset_index(drop=False).rename(columns={"index": "_row_id"})
+
+        # Build RF observations first, then let analysis consume observation-derived rows.
+        packet_rows = packets_input.to_dict("records")
+        observations = build_observations(packet_rows)
         rows = observations_to_rows(observations)
         observations_df = pd.DataFrame(rows)
-        if "_row_id" not in observations_df.columns:
-            observations_df["_row_id"] = pd.Series(dtype="int")
-        packets_all = packets_all.merge(
-            observations_df,
-            on="_row_id",
-            how="left",
-            suffixes=("", "_obs"),
-        )
 
-        # Ensure we keep canonical lat/lon/ts_epoch columns for downstream analysis
-        for col in ["lat", "lon", "ts_epoch"]:
-            x = f"{col}_x"
-            y = f"{col}_y"
-            obs = f"{col}_obs"
-            if col not in packets_all.columns:
-                if obs in packets_all.columns:
-                    packets_all[col] = packets_all[obs]
-                elif x in packets_all.columns and y in packets_all.columns:
-                    packets_all[col] = packets_all[y].fillna(packets_all[x])
-            # Clean up any intermediate merged columns
-            for drop_col in [x, y, obs]:
-                if drop_col in packets_all.columns:
-                    packets_all.drop(columns=[drop_col], inplace=True)
+        if observations_df.empty:
+            # Compatibility fallback: keep prior packet-like behavior when observation
+            # construction cannot produce rows.
+            packets_all = packets_input.copy()
+        else:
+            if "_row_id" not in observations_df.columns:
+                observations_df["_row_id"] = pd.Series(dtype="Int64")
+
+            # Enrich observation rows with packet transport metadata when available.
+            meta_cols = [
+                c
+                for c in ["_row_id", "raw", "qas", "dst", "ts_utc", "receiver", "packet_id", "id"]
+                if c in packets_input.columns
+            ]
+            meta_df = packets_input[meta_cols].copy() if meta_cols else pd.DataFrame()
+            if not meta_df.empty and "_row_id" in meta_df.columns:
+                packets_all = observations_df.merge(meta_df, on="_row_id", how="left")
+            else:
+                packets_all = observations_df.copy()
+
+            # Keep canonical downstream aliases expected by existing analyses.
+            if "aircraft" in packets_all.columns and "src" not in packets_all.columns:
+                packets_all["src"] = packets_all["aircraft"]
+            if "station_id" in packets_all.columns and "igate" not in packets_all.columns:
+                packets_all["igate"] = packets_all["station_id"]
+            if "timestamp" in packets_all.columns and "ts_epoch" not in packets_all.columns:
+                packets_all["ts_epoch"] = pd.to_numeric(packets_all["timestamp"], errors="coerce").astype("Int64")
+
         packets_filtered = packets_all
         packets_rf = packets_all.iloc[0:0].copy()
         dataset_mode = (dataset_mode or "NETWORK").upper()
@@ -618,30 +622,37 @@ class RFAnalysisEngine:
         # Stage 1: observation building
         distance_df, grid_for_analysis = self._build_observations()
 
-        # Stage 2: metric computation
-        metrics, terrain_stats = self._compute_metrics(distance_df, grid_for_analysis)
-
-        rf_models_results = {
-            "signal_distance": metrics.get("signal_distance"),
-            "radio_horizon": metrics.get("radio_horizon"),
-            "terrain": metrics.get("terrain"),
-            "terrain_visibility": metrics.get("terrain_visibility"),
-            "altitude_distance": metrics.get("altitude_distance"),
+        # Stage 2+: declarative RF analysis pipeline
+        dataset = {
+            "distance_df": distance_df,
+            "grid_for_analysis": grid_for_analysis,
+            "station_lat": self.station_lat,
+            "station_lon": self.station_lon,
+            "metrics": {},
         }
-        metrics["rf_models"] = rf_models_results
 
-        # Stage 3: RF propagation analysis
-        rf_models = self._run_rf_models(distance_df)
-        azimuth_df = rf_models.get("azimuth_df")
-        coverage_grid = rf_models.get("coverage_grid")
+        pipeline = RFAnalysisPipeline(
+            [
+                RFCoverageStage(),
+                VisibilityModelStage(),
+                BlindZoneDetectionStage(),
+                RFDiagnosticsStage(),
+            ]
+        )
+        dataset = pipeline.run(dataset)
 
-        # Stage 4: diagnostics
+        metrics = dataset.get("metrics", {})
+        azimuth_df = dataset.get("azimuth_df")
+        coverage_grid = dataset.get("coverage_grid")
+        terrain_stats = dataset.get("terrain") or metrics.get("terrain")
+
+        # Keep existing no-op stage hooks for compatibility.
         _ = self._run_diagnostics(metrics)
-
-        # Stage 5: network intelligence (no-op for run)
         _ = self._run_network_analysis(metrics)
 
-        terrain_mask = terrain_stats.get("data") if terrain_stats.get("implemented") else None
+        terrain_mask = None
+        if isinstance(terrain_stats, dict) and terrain_stats.get("implemented"):
+            terrain_mask = terrain_stats.get("data")
 
         return RFAnalysisResult(
             packets=self.packets,
@@ -652,48 +663,14 @@ class RFAnalysisEngine:
             metrics=metrics,
         )
 
-
-
-from typing import Iterable, List
-
-from ogn_tool.domain.rf_observation import RFObservation
-
-
-def observations_to_rows(observations: Iterable[RFObservation]) -> List[dict]:
-    """
-    Temporary compatibility layer.
-
-    Converts RFObservation objects back into the row-like dictionaries
-    expected by existing analysis modules.
-
-    This allows progressive migration of analysis code to RFObservation
-    without breaking the current system.
-    """
-
-    rows = []
-
-    for obs in observations:
-        event = obs.event
-
-        rows.append(
-            {
-                "lat": event.lat,
-                "lon": event.lon,
-                "ts_epoch": event.timestamp,
-                "aircraft": event.emitter_id,
-                "igate": event.receiver_id,
-                "_row_id": event.metadata.get("_row_id") if event.metadata else None,
-                "receiver_lat": obs.receiver_lat,
-                "receiver_lon": obs.receiver_lon,
-                "receiver_alt": obs.receiver_alt,
-                "distance_km": obs.distance_km,
-                "bearing_deg": obs.bearing_deg,
-            }
-        )
-
+def observations_to_rows(observations: Iterable[RFObservationEvent]) -> List[dict]:
+    """Convert canonical RFObservationEvent objects into analysis row dictionaries."""
+    rows: List[dict] = []
+    for event in observations:
+        row = rf_event_to_dataset_row(event)
+        row.update({
+            "aircraft": event.aircraft_id,
+            "station_id": event.station_id,
+        })
+        rows.append(row)
     return rows
-
-
-
-
-

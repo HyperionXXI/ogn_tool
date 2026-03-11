@@ -95,7 +95,7 @@ def normalize_rf_receptions(
     out["bit_errors"] = pd.to_numeric(_first_existing(df, ["bit_errors"]), errors="coerce").astype("Int64")
 
     # Preserve commonly useful metadata when present.
-    for col in ["packet_id", "id", "qas", "raw", "dst", "protocol"]:
+    for col in ["_row_id", "packet_id", "id", "qas", "raw", "dst", "protocol", "ts_utc", "receiver", "igate", "src"]:
         if col in df.columns:
             out[col] = df[col]
 
@@ -111,6 +111,21 @@ def normalize_rf_receptions(
     return out[canonical_plus]
 
 
+def normalize_packets(
+    packets_df: pd.DataFrame,
+    keep_legacy_aliases: bool = True,
+) -> pd.DataFrame:
+    """Backward-compatible alias for reception normalization.
+
+    This name is used by pipeline integration to emphasize that packet input
+    is normalized before geometry/observation logic.
+    """
+    return normalize_rf_receptions(
+        packets_df=packets_df,
+        keep_legacy_aliases=keep_legacy_aliases,
+    )
+
+
 def map_row_to_canonical(row: dict[str, Any]) -> dict[str, Any]:
     """Map a single packet/reception row dict to canonical RF fields."""
     frame = pd.DataFrame([row])
@@ -123,5 +138,6 @@ def map_row_to_canonical(row: dict[str, Any]) -> dict[str, Any]:
 __all__ = [
     "CANONICAL_COLUMNS",
     "normalize_rf_receptions",
+    "normalize_packets",
     "map_row_to_canonical",
 ]

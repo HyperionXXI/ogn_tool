@@ -1,0 +1,247 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
+
+import math
+
+from ogn_tool.analysis.rf_kernel.geometry import altitude_difference
+from ogn_tool.analysis.rf_kernel.spatial_index import RFSpatialIndex
+from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(num):
+        return None
+    return num
+
+
+def _safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(num):
+        return None
+    return int(num)
+
+
+def _extract_aircraft_id(packet: Dict[str, Any]) -> str | None:
+    aircraft = packet.get("aircraft_id")
+    if aircraft is None:
+        aircraft = packet.get("src")
+    if aircraft is None:
+        aircraft = packet.get("aircraft")
+    if aircraft is None:
+        return None
+    return str(aircraft)
+
+
+def _extract_timestamp(packet: Dict[str, Any]) -> int | None:
+    ts = packet.get("timestamp")
+    if ts is None:
+        ts = packet.get("ts_epoch")
+    if ts is None:
+        return None
+    return _safe_int(ts)
+
+
+@dataclass
+class AircraftState:
+    aircraft_id: str
+    timestamp: int
+    lat: float
+    lon: float
+    altitude: float | None = None
+
+
+@dataclass
+class IncrementalMetrics:
+    packet_count: int = 0
+    station_packet_count: Dict[str, int] = field(default_factory=dict)
+    station_max_range_km: Dict[str, float] = field(default_factory=dict)
+    station_coverage_cells: Dict[str, set[tuple[float, float]]] = field(default_factory=dict)
+    station_azimuth_histogram: Dict[str, list[int]] = field(default_factory=dict)
+    shadow_sectors: Dict[str, list[int]] = field(default_factory=dict)
+
+
+class RFStateEngine:
+    """Incremental RF state engine for streaming packet analysis."""
+
+    def __init__(
+        self,
+        station_coords: Optional[Dict[str, tuple[float, float, float | None]]] = None,
+        grid_cell_deg: float = 0.05,
+        azimuth_bins: int = 36,
+        ttl_seconds: int = 3600,
+        cleanup_interval_packets: int = 256,
+    ) -> None:
+        self.station_coords = station_coords or {}
+        self.grid_cell_deg = float(grid_cell_deg)
+        self.azimuth_bins = int(azimuth_bins)
+        self.ttl_seconds = int(ttl_seconds)
+        self.cleanup_interval_packets = max(1, int(cleanup_interval_packets))
+
+        self.aircraft_states: Dict[str, AircraftState] = {}
+        self.metrics = IncrementalMetrics()
+        self._ingest_counter = 0
+        self.spatial_index = RFSpatialIndex(station_coords=dict(self.station_coords), grid_size=self.grid_cell_deg)
+
+    def cleanup_states(self, current_timestamp: int | None = None) -> int:
+        if not self.aircraft_states:
+            return 0
+
+        if current_timestamp is None:
+            current_timestamp = max((s.timestamp for s in self.aircraft_states.values()), default=0)
+
+        to_delete = [
+            aid
+            for aid, st in self.aircraft_states.items()
+            if current_timestamp - st.timestamp > self.ttl_seconds
+        ]
+        for aid in to_delete:
+            self.aircraft_states.pop(aid, None)
+        return len(to_delete)
+
+    def update_aircraft_state(self, packet: Dict[str, Any]) -> AircraftState | None:
+        aircraft_id = _extract_aircraft_id(packet)
+        timestamp = _extract_timestamp(packet)
+        lat = _safe_float(packet.get("lat"))
+        lon = _safe_float(packet.get("lon"))
+        altitude = _safe_float(packet.get("altitude"))
+        if altitude is None:
+            altitude = _safe_float(packet.get("altitude_m"))
+        if altitude is None:
+            altitude = _safe_float(packet.get("alt"))
+
+        if aircraft_id is None or timestamp is None or lat is None or lon is None:
+            return None
+
+        state = AircraftState(
+            aircraft_id=aircraft_id,
+            timestamp=timestamp,
+            lat=lat,
+            lon=lon,
+            altitude=altitude,
+        )
+        self.aircraft_states[aircraft_id] = state
+        return state
+
+    def build_rf_observation(self, packet: Dict[str, Any]) -> RFObservationEvent | None:
+        event = packet_to_rf_event(packet)
+        if event.station_id is None or event.aircraft_id is None or event.timestamp is None:
+            return None
+
+        state = self.aircraft_states.get(event.aircraft_id)
+        if state is None:
+            state = self.update_aircraft_state(packet)
+            if state is None:
+                return None
+
+        st_coords = self.station_coords.get(event.station_id)
+        if st_coords is not None:
+            _st_lat, _st_lon, st_alt = st_coords
+            distance, bearing = self.spatial_index.get_distance_bearing(
+                station_id=event.station_id,
+                lat=float(state.lat),
+                lon=float(state.lon),
+            )
+            event.distance = distance
+            event.bearing = bearing
+            event.altitude_difference = altitude_difference(state.altitude, st_alt)
+
+        # Fallback to packet-provided geometry if station coordinates are unknown.
+        if event.distance is None:
+            event.distance = _safe_float(packet.get("distance"))
+        if event.distance is None:
+            event.distance = _safe_float(packet.get("distance_km"))
+
+        if event.bearing is None:
+            event.bearing = _safe_float(packet.get("bearing"))
+        if event.bearing is None:
+            event.bearing = _safe_float(packet.get("bearing_deg"))
+
+        if event.altitude_difference is None:
+            event.altitude_difference = _safe_float(packet.get("altitude_difference"))
+        if event.altitude_difference is None:
+            event.altitude_difference = _safe_float(packet.get("relative_alt_m"))
+
+        return event
+
+    def _update_incremental_metrics(self, obs: RFObservationEvent, state: AircraftState | None) -> None:
+        self.metrics.packet_count += 1
+        st = obs.station_id
+        if st is None:
+            return
+
+        self.metrics.station_packet_count[st] = self.metrics.station_packet_count.get(st, 0) + 1
+
+        if obs.distance is not None:
+            cur = self.metrics.station_max_range_km.get(st)
+            if cur is None or obs.distance > cur:
+                self.metrics.station_max_range_km[st] = obs.distance
+
+        if state is not None:
+            cell = (
+                round(float(state.lat) / self.grid_cell_deg) * self.grid_cell_deg,
+                round(float(state.lon) / self.grid_cell_deg) * self.grid_cell_deg,
+            )
+            self.metrics.station_coverage_cells.setdefault(st, set()).add(cell)
+
+        if obs.bearing is not None:
+            hist = self.metrics.station_azimuth_histogram.setdefault(st, [0] * self.azimuth_bins)
+            b = float(obs.bearing) % 360.0
+            idx = min(self.azimuth_bins - 1, int(math.floor((b / 360.0) * self.azimuth_bins)))
+            hist[idx] += 1
+
+            nonzero = [v for v in hist if v > 0]
+            if nonzero:
+                mean = sum(hist) / len(hist)
+                flagged = [i for i, v in enumerate(hist) if v > 0 and v < 0.25 * mean]
+            else:
+                flagged = []
+            self.metrics.shadow_sectors[st] = flagged
+
+    def ingest_packet(self, packet: Dict[str, Any]) -> RFObservationEvent | None:
+        state = self.update_aircraft_state(packet)
+        obs = self.build_rf_observation(packet)
+        if obs is None:
+            return None
+
+        self._update_incremental_metrics(obs, state)
+
+        self._ingest_counter += 1
+        if self._ingest_counter % self.cleanup_interval_packets == 0 and obs.timestamp is not None:
+            self.cleanup_states(current_timestamp=obs.timestamp)
+
+        return obs
+
+    def get_metrics_snapshot(self) -> Dict[str, Any]:
+        coverage_cells_count = {
+            st: len(cells)
+            for st, cells in self.metrics.station_coverage_cells.items()
+        }
+        return {
+            "packet_count": self.metrics.packet_count,
+            "station_packet_count": dict(self.metrics.station_packet_count),
+            "station_max_range_km": dict(self.metrics.station_max_range_km),
+            "station_coverage_cells": coverage_cells_count,
+            "station_azimuth_histogram": dict(self.metrics.station_azimuth_histogram),
+            "shadow_sectors": dict(self.metrics.shadow_sectors),
+        }
+
+
+__all__ = [
+    "AircraftState",
+    "RFObservationEvent",
+    "IncrementalMetrics",
+    "RFStateEngine",
+]
