@@ -168,7 +168,7 @@ Actions:
 - UI must consume engine/network products, not raw SQL or packet transport schemas.
 ## 7. Canonical Engine Container
 
-`RFAnalysisDataset` (`src/ogn_tool/engine/rf_dataset.py`) is the canonical typed container
+`RFAnalysisDataset` (`src/ogn_tool/models/rf_analysis_dataset.py`) is the canonical typed container
 for engine outputs.
 
 Role:

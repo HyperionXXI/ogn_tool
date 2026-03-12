@@ -8,7 +8,7 @@ Scope:
 - Alignment check versus architecture and data-contract documentation.
 
 Audited code:
-- `src/ogn_tool/engine/rf_dataset.py`
+- `src/ogn_tool/models/rf_analysis_dataset.py`
 - `src/ogn_tool/engine/rf_engine.py`
 - `src/ogn_tool/analysis/aprs_adapter.py`
 - `src/ogn_tool/analysis/observation_pipeline.py`
@@ -21,7 +21,7 @@ Audited code:
 ### Findings
 
 1. `RFAnalysisDataset` exists but is not integrated into engine runtime paths.
-- Present in `src/ogn_tool/engine/rf_dataset.py`.
+- Present in `src/ogn_tool/models/rf_analysis_dataset.py`.
 - No imports/usages found in `rf_engine.py`, dashboard, or UI pages.
 
 2. Dataset dictionaries are still produced directly by engine.

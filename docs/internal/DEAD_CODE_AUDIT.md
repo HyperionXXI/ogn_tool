@@ -72,7 +72,7 @@ Modules currently not imported anywhere in the scanned scope.
 | ogn_tool.data.stations_repository | verify if legacy |
 | ogn_tool.db | verify usage |
 | ogn_tool.engine.observation_builder | verify if replaced |
-| ogn_tool.engine.rf_dataset | probably replaced by RFAnalysisDataset |
+| ogn_tool.models.rf_analysis_dataset | probably replaced by RFAnalysisDataset |
 | ogn_tool.rf_analysis | unknown legacy module |
 
 Caution:
