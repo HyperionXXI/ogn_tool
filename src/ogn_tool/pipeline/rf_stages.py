@@ -2,18 +2,14 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
-from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
-from ogn_tool.analysis import terrain as analysis_terrain
-from ogn_tool.analysis import terrain_visibility as analysis_terrain_visibility
 from ogn_tool.analysis.network_analysis import detect_network_blind_zones
-from ogn_tool.models.rf.rf_model_adapter import run_rf_model
+from ogn_tool.engine.rf_model_runner import run
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
-from ogn_tool.network import station_quality as analysis_station_quality
-from ogn_tool.network import station_range as analysis_station_range
+from ogn_tool.analysis.network import station_quality as analysis_station_quality
+from ogn_tool.analysis.network import station_range as analysis_station_range
 from ogn_tool.rf import azimuth as analysis_azimuth
-from ogn_tool.rf import signal_distance as analysis_signal_distance
-from ogn_tool.rf_probability_field import build_rf_probability_field
+from ogn_tool.analysis.rf_probability_field import build_rf_probability_field
+from ogn_tool.engine.rf_models_registry import MODELS
 
 from .rf_stage import RFAnalysisStage
 
@@ -36,11 +32,10 @@ class RFCoverageStage(RFAnalysisStage):
     produces = ["coverage"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
-        distance_df = getattr(dataset, "distance_df", None)
-        if distance_df is None:
-            distance_df = pd.DataFrame()
-        station_lat = getattr(dataset, "station_lat", None)
-        station_lon = getattr(dataset, "station_lon", None)
+        obs = dataset.observations if isinstance(dataset.observations, dict) else {}
+        distance_df = obs.get("distance_df", pd.DataFrame())
+        station_lat = obs.get("station_lat")
+        station_lon = obs.get("station_lon")
 
         if callable(getattr(analysis_azimuth, "compute_azimuth_radiation", None)):
             azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, station_lat, station_lon)
@@ -64,44 +59,40 @@ class VisibilityModelStage(RFAnalysisStage):
     produces = ["visibility"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
-        distance_df = getattr(dataset, "distance_df", None)
-        grid_for_analysis = getattr(dataset, "grid_for_analysis", None)
-        station_lat = getattr(dataset, "station_lat", None)
-        station_lon = getattr(dataset, "station_lon", None)
-
-        if distance_df is None:
-            distance_df = pd.DataFrame()
-        if grid_for_analysis is None:
-            grid_for_analysis = pd.DataFrame()
+        obs = dataset.observations if isinstance(dataset.observations, dict) else {}
+        distance_df = obs.get("distance_df", pd.DataFrame())
+        grid_for_analysis = obs.get("grid_for_analysis", pd.DataFrame())
+        station_lat = obs.get("station_lat")
+        station_lon = obs.get("station_lon")
 
         range_stats = analysis_station_range.analyze(grid_for_analysis)
         quality_stats = analysis_station_quality.analyze(grid_for_analysis)
-        signal_stats = run_rf_model(
-            analysis_signal_distance.analyze,
+        signal_stats = run(
+            MODELS["signal_distance"],
             df_observations=distance_df,
             station_lat=station_lat,
             station_lon=station_lon,
         )
-        altitude_stats = run_rf_model(
-            analysis_altitude_distance.analyze,
+        altitude_stats = run(
+            MODELS["altitude_distance"],
             df_observations=distance_df,
             station_lat=station_lat,
             station_lon=station_lon,
         )
-        horizon_stats = run_rf_model(
-            analysis_radio_horizon.analyze,
+        horizon_stats = run(
+            MODELS["radio_horizon"],
             df_observations=distance_df,
             station_lat=station_lat,
             station_lon=station_lon,
         )
-        terrain_stats = run_rf_model(
-            analysis_terrain.analyze,
+        terrain_stats = run(
+            MODELS["terrain"],
             df_grid=grid_for_analysis,
             station_lat=station_lat,
             station_lon=station_lon,
         )
-        visibility_stats = run_rf_model(
-            analysis_terrain_visibility.analyze,
+        visibility_stats = run(
+            MODELS["terrain_visibility"],
             df_observations=distance_df,
             station_lat=station_lat,
             station_lon=station_lon,
@@ -147,7 +138,8 @@ class BlindZoneDetectionStage(RFAnalysisStage):
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
         coverage_grid = dataset.results.coverage
-        distance_df = getattr(dataset, "distance_df", None)
+        obs = dataset.observations if isinstance(dataset.observations, dict) else {}
+        distance_df = obs.get("distance_df", pd.DataFrame())
 
         source = coverage_grid if isinstance(coverage_grid, pd.DataFrame) and not coverage_grid.empty else distance_df
         blind_zone_grid = detect_network_blind_zones(source)

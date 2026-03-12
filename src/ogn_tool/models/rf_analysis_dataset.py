@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any, Optional
 
 from .rf_analysis_results import RFAnalysisResults
 from .rf_observation_vector import RFObservationVector
@@ -8,7 +8,7 @@ from .rf_observation_vector import RFObservationVector
 @dataclass
 class RFAnalysisDataset:
 
-    observations: List[RFObservationVector]
+    observations: Any
 
     diagnostics: Optional[object] = None
     results: RFAnalysisResults = field(default_factory=RFAnalysisResults)

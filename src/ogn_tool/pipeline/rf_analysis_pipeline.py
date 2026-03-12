@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import time
 from typing import Any, Dict, Iterable
 
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.engine.rf_pipeline_executor import execute_rf_pipeline
 from .rf_stages import (
     AntennaPatternStage,
     BlindZoneDetectionStage,
@@ -42,32 +42,19 @@ class RFAnalysisPipeline:
                 )
             produced.update(getattr(stage, "produces", []))
 
-    @staticmethod
-    def _count_items(value: Any) -> int:
-        if value is None:
-            return 0
-        try:
-            return int(len(value))
-        except TypeError:
-            return 0
-
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
-        self.metrics = {}
-        for stage in self.stages:
-            stage_name = getattr(stage, "name", stage.__class__.__name__)
-            requires = set(getattr(stage, "requires", []))
-            available = dataset.available_fields()
-            missing = sorted(requires - available)
-            if missing:
-                raise RuntimeError(f"Stage {stage_name} missing inputs {missing}")
+        return execute_rf_pipeline(dataset, self)
 
-            start = time.perf_counter()
-            dataset = stage.run(dataset)
-            elapsed = time.perf_counter() - start
-            items_processed = self._count_items(getattr(dataset, "observations", []))
-            self.metrics[stage_name] = {
-                "executed": True,
-                "time": elapsed,
-                "items": items_processed,
-            }
-        return dataset
+
+
+def run_rf_analysis_pipeline(ctx: RFAnalysisDataset) -> RFAnalysisDataset:
+    """Canonical RF analysis entrypoint.
+
+    Executes the default RF pipeline stages on a pre-built RFAnalysisDataset.
+    """
+    pipeline = RFAnalysisPipeline()
+    return pipeline.run(ctx)
+
+
+def run_rf_analysis(ctx):
+    return run_rf_analysis_pipeline(ctx)
