@@ -3,40 +3,33 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from ogn_tool.analysis.grid import build_rf_grid as build_base_rf_grid
+
 
 def build_rf_grid(
     df_packets: pd.DataFrame,
     cell_size_deg: float = 0.01,
 ) -> pd.DataFrame:
-    df = df_packets.copy()
-    df = df.dropna(subset=["lat", "lon"])
+    if df_packets is None or df_packets.empty:
+        return pd.DataFrame()
 
-    # grid index
-    df["grid_x"] = (df["lon"] / cell_size_deg).astype(int)
-    df["grid_y"] = (df["lat"] / cell_size_deg).astype(int)
+    # Canonical grid aggregation comes from analysis.grid.
+    grid = build_base_rf_grid(df_packets, cell_size=float(cell_size_deg)).copy()
+    if grid.empty:
+        return grid
 
-    grouped = df.groupby(["grid_x", "grid_y"])
+    # Normalize columns expected by probability-field consumers.
+    if "grid_lat" in grid.columns and "lat" not in grid.columns:
+        grid["lat"] = grid["grid_lat"]
+    if "grid_lon" in grid.columns and "lon" not in grid.columns:
+        grid["lon"] = grid["grid_lon"]
 
-    aircraft_col = "aircraft_id" if "aircraft_id" in df.columns else "src"
-    rssi_col = "rssi_db" if "rssi_db" in df.columns else None
-
-    agg = {
-        "packets": ("lat", "count"),
-        "aircraft": (aircraft_col, "nunique"),
-    }
-    if "distance_km" in df.columns:
-        agg["max_distance"] = ("distance_km", "max")
-    if rssi_col:
-        agg["median_rssi"] = (rssi_col, "median")
-
-    grid = grouped.agg(**agg).reset_index()
-
-    grid["lat"] = grid["grid_y"] * cell_size_deg
-    grid["lon"] = grid["grid_x"] * cell_size_deg
     grid["cell_size_deg"] = float(cell_size_deg)
-
     if "max_distance" not in grid.columns:
-        grid["max_distance"] = np.nan
+        if "max_distance_km" in grid.columns:
+            grid["max_distance"] = pd.to_numeric(grid["max_distance_km"], errors="coerce")
+        else:
+            grid["max_distance"] = np.nan
     if "median_rssi" not in grid.columns:
         grid["median_rssi"] = np.nan
 

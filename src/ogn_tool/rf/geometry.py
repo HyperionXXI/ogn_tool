@@ -53,6 +53,25 @@ def haversine_km_vector(
     return r * c
 
 
+def bearing_deg_vector(
+    station_lat: float,
+    station_lon: float,
+    lat: Iterable[float],
+    lon: Iterable[float],
+) -> np.ndarray:
+    """Vectorized initial bearing (deg) from station to many points."""
+    lat1_r = np.radians(float(station_lat))
+    lon1_r = np.radians(float(station_lon))
+    lat2_r = np.radians(np.asarray(lat, dtype=float))
+    lon2_r = np.radians(np.asarray(lon, dtype=float))
+
+    dlon = lon2_r - lon1_r
+    y = np.sin(dlon) * np.cos(lat2_r)
+    x = np.cos(lat1_r) * np.sin(lat2_r) - np.sin(lat1_r) * np.cos(lat2_r) * np.cos(dlon)
+    brng = np.degrees(np.arctan2(y, x))
+    return (brng + 360.0) % 360.0
+
+
 def altitude_difference(aircraft_alt_m: float | None, station_alt_m: float | None) -> float | None:
     """Compute aircraft minus station altitude difference in meters."""
     if aircraft_alt_m is None or station_alt_m is None:
@@ -76,6 +95,7 @@ def radio_horizon_km(station_height_m: float, aircraft_height_m: float) -> float
 __all__ = [
     "compute_distance_bearing_scalar",
     "haversine_km_vector",
+    "bearing_deg_vector",
     "altitude_difference",
     "radio_horizon_km",
 ]

@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from ogn_tool.analysis.rf_metrics import compute_distance_bearing
+from ogn_tool.rf.geometry import bearing_deg_vector, haversine_km_vector
 
 
 def build_rf_observations(packets_df: pd.DataFrame, receptions_df: pd.DataFrame) -> pd.DataFrame:
@@ -30,7 +30,7 @@ def compute_distance(df: pd.DataFrame, station_lat: float, station_lon: float) -
         return pd.Series(dtype=float)
     lat = pd.to_numeric(df["lat"], errors="coerce").to_numpy()
     lon = pd.to_numeric(df["lon"], errors="coerce").to_numpy()
-    distance_km, _ = compute_distance_bearing(lat, lon, station_lat=station_lat, station_lon=station_lon)
+    distance_km = haversine_km_vector(station_lat, station_lon, lat, lon)
     return pd.Series(distance_km)
 
 
@@ -39,5 +39,5 @@ def compute_bearing(df: pd.DataFrame, station_lat: float, station_lon: float) ->
         return pd.Series(dtype=float)
     lat = pd.to_numeric(df["lat"], errors="coerce").to_numpy()
     lon = pd.to_numeric(df["lon"], errors="coerce").to_numpy()
-    _, bearing_deg = compute_distance_bearing(lat, lon, station_lat=station_lat, station_lon=station_lon)
+    bearing_deg = bearing_deg_vector(station_lat, station_lon, lat, lon)
     return pd.Series(bearing_deg)
