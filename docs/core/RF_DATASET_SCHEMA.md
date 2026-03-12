@@ -42,14 +42,21 @@ Note:
 - `stations`
 - `dataset_mode`
 
-`RFAnalysisEngine.run()` returns `RFAnalysisResult` with:
+`RFAnalysisEngine.run()` returns `RFAnalysisResults` with:
 
-- `packets`
-- `distance_df`
-- `azimuth_df`
-- `coverage_grid`
-- `terrain_mask`
-- `metrics` (including `metrics["rf_models"]`)
+- `feature_matrix`
+- `coverage`
+- `visibility`
+- `blind_zones`
+- `antenna_pattern`
+- `antenna_shadow_sectors`
+- `network_graph`
+- `network_metrics`
+- `network_timeseries`
+- `network_events`
+- `network_evolution`
+- `station_suggestions`
+- `metrics`
 
 ## 2. Flight-Relevant Datasets
 
@@ -60,6 +67,7 @@ Required for free-flight analysis:
 - `station_metrics`
 - `coverage_grid`
 - `network_overlap`
+- `network_graph`
 
 Current engine mapping:
 
@@ -68,6 +76,7 @@ Current engine mapping:
 - `station_metrics`: explicit dataset key.
 - `coverage_grid`: explicit dataset key.
 - `network_overlap`: currently represented by `station_overlap_matrix`.
+- `network_graph`: explicit typed result key in `RFAnalysisResults`.
 
 ## 3. Canonical Schema Definitions
 
@@ -83,6 +92,7 @@ Expected fields:
 | `station_id` (current alias often `igate`/`receiver`) | `string` | stable | canonical target from DATA_CONTRACT |
 | `aircraft_id` (current alias often `src`) | `string` | stable | canonical target from DATA_CONTRACT |
 | `timestamp` (current alias often `ts_epoch`/`ts_utc`) | `int64` or `datetime-like` | stable | canonical target from DATA_CONTRACT |
+| `timestamp_ns` | `int64` | experimental | high-resolution timestamp when ingestion path provides it |
 | `lat` | `float64` | stable | WGS84 latitude |
 | `lon` | `float64` | stable | WGS84 longitude |
 | `altitude` (`altitude`/`altitude_m`) | `float64` | experimental | may be absent in packet fallback mode |
@@ -136,7 +146,7 @@ Typical fields:
 
 Producer module:
 - `src/ogn_tool/engine/rf_engine.py`
-- via `analysis.pipeline.build_rf_dataset(...)` + probability-field builder
+- via probability-field builder
 
 Typical fields:
 
@@ -153,7 +163,8 @@ Typical fields:
 ### 3.5 `network_metrics`
 
 Producer module:
-- `src/ogn_tool/engine/rf_engine.py`
+- `src/ogn_tool/analysis/network_metrics/*`
+- attached by `src/ogn_tool/engine/rf_engine.py`
 
 Fields:
 
@@ -168,7 +179,8 @@ Fields:
 ### 3.6 `network_overlap` (canonical free-flight view)
 
 Producer module:
-- Current key: `station_overlap_matrix` from `src/ogn_tool/engine/rf_engine.py`
+- current key: `station_overlap_matrix`
+- metrics-side logic: `src/ogn_tool/analysis/network_metrics/station_metrics.py`
 
 Fields (matrix form):
 
@@ -177,6 +189,83 @@ Fields (matrix form):
 | index: `station_id` (current often callsign/igate) | `string` | stable | row station |
 | columns: `station_id` | `string` | stable | column station |
 | cell value overlap count | `int64` | stable | shared event count |
+
+### 3.7 `network_graph`
+
+Producer modules:
+- `src/ogn_tool/analysis/network_graph/rf_graph_builder.py`
+- `src/ogn_tool/engine/network_graph_engine.py`
+
+Canonical typed model:
+- `src/ogn_tool/models/network_graph_model.py`
+
+Typed objects:
+
+| object | fields | stability | notes |
+| --- | --- | --- | --- |
+| `NetworkNode` | `id`, `type`, `lat`, `lon`, `altitude`, `attributes` | stable | `lat`/`lon` remain optional for backward compatibility |
+| `NetworkEdge` | `source`, `target`, `relation`, `weight`, `attributes` | stable | `relation`: `reception` / `coverage` / future graph relations |
+| `NetworkGraph` | `nodes`, `edges`, `metrics` | stable | canonical graph container |
+
+Node types:
+- `station`
+- `aircraft`
+- `grid_cell`
+
+Edge relations:
+- `reception`
+- `coverage`
+- future: `overlap`
+
+Compatibility rule:
+- `NetworkGraph` is intentionally mapping-friendly for current callers.
+- Existing usage patterns remain valid:
+  - `graph.get("nodes")`
+  - `"nodes" in graph`
+  - `graph["edges"]`
+
+### 3.8 `network_timeseries`
+
+Producer modules:
+- `src/ogn_tool/analysis/network_graph/network_timeseries.py`
+- attached by `src/ogn_tool/pipeline/network_graph_stage.py`
+
+Typical content:
+- station activity time series
+- network load time series
+- coverage time series
+
+Stability:
+- experimental
+
+### 3.9 `network_events`
+
+Producer modules:
+- `src/ogn_tool/analysis/network_graph/network_events.py`
+- attached by `src/ogn_tool/pipeline/network_graph_stage.py`
+
+Typical content:
+- station outages
+- coverage regressions
+- network anomalies
+
+Stability:
+- experimental
+
+### 3.10 `network_evolution`
+
+Producer modules:
+- `src/ogn_tool/analysis/network_graph/network_metrics.py`
+- attached by `src/ogn_tool/pipeline/network_graph_stage.py`
+
+Fields:
+
+| field | type | stability | notes |
+| --- | --- | --- | --- |
+| `coverage_growth` | `int64` | experimental | change in covered grid-cell count |
+| `station_importance_change` | `dict[str, float]` | experimental | per-station delta |
+| `redundancy_change` | `float64` | experimental | mean coverage redundancy delta |
+| `blind_zone_change` | `int64` | experimental | blind zone count delta |
 
 ## 4. Stability Model
 
@@ -192,8 +281,9 @@ Definitions:
 - `coverage_grid`
 - `network_metrics`
 - `station_overlap_matrix` (as `network_overlap` view)
-- `rf_diagnosis` (health/issues)
-- `metrics["rf_models"]` from `run()`
+- `network_graph`
+- `rf_diagnosis`
+- `metrics["rf_models"]`
 
 ### Experimental surface
 
@@ -207,13 +297,16 @@ Definitions:
 - `blind_cells`
 - `azimuth_df`
 - `terrain_mask`
+- `network_timeseries`
+- `network_events`
+- `network_evolution`
+- `station_suggestions`
 
 ### Internal surface
 
 - `packets_all`
 - `packets_rf`
 - `packets_filtered`
-- `RFAnalysisResult.packets`
 - transport metadata columns used for compatibility (`raw`, `qas`, `dst`) in analysis-facing tables
 
 ## 5. Relationship with DATA_CONTRACT

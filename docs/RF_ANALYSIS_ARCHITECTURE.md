@@ -11,6 +11,7 @@ Packets
 → RFAnalysisPipeline
 → Stages
 → Metrics / Diagnostics
+→ NetworkGraph
 → Engine outputs
 → Services
 → UI
@@ -42,6 +43,69 @@ Role:
 - explicit contract between engine and pipeline
 - stable handoff object for service/UI layers
 
+### NetworkGraph
+
+`NetworkGraph` is the canonical typed container for RF network topology.
+It is defined in:
+- `src/ogn_tool/models/network_graph_model.py`
+
+It contains:
+- `nodes: list[NetworkNode]`
+- `edges: list[NetworkEdge]`
+- `metrics: dict`
+
+Role:
+- formalize RF network topology as a first-class model
+- provide a stable contract for graph analytics, storage and engine outputs
+- avoid ad hoc graph dictionaries as the long-term architecture
+
+Important compatibility rule:
+- `NetworkGraph` remains mapping-friendly for current callers.
+- Existing usage still works:
+  - `graph.get("nodes")`
+  - `"nodes" in graph`
+  - `graph["edges"]`
+
+### NetworkNode
+
+Represents a graph node.
+
+Current node types:
+- `station`
+- `aircraft`
+- `grid_cell`
+
+Fields:
+- `id`
+- `type`
+- `lat`
+- `lon`
+- `altitude`
+- `attributes`
+
+Note:
+- `lat` / `lon` remain optional by design.
+- This preserves compatibility with current code paths where some nodes are not fully geo-populated yet.
+
+### NetworkEdge
+
+Represents a graph relation.
+
+Fields:
+- `source`
+- `target`
+- `relation`
+- `weight`
+- `attributes`
+
+Current edge relations:
+- `reception`
+- `coverage`
+
+Future relation types may include:
+- `overlap`
+- routing/topology relations
+
 ## 3. RF Analysis Pipeline
 
 Pipeline stage order:
@@ -52,6 +116,7 @@ Pipeline stage order:
 4. `BlindZoneDetectionStage`
 5. `AntennaPatternStage`
 6. `RFDiagnosticsStage`
+7. `network_graph_stage` (complementary network intelligence stage)
 
 Each stage declares `requires` and `produces` to support pipeline validation.
 
@@ -85,6 +150,11 @@ Each stage declares `requires` and `produces` to support pipeline validation.
 - outputs (`produces`): `metrics`
 - purpose: aggregate model outputs into final diagnostics and engine-facing metrics.
 
+### network_graph_stage
+- inputs: observation payload, coverage outputs, previous graph (optional)
+- outputs: `network_graph`, `network_metrics`, `network_timeseries`, `network_events`, `network_evolution`, `station_suggestions`
+- purpose: build and analyze RF network topology as a graph-oriented layer on top of RF observations
+
 ## 4. RF Computation Layer
 
 Low-level RF primitives are located under `ogn_tool.rf`:
@@ -105,19 +175,43 @@ These modules are treated as primitive utilities for higher analysis stages.
 Analytical modules transform observations into domain metrics:
 
 - `rf_feature_matrix`: vectorized feature extraction from observations
-- `rf_visibility_model`: horizon/visibility-oriented RF interpretation
 - `rf_blind_zone_detection`: blind-zone inference from observation-derived distributions
 - `rf_antenna_pattern`: directional reception probability and shadow-sector estimation
 - `rf_metrics`: shared RF metric summarization helpers
 
+RF model modules are now grouped under:
+- `ogn_tool.analysis.rf_models`
+  - `radio_horizon`
+  - `altitude_distance`
+  - `terrain`
+  - `terrain_visibility`
+  - `rf_visibility_model`
+
+Network analytics are split by concern:
+- `ogn_tool.analysis.network_metrics`
+  - tabular/statistical network metrics
+  - station metrics
+  - coverage metrics
+  - redundancy and blind-zone metrics
+- `ogn_tool.analysis.network_graph`
+  - graph construction
+  - connectivity/topology metrics
+  - time series and events
+  - network optimization helpers
+
+Network intelligence helpers are grouped under:
+- `ogn_tool.analysis.intelligence`
+  - `rf_coverage_map`
+  - `station_planner`
+
 Responsibility:
-- implement RF domain analysis logic
+- implement RF and network analysis logic
 - consume normalized observation-level inputs
-- produce analysis outputs for pipeline stages
+- produce analysis outputs for pipeline stages and engine integration
 
 ### Observation Pipeline Boundary
 
-`ogn_tool.analysis.observation_pipeline` is the normalization boundary between packet-shaped rows and analysis-ready observation vectors.
+`ogn_tool.analysis.observation_builder` is the normalization boundary between packet-shaped rows and analysis-ready observation vectors/payloads.
 
 Responsibility:
 - transform packet-level data to `RFObservationVector`
@@ -142,14 +236,17 @@ This layer provides raw/structured inputs to service and engine orchestration.
 
 ## 7. Engine Layer
 
-Primary orchestrator: `ogn_tool.engine.rf_engine`
+Primary orchestrators:
+- `ogn_tool.engine.rf_engine`
+- `ogn_tool.engine.network_graph_engine`
 
 Responsibility:
 - build the initial `RFAnalysisDataset`
 - execute the `RFAnalysisPipeline`
+- build and expose `NetworkGraph` results
 - return consolidated analysis results for services/UI
 
-The engine is the runtime integration point between normalized observations, staged analytics, and final outputs.
+The engine is the runtime integration point between normalized observations, staged analytics, graph intelligence and final outputs.
 
 ## 8. Service Layer
 
@@ -157,7 +254,6 @@ Service modules are located under `ogn_tool.services`:
 
 - `data_service`
 - `rf_analysis_service`
-- `rf_analysis_pipeline`
 
 Responsibility:
 - orchestrate application use-cases
@@ -166,23 +262,40 @@ Responsibility:
 
 Services should not duplicate low-level RF analysis algorithms.
 
-## 9. UI Layer
+## 9. Storage Layer
 
-UI modules are under `ogn_tool.ui`.
+Graph persistence lives under `ogn_tool.storage`:
+
+- `network_graph_store`
 
 Responsibility:
-- consume service/engine-produced results
+- persist `NetworkGraph`
+- reload prior graph state
+- support incremental graph updates from new observations
+
+This layer is intentionally separated from analysis logic.
+
+## 10. UI Layer
+
+The canonical UI now lives under:
+- `apps/ui`
+- `apps/dashboard.py`
+
+Responsibility:
+- consume engine/service-produced results
 - render metrics, maps, diagnostics, and views
 - avoid recomputing RF analysis logic in UI code
 
 UI is a presentation layer over analysis results.
 
-## 10. Architectural Rules
+## 11. Architectural Rules
 
 - Analysis modules must not import UI modules.
 - RF primitive modules must not depend on analysis modules.
-- Pipeline stages must declare `requires` / `produces`.
+- Pipeline stages must declare `requires` / `produces` when they participate in the RF pipeline contract.
 - `RFAnalysisDataset` is the canonical dataset contract between pipeline and engine.
-- UI should consume service-layer interfaces (target architecture), not bypass contracts.
+- `NetworkGraph` is the canonical graph contract for RF network topology.
+- UI should consume service-layer interfaces or engine outputs, not recompute analysis logic.
 - Service layer must not implement RF primitive algorithms.
 - Data access layer must not contain RF analysis logic.
+- Storage must persist typed graph state, not define analysis logic.
