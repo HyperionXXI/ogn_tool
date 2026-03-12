@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from ogn_tool.analysis.network_graph import build_rf_graph, compute_graph_metrics
+from ogn_tool.models.network_graph_model import NetworkGraph
 
 
 @dataclass
 class NetworkGraphResult:
-    graph: dict
+    graph: NetworkGraph
     metrics: dict
     station_links: Any = None
     coverage_links: Any = None

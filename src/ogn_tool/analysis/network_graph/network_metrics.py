@@ -4,18 +4,23 @@ from collections import defaultdict
 
 import pandas as pd
 
+from ogn_tool.models.network_graph_model import NetworkGraph
 
-def compute_graph_metrics(graph: dict) -> dict:
+
+def _as_graph_dict(graph) -> dict:
+    if isinstance(graph, NetworkGraph):
+        return graph.to_dict()
+    return graph or {"nodes": [], "edges": [], "metrics": {}}
+
+
+def compute_graph_metrics(graph: dict | NetworkGraph) -> dict:
     """
     Compute lightweight graph metrics for RF intelligence.
-
-    The graph format is expected to contain:
-    - nodes: [{id, type, ...}]
-    - edges: [{source, target, type, ...}]
     """
 
-    nodes = graph.get("nodes") or []
-    edges = graph.get("edges") or []
+    graph_dict = _as_graph_dict(graph)
+    nodes = graph_dict.get("nodes") or []
+    edges = graph_dict.get("edges") or []
 
     station_to_aircraft: dict[str, set[str]] = defaultdict(set)
     station_to_grid: dict[str, set[str]] = defaultdict(set)
@@ -25,7 +30,7 @@ def compute_graph_metrics(graph: dict) -> dict:
     for edge in edges:
         source = str(edge.get("source"))
         target = str(edge.get("target"))
-        edge_type = edge.get("type")
+        edge_type = edge.get("type", edge.get("relation"))
         if not source or not target:
             continue
         if edge_type == "reception":
@@ -86,7 +91,7 @@ def compute_graph_metrics(graph: dict) -> dict:
 
 
 
-def compute_network_evolution_metrics(graph: dict, previous_graph: dict | None) -> dict:
+def compute_network_evolution_metrics(graph: dict | NetworkGraph, previous_graph: dict | NetworkGraph | None) -> dict:
     current = compute_graph_metrics(graph)
     previous = compute_graph_metrics(previous_graph or {"nodes": [], "edges": []})
 
