@@ -6,6 +6,7 @@ from typing import Any, Dict, Optional
 import math
 
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event
+from ogn_tool.rf.geometry import compute_distance_bearing_scalar
 
 
 def _safe_float(value: Any) -> float | None:
@@ -41,26 +42,6 @@ def _altitude_difference(aircraft_alt_m: float | None, station_alt_m: float | No
         return None
 
 
-def _compute_distance_bearing_scalar(station_lat: float, station_lon: float, aircraft_lat: float, aircraft_lon: float) -> tuple[float, float]:
-    r_km = 6371.0
-    lat1 = math.radians(float(station_lat))
-    lon1 = math.radians(float(station_lon))
-    lat2 = math.radians(float(aircraft_lat))
-    lon2 = math.radians(float(aircraft_lon))
-
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-
-    a = math.sin(dlat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2.0) ** 2
-    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
-    distance_km = r_km * c
-
-    x = math.sin(dlon) * math.cos(lat2)
-    y = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
-    bearing = (math.degrees(math.atan2(x, y)) + 360.0) % 360.0
-
-    return distance_km, bearing
-
 
 class _SpatialIndex:
     def __init__(self, station_coords: Dict[str, tuple[float, float, float | None]], grid_size: float = 0.05):
@@ -83,7 +64,7 @@ class _SpatialIndex:
         if key not in self._cache:
             st_lat, st_lon, _ = coords
             center_lat, center_lon = self._center(c_lat, c_lon)
-            self._cache[key] = _compute_distance_bearing_scalar(st_lat, st_lon, center_lat, center_lon)
+            self._cache[key] = compute_distance_bearing_scalar(st_lat, st_lon, center_lat, center_lon)
         d, b = self._cache[key]
         return float(d), float(b)
 
