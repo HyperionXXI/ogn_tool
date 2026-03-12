@@ -5,6 +5,7 @@ import streamlit as st
 import pydeck as pdk
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
 
 
@@ -117,15 +118,16 @@ def render_station_intelligence_page(ctx: dict) -> None:
     station_lon = ctx.get("station_lon")
 
     engine = RFAnalysisEngine(rf_packets, station_lat, station_lon)
-    results = engine.run()
+    results = engine.run(RFAnalysisDataset(observations=[]))
 
     metrics = results.metrics or {}
     rf_models = metrics.get("rf_models", {})
     diagnostics = ctx.get("rf_diagnostics", {})
 
     median_distance = None
-    if isinstance(results.distance_df, pd.DataFrame) and "distance_km" in results.distance_df.columns:
-        median_distance = results.distance_df["distance_km"].median()
+    distance_df = metrics.get("distance_df")
+    if isinstance(distance_df, pd.DataFrame) and "distance_km" in distance_df.columns:
+        median_distance = distance_df["distance_km"].median()
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -137,7 +139,7 @@ def render_station_intelligence_page(ctx: dict) -> None:
 
     st.divider()
 
-    render_coverage_radar(results.azimuth_df)
+    render_coverage_radar(metrics.get("azimuth_df"))
     render_propagation_models(rf_models)
     st.subheader("RF Metrics Summary")
 

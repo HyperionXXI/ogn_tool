@@ -3,16 +3,16 @@ from __future__ import annotations
 import pandas as pd
 
 from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
-from ogn_tool.analysis import azimuth as analysis_azimuth
 from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
-from ogn_tool.analysis import signal_distance as analysis_signal_distance
-from ogn_tool.analysis import station_quality as analysis_station_quality
-from ogn_tool.analysis import station_range as analysis_station_range
 from ogn_tool.analysis import terrain as analysis_terrain
 from ogn_tool.analysis import terrain_visibility as analysis_terrain_visibility
 from ogn_tool.analysis.network_analysis import detect_network_blind_zones
 from ogn_tool.models.rf.rf_model_adapter import run_rf_model
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.network import station_quality as analysis_station_quality
+from ogn_tool.network import station_range as analysis_station_range
+from ogn_tool.rf import azimuth as analysis_azimuth
+from ogn_tool.rf import signal_distance as analysis_signal_distance
 from ogn_tool.rf_probability_field import build_rf_probability_field
 
 from .rf_stage import RFAnalysisStage
@@ -20,6 +20,8 @@ from .rf_stage import RFAnalysisStage
 
 class FeatureMatrixStage(RFAnalysisStage):
     name = "feature_matrix"
+    requires = ["observations"]
+    produces = ["feature_matrix"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
         from ogn_tool.analysis.rf_feature_matrix import build_feature_matrix
@@ -30,6 +32,8 @@ class FeatureMatrixStage(RFAnalysisStage):
 
 class RFCoverageStage(RFAnalysisStage):
     name = "coverage"
+    requires = ["feature_matrix"]
+    produces = ["coverage"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
         distance_df = getattr(dataset, "distance_df", None)
@@ -38,17 +42,26 @@ class RFCoverageStage(RFAnalysisStage):
         station_lat = getattr(dataset, "station_lat", None)
         station_lon = getattr(dataset, "station_lon", None)
 
-        azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, station_lat, station_lon)
-        coverage_grid = build_rf_probability_field(distance_df)
+        if callable(getattr(analysis_azimuth, "compute_azimuth_radiation", None)):
+            azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, station_lat, station_lon)
+        else:
+            azimuth_df = pd.DataFrame()
+        if {"lat", "lon"}.issubset(distance_df.columns):
+            coverage_grid = build_rf_probability_field(distance_df)
+        else:
+            coverage_grid = pd.DataFrame()
 
-        dataset.coverage = coverage_grid
-        dataset.azimuth_df = azimuth_df
-        dataset.coverage_grid = coverage_grid
+        dataset.results.coverage = coverage_grid
+        metrics = dataset.results.metrics or {}
+        metrics["azimuth_df"] = azimuth_df
+        dataset.results.metrics = metrics
         return dataset
 
 
 class VisibilityModelStage(RFAnalysisStage):
     name = "visibility"
+    requires = ["coverage"]
+    produces = ["visibility"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
         distance_df = getattr(dataset, "distance_df", None)
@@ -94,7 +107,7 @@ class VisibilityModelStage(RFAnalysisStage):
             station_lon=station_lon,
         )
 
-        metrics = getattr(dataset, "metrics", {}) or {}
+        metrics = dataset.results.metrics or {}
         metrics.update(
             {
                 "station_range": range_stats,
@@ -118,35 +131,55 @@ class VisibilityModelStage(RFAnalysisStage):
             }
         )
 
-        dataset.visibility = {
+        dataset.results.visibility = {
             "signal_distance": signal_stats,
             "radio_horizon": horizon_stats,
             "terrain_visibility": visibility_stats,
         }
-        dataset.terrain = terrain_stats
-        dataset.metrics = metrics
+        dataset.results.metrics = metrics
         return dataset
 
 
 class BlindZoneDetectionStage(RFAnalysisStage):
     name = "blind_zone"
+    requires = ["visibility"]
+    produces = ["blind_zones"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
-        coverage_grid = getattr(dataset, "coverage_grid", None)
+        coverage_grid = dataset.results.coverage
         distance_df = getattr(dataset, "distance_df", None)
 
         source = coverage_grid if isinstance(coverage_grid, pd.DataFrame) and not coverage_grid.empty else distance_df
         blind_zone_grid = detect_network_blind_zones(source)
-        dataset.blind_zones = blind_zone_grid
-        dataset.blind_zone_grid = blind_zone_grid
+        dataset.results.blind_zones = blind_zone_grid
+        return dataset
+
+
+class AntennaPatternStage(RFAnalysisStage):
+
+    name = "antenna_pattern"
+    requires = ["feature_matrix"]
+    produces = ["antenna_pattern", "antenna_shadow_sectors"]
+
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
+
+        from ogn_tool.analysis.rf_antenna_pattern import estimate_antenna_pattern, detect_shadow_sectors
+
+        pattern = estimate_antenna_pattern(dataset.feature_matrix)
+
+        dataset.results.antenna_pattern = pattern
+        dataset.results.antenna_shadow_sectors = detect_shadow_sectors(pattern)
+
         return dataset
 
 
 class RFDiagnosticsStage(RFAnalysisStage):
     name = "diagnostics"
+    requires = ["coverage", "visibility"]
+    produces = ["metrics"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
-        metrics = getattr(dataset, "metrics", {}) or {}
+        metrics = dataset.results.metrics or {}
         metrics["rf_models"] = {
             "signal_distance": metrics.get("signal_distance"),
             "radio_horizon": metrics.get("radio_horizon"),
@@ -154,11 +187,14 @@ class RFDiagnosticsStage(RFAnalysisStage):
             "terrain_visibility": metrics.get("terrain_visibility"),
             "altitude_distance": metrics.get("altitude_distance"),
         }
-        if getattr(dataset, "blind_zone_grid", None) is not None:
-            metrics["blind_zone_grid"] = getattr(dataset, "blind_zone_grid")
+        if dataset.results.blind_zones is not None:
+            metrics["blind_zone_grid"] = dataset.results.blind_zones
+        if dataset.results.antenna_pattern is not None:
+            metrics["antenna_pattern"] = dataset.results.antenna_pattern
+        if dataset.results.antenna_shadow_sectors is not None:
+            metrics["antenna_shadow_sectors"] = dataset.results.antenna_shadow_sectors
 
-        dataset.diagnostics = metrics
-        dataset.metrics = metrics
+        dataset.results.metrics = metrics
         return dataset
 
 
@@ -167,5 +203,8 @@ __all__ = [
     "RFCoverageStage",
     "VisibilityModelStage",
     "BlindZoneDetectionStage",
+    "AntennaPatternStage",
     "RFDiagnosticsStage",
 ]
+
+

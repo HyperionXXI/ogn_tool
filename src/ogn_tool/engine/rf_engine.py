@@ -6,15 +6,15 @@ import pandas as pd
 import numpy as np
 
 from ogn_tool.analysis.pipeline import build_rf_dataset
-from ogn_tool.analysis import azimuth as analysis_azimuth
-from ogn_tool.analysis import station_range as analysis_station_range
-from ogn_tool.analysis import station_quality as analysis_station_quality
-from ogn_tool.analysis import signal_distance as analysis_signal_distance
+from ogn_tool.rf import azimuth as analysis_azimuth
+from ogn_tool.network import station_range as analysis_station_range
+from ogn_tool.network import station_quality as analysis_station_quality
+from ogn_tool.rf import signal_distance as analysis_signal_distance
 from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
 from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
 from ogn_tool.analysis import terrain as analysis_terrain
 from ogn_tool.analysis import terrain_visibility as analysis_terrain_visibility
-from ogn_tool.analysis.azimuth import compute_azimuth_histogram, analyze_directional_balance
+from ogn_tool.rf.azimuth import compute_azimuth_histogram, analyze_directional_balance
 from ogn_tool.analysis.geo import compute_distance_bearing
 from ogn_tool.analysis.network_analysis import detect_network_blind_zones
 from ogn_tool.analysis.rf_diagnosis import RFDiagnosis
@@ -26,20 +26,29 @@ from ogn_tool.models.rf.rf_model_adapter import run_rf_model
 from ogn_tool.models.rf_types import RFObservationEvent, rf_event_to_dataset_row
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.models.rf_analysis_results import RFAnalysisResults
 from ogn_tool.pipeline.rf_analysis_pipeline import RFAnalysisPipeline
-from ogn_tool.pipeline.rf_stages import FeatureMatrixStage, RFCoverageStage, VisibilityModelStage, BlindZoneDetectionStage, RFDiagnosticsStage
+from ogn_tool.pipeline.rf_stages import FeatureMatrixStage, RFCoverageStage, VisibilityModelStage, BlindZoneDetectionStage, AntennaPatternStage, RFDiagnosticsStage
 
-from .results import RFAnalysisResult
 
 
 class RFAnalysisEngine:
-    def __init__(self, packets_df: pd.DataFrame, station_lat: float, station_lon: float):
+    def __init__(self, packets_df: pd.DataFrame | None = None, station_lat: float = 0.0, station_lon: float = 0.0):
         self.packets = packets_df if packets_df is not None else pd.DataFrame()
         self.station_lat = station_lat
         self.station_lon = station_lon
         self._last_dataset: Optional[dict] = None
         self._last_dataset_mode: Optional[str] = None
         self._last_station_id: Optional[str] = None
+
+        self.pipeline = RFAnalysisPipeline([
+            FeatureMatrixStage(),
+            RFCoverageStage(),
+            VisibilityModelStage(),
+            BlindZoneDetectionStage(),
+            AntennaPatternStage(),
+            RFDiagnosticsStage(),
+        ])
 
     @staticmethod
     def filter_packets_by_station(packets_rf: pd.DataFrame, station_id: str) -> pd.DataFrame:
@@ -612,61 +621,31 @@ class RFAnalysisEngine:
             "coverage_grid": coverage_grid,
         }
 
-    def _run_diagnostics(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
-        _ = metrics
-        return {}
-
-    def _run_network_analysis(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
-        _ = metrics
-        return {}
-
-    def run(self) -> RFAnalysisResult:
+    def run(self, dataset: RFAnalysisDataset) -> RFAnalysisResults:
         # Stage 1: observation building
         distance_df, grid_for_analysis = self._build_observations()
 
         # Stage 2+: declarative RF analysis pipeline
-        observations: List[RFObservationVector] = []
-        dataset = RFAnalysisDataset(
-            observations=observations,
-        )
+        if dataset.observations is None:
+            dataset.observations = []
+
         dataset.distance_df = distance_df
         dataset.grid_for_analysis = grid_for_analysis
         dataset.station_lat = self.station_lat
         dataset.station_lon = self.station_lon
-        dataset.metrics = {}
 
-        pipeline = RFAnalysisPipeline(
-            [
-                FeatureMatrixStage(),
-                RFCoverageStage(),
-                VisibilityModelStage(),
-                BlindZoneDetectionStage(),
-                RFDiagnosticsStage(),
-            ]
-        )
-        dataset = pipeline.run(dataset)
+        dataset = self.pipeline.run(dataset)
+        dataset.validate()
 
-        metrics = getattr(dataset, "metrics", {}) or {}
-        azimuth_df = getattr(dataset, "azimuth_df", None)
-        coverage_grid = getattr(dataset, "coverage_grid", None)
-        terrain_stats = getattr(dataset, "terrain", None) or metrics.get("terrain")
+        metrics = dataset.results.metrics
+        metrics["distance_df"] = distance_df
 
-        # Keep existing no-op stage hooks for compatibility.
-        _ = self._run_diagnostics(metrics)
-        _ = self._run_network_analysis(metrics)
+        return dataset.results
 
-        terrain_mask = None
-        if isinstance(terrain_stats, dict) and terrain_stats.get("implemented"):
-            terrain_mask = terrain_stats.get("data")
 
-        return RFAnalysisResult(
-            packets=self.packets,
-            distance_df=distance_df,
-            azimuth_df=azimuth_df,
-            coverage_grid=coverage_grid,
-            terrain_mask=terrain_mask,
-            metrics=metrics,
-        )
+    def run_from_observations(self, observations: Optional[List[RFObservationVector]] = None) -> RFAnalysisResults:
+        dataset = RFAnalysisDataset(observations=observations or [])
+        return self.run(dataset)
 
 def observations_to_rows(observations: Iterable[object]) -> List[dict]:
     """Convert RF observation objects (vector/event) into analysis row dictionaries."""
@@ -701,3 +680,5 @@ def observations_to_rows(observations: Iterable[object]) -> List[dict]:
             rows.append(dict(obs))
 
     return rows
+
+

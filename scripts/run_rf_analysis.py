@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 
 
 def main():
@@ -19,15 +20,20 @@ def main():
 
     packets = pd.read_csv(args.packets)
     engine = RFAnalysisEngine(packets, args.station_lat, args.station_lon)
-    result = engine.run()
+    result = engine.run(RFAnalysisDataset(observations=[]))
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    result.coverage_grid.to_csv(out_dir / "coverage.csv", index=False)
-    result.distance_df.to_csv(out_dir / "propagation.csv", index=False)
+    coverage_df = result.coverage if isinstance(result.coverage, pd.DataFrame) else pd.DataFrame()
+    propagation_df = (result.metrics or {}).get("distance_df")
+    if not isinstance(propagation_df, pd.DataFrame):
+        propagation_df = pd.DataFrame()
+
+    coverage_df.to_csv(out_dir / "coverage.csv", index=False)
+    propagation_df.to_csv(out_dir / "propagation.csv", index=False)
     with open(out_dir / "metrics.json", "w", encoding="utf-8") as f:
-        json.dump(result.metrics, f, indent=2, default=str)
+        json.dump(result.metrics or {}, f, indent=2, default=str)
 
 
 if __name__ == "__main__":
