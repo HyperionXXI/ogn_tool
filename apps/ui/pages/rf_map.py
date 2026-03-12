@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ui.charts import render_rf_cartography
+from ogn_tool.ui.charts import render_rf_cartography
 
 
 def render_rf_map_page(ctx):

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ui.layout import DASHBOARD_COLUMNS
-from ui.metrics import metric_card
-from ui import charts as ui_charts
-from ui.charts import render_rf_cartography
+from ogn_tool.ui.layout import DASHBOARD_COLUMNS
+from apps.ui.metrics import metric_card
+from ogn_tool.ui import charts as ui_charts
+from ogn_tool.ui.charts import render_rf_cartography
 from ogn_tool.rf_probability_field import build_rf_probability_field
 
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ui.layout import DASHBOARD_COLUMNS
-from ui.metrics import metric_card
+from ogn_tool.ui.layout import DASHBOARD_COLUMNS
+from apps.ui.metrics import metric_card
 
 
 def render_terrain_page(ctx):
