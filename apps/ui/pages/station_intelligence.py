@@ -4,8 +4,6 @@ import pandas as pd
 import streamlit as st
 import pydeck as pdk
 
-from ogn_tool.engine.rf_engine import RFAnalysisEngine
-from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.ui.view_models.station_view import StationAnalysisView
 from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
 
@@ -115,12 +113,9 @@ def render_station_intelligence_page(ctx: dict) -> None:
 
     rf_results = cached_rf_analysis(rf_packets)
 
-    station_lat = ctx.get("station_lat")
-    station_lon = ctx.get("station_lon")
-
-    engine = RFAnalysisEngine(rf_packets, station_lat, station_lon)
-    results = engine.run(RFAnalysisDataset(observations=[]))
-    view = StationAnalysisView.from_results(results, packet_count=len(rf_packets))
+    view = StationAnalysisView.from_context(ctx)
+    if not view.packet_count:
+        view.packet_count = len(rf_packets)
 
     metrics = view.metrics or {}
     rf_models = view.rf_models
