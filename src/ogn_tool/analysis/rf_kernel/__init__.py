@@ -1,4 +1,4 @@
-from .geometry import (
+from ogn_tool.rf.geometry import (
     compute_distance_bearing_scalar,
     haversine_km_vector,
     altitude_difference,

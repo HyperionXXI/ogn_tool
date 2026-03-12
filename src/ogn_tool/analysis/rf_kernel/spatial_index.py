@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, Tuple
 
-from .geometry import compute_distance_bearing_scalar
+from ogn_tool.rf.geometry import compute_distance_bearing_scalar
 
 
 @dataclass
@@ -19,7 +19,6 @@ class RFSpatialIndex:
         self.grid_size = max(1e-6, float(self.grid_size))
 
     def _cell_for(self, lat: float, lon: float) -> tuple[int, int]:
-        # Required indexing rule: floor(lat/grid_size), floor(lon/grid_size)
         cell_lat = int(math.floor(float(lat) / self.grid_size))
         cell_lon = int(math.floor(float(lon) / self.grid_size))
         return cell_lat, cell_lon

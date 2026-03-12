@@ -6,7 +6,8 @@ import pandas as pd
 
 from ogn_tool.analysis import rf_normalization
 from ogn_tool.analysis.aircraft_states import extract_aircraft_states
-from ogn_tool.analysis import signal_distance, azimuth, radio_horizon
+from ogn_tool.rf import signal_distance, azimuth
+from ogn_tool.analysis import radio_horizon
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event, state_to_rf_event
 
@@ -311,3 +312,4 @@ __all__ = [
     "build_observations_from_packets_events",
     "build_observation_vector",
 ]
+
