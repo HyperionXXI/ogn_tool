@@ -4,19 +4,20 @@ import pandas as pd
 import streamlit as st
 
 from ogn_tool.ui.layout import DASHBOARD_COLUMNS
+from ogn_tool.ui.view_models.station_view import StationAnalysisView
 from apps.ui.metrics import metric_card
 
 
 def render_directional_rf_page(ctx):
-    dataset = ctx.get("dataset", {})
+    view = StationAnalysisView.from_context(ctx)
     st.markdown("<h2>Directional RF Analysis</h2>", unsafe_allow_html=True)
-    if ctx.get("rf_packets") is None or getattr(ctx.get("rf_packets"), "empty", False):
+    if not view.has_rf:
         st.warning("No packets for this station in APRS-IS dataset.")
         return
 
-    hist_data = dataset.get("azimuth_histogram")
-    directional_balance = dataset.get("directional_balance")
-    station_metrics = dataset.get("station_metrics")
+    hist_data = view.azimuth_histogram
+    directional_balance = view.directional_balance
+    station_metrics = view.metrics.get("station_metrics")
     station_callsign = ctx.get("station_callsign")
 
     rf_local_count = int(ctx.get("rf_local_count", 0))
@@ -47,10 +48,7 @@ def render_directional_rf_page(ctx):
         p95 = metric_row.get("p95_distance") if metric_row is not None else None
         metric_card("P95 median (km)", ctx["fmt_float"](p95, 1) if p95 is not None else "—")
     with c3:
-        if isinstance(directional_balance, dict):
-            anisotropy = directional_balance.get("anisotropy")
-        else:
-            anisotropy = None
+        anisotropy = directional_balance.get("anisotropy") if isinstance(directional_balance, dict) else None
         metric_card("Anisotropy", ctx["fmt_float"](anisotropy, 2) if anisotropy is not None else "—")
     with c4:
         st.empty()
@@ -58,28 +56,19 @@ def render_directional_rf_page(ctx):
         st.empty()
 
     if hist_data:
-        df = pd.DataFrame(
-            {
-                "sector": hist_data.get("edges", [])[:-1],
-                "packets": hist_data.get("hist", []),
-            }
-        )
+        df = pd.DataFrame({
+            "sector": hist_data.get("edges", [])[:-1],
+            "packets": hist_data.get("hist", []),
+        })
         st.subheader("Azimuth reception distribution")
-        st.bar_chart(
-            df.set_index("sector"),
-            use_container_width=True,
-        )
+        st.bar_chart(df.set_index("sector"), use_container_width=True)
     else:
         st.info("No azimuth histogram available in the dataset.")
 
     if isinstance(directional_balance, dict) and directional_balance:
         st.subheader("Directional balance")
-        st.dataframe(
-            pd.DataFrame([directional_balance]),
-            use_container_width=True,
-        )
+        st.dataframe(pd.DataFrame([directional_balance]), use_container_width=True)
 
 
 def render_legacy_rf_page(filters):
-    dataset = ctx.get("dataset", {})
     st.info("Legacy RF tab removed. Use Overview / RF Map / Propagation / Directional RF / Terrain.")

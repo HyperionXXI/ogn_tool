@@ -102,10 +102,8 @@ def cached_rf_analysis(df):
 def render_station_intelligence_page(ctx: dict) -> None:
     st.title("Station Intelligence")
 
-    dataset = ctx.get("dataset", {})
-    rf_packets = ctx.get("rf_packets")
-    if rf_packets is None and isinstance(dataset, dict):
-        rf_packets = dataset.get("rf_receptions")
+    view = StationAnalysisView.from_context(ctx)
+    rf_packets = view.metrics.get("packets_rf")
 
     if rf_packets is None or not isinstance(rf_packets, pd.DataFrame) or rf_packets.empty:
         st.info("No RF packets available")
@@ -113,7 +111,6 @@ def render_station_intelligence_page(ctx: dict) -> None:
 
     rf_results = cached_rf_analysis(rf_packets)
 
-    view = StationAnalysisView.from_context(ctx)
     if not view.packet_count:
         view.packet_count = len(rf_packets)
 

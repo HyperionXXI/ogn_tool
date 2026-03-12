@@ -16,6 +16,9 @@ class StationAnalysisView:
     metrics: dict = field(default_factory=dict)
     rf_models: dict = field(default_factory=dict)
     azimuth_df: Any = None
+    azimuth_histogram: dict | None = None
+    directional_balance: dict | None = None
+    shadow_map: Any = None
 
     station_id: str = "—"
     station_lat: float | None = None
@@ -41,6 +44,9 @@ class StationAnalysisView:
             metrics=metrics,
             rf_models=metrics.get("rf_models", {}) if isinstance(metrics, dict) else {},
             azimuth_df=metrics.get("azimuth_df") if isinstance(metrics, dict) else None,
+            azimuth_histogram=metrics.get("azimuth_histogram") if isinstance(metrics, dict) else None,
+            directional_balance=metrics.get("directional_balance") if isinstance(metrics, dict) else None,
+            shadow_map=metrics.get("shadow_map") if isinstance(metrics, dict) else None,
         )
 
     @classmethod
@@ -65,6 +71,9 @@ class StationAnalysisView:
             metrics=metrics,
             rf_models=metrics.get("rf_models", {}),
             azimuth_df=dataset.get("azimuth_df") or metrics.get("azimuth_df"),
+            azimuth_histogram=dataset.get("azimuth_histogram") or metrics.get("azimuth_histogram"),
+            directional_balance=dataset.get("directional_balance") or metrics.get("directional_balance"),
+            shadow_map=dataset.get("shadow_map") or metrics.get("shadow_map"),
         )
 
     @classmethod
@@ -97,6 +106,9 @@ class StationAnalysisView:
             metrics=metrics,
             rf_models=metrics.get("rf_models", {}),
             azimuth_df=dataset.get("azimuth_df") or metrics.get("azimuth_df"),
+            azimuth_histogram=dataset.get("azimuth_histogram") or metrics.get("azimuth_histogram"),
+            directional_balance=dataset.get("directional_balance") or metrics.get("directional_balance"),
+            shadow_map=dataset.get("shadow_map") or metrics.get("shadow_map"),
             station_id=ctx.get("station_callsign") or "—",
             station_lat=ctx.get("station_lat"),
             station_lon=ctx.get("station_lon"),

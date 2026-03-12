@@ -3,11 +3,12 @@ from __future__ import annotations
 import streamlit as st
 
 from ogn_tool.ui.layout import DASHBOARD_COLUMNS
+from ogn_tool.ui.view_models.station_view import StationAnalysisView
 from apps.ui.metrics import metric_card
 
 
 def render_terrain_page(ctx):
-    dataset = ctx.get("dataset", {})
+    view = StationAnalysisView.from_context(ctx)
     st.markdown("<h2>Terrain</h2>", unsafe_allow_html=True)
     rf_local_count = int(ctx.get("rf_local_count", 0))
     readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
@@ -18,7 +19,7 @@ def render_terrain_page(ctx):
     if rf_local_count < 2000:
         st.warning("Dataset too small for reliable RF coverage analysis")
 
-    shadow_map = dataset.get("shadow_map")
+    shadow_map = view.shadow_map
 
     st.markdown("**Terrain analysis**")
     if shadow_map is None or (hasattr(shadow_map, "empty") and shadow_map.empty):
