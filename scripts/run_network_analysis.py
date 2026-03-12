@@ -2,7 +2,7 @@ import json
 import pandas as pd
 from pathlib import Path
 
-from ogn_tool.network.network_intelligence import (
+from ogn_tool.analysis.network.network_intelligence import (
     compute_network_topology,
     compute_station_roles,
     compute_coverage_redundancy

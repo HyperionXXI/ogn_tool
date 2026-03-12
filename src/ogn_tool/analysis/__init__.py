@@ -1,5 +1,5 @@
 from ogn_tool.rf.azimuth import compute_azimuth_histogram, analyze_directional_balance
-from .network_analysis import detect_network_blind_zones
+from .network_metrics import detect_network_blind_zones
 from .rf_diagnosis import RFDiagnosis
 
 __all__ = [
@@ -8,3 +8,4 @@ __all__ = [
     "detect_network_blind_zones",
     "RFDiagnosis",
 ]
+

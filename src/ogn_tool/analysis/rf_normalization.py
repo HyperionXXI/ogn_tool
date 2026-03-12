@@ -9,6 +9,7 @@ CANONICAL_COLUMNS = [
     "station_id",
     "aircraft_id",
     "timestamp",
+    "timestamp_ns",
     "lat",
     "lon",
     "altitude",
@@ -81,6 +82,7 @@ def normalize_rf_receptions(
     out["station_id"] = _first_existing(df, ["station_id", "receiver", "igate"])
     out["aircraft_id"] = _first_existing(df, ["aircraft_id", "src", "aircraft", "emitter_id"])
     out["timestamp"] = _to_timestamp(df)
+    out["timestamp_ns"] = pd.to_numeric(_first_existing(df, ["timestamp_ns", "ts_ns"]), errors="coerce").astype("Int64")
 
     out["lat"] = pd.to_numeric(_first_existing(df, ["lat"]), errors="coerce")
     out["lon"] = pd.to_numeric(_first_existing(df, ["lon"]), errors="coerce")

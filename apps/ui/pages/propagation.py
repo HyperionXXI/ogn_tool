@@ -3,8 +3,8 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from ogn_tool.ui.layout import DASHBOARD_COLUMNS
-from ogn_tool.ui.view_models.station_view import StationAnalysisView
+from apps.ui.layout import DASHBOARD_COLUMNS
+from apps.ui.view_models.station_view import StationAnalysisView
 from apps.ui.metrics import metric_card
 
 
@@ -98,3 +98,4 @@ def render_propagation_page(filters):
             st.info("Distance field not present in packets.")
         else:
             st.bar_chart(packets_signal["distance_km"])
+

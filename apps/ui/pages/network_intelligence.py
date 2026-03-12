@@ -2,7 +2,17 @@ import streamlit as st
 import pydeck as pdk
 import pandas as pd
 
-from ogn_tool.network.network_intelligence import compute_coverage_redundancy
+from ogn_tool.analysis.network.network_intelligence import compute_coverage_redundancy
+from ogn_tool.analysis.network_graph.rf_graph_builder import build_rf_graph
+from ogn_tool.analysis.network_graph.network_metrics import compute_network_evolution_metrics
+from ogn_tool.analysis.network_graph.network_timeseries import (
+    compute_coverage_timeseries,
+    compute_network_load_timeseries,
+)
+from ogn_tool.analysis.network_graph.network_events import (
+    detect_coverage_regressions,
+    detect_network_anomalies,
+)
 
 
 def render_network_intelligence(ctx):
@@ -30,6 +40,51 @@ def render_network_intelligence(ctx):
     if df_plot.empty:
         st.warning("No valid aircraft coordinates available for RF map")
         return
+
+    graph = build_rf_graph(df_plot)
+    graph_metrics = graph.get("metrics") or {}
+    connectivity = graph_metrics.get("connectivity") or {}
+    redundancy_metrics = graph_metrics.get("redundancy") or {}
+    evolution = compute_network_evolution_metrics(graph, None)
+    load_ts = compute_network_load_timeseries(df_plot)
+    coverage_ts = compute_coverage_timeseries({"observations": df_plot})
+    anomalies = detect_network_anomalies(load_ts)
+    coverage_regressions = detect_coverage_regressions(coverage_ts)
+
+    st.subheader("Network overview")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Stations", int(connectivity.get("station_count", 0)))
+    c2.metric("Aircraft", int(connectivity.get("aircraft_count", 0)))
+    c3.metric("Connectivity", int(connectivity.get("edge_count", 0)))
+    c4.metric("Redundancy", f"{float(redundancy_metrics.get('coverage_redundancy_mean', 0.0)):.2f}")
+
+    st.subheader("Network evolution")
+    e1, e2 = st.columns(2)
+    e1.metric("Coverage growth", int(evolution.get("coverage_growth", 0)))
+    e2.metric("Blind zone change", int(evolution.get("blind_zone_change", 0)))
+    importance_change = evolution.get("station_importance_change") or {}
+    if importance_change:
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {"station_id": station_id, "importance_change": value}
+                    for station_id, value in importance_change.items()
+                ]
+            ),
+            use_container_width=True,
+        )
+
+    st.subheader("Network events")
+    if not anomalies.empty:
+        st.caption("Network anomalies")
+        st.dataframe(anomalies, use_container_width=True)
+    else:
+        st.info("No network anomalies detected")
+    if not coverage_regressions.empty:
+        st.caption("Coverage regressions")
+        st.dataframe(coverage_regressions, use_container_width=True)
+    else:
+        st.info("No coverage regressions detected")
 
     st.subheader("Coverage redundancy map")
     redundancy = compute_coverage_redundancy(df_plot)

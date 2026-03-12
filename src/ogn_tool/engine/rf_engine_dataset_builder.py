@@ -10,7 +10,7 @@ from ogn_tool.analysis.network import station_range as analysis_station_range
 from ogn_tool.analysis.network import station_quality as analysis_station_quality
 from ogn_tool.rf.azimuth import compute_azimuth_histogram, analyze_directional_balance
 from ogn_tool.analysis.geo import compute_distance_bearing
-from ogn_tool.analysis.network_analysis import detect_network_blind_zones
+from ogn_tool.analysis.network_metrics import detect_network_blind_zones
 from ogn_tool.analysis.rf_diagnosis import RFDiagnosis
 from ogn_tool.analysis.shadow import detect_rf_shadows
 from ogn_tool.analysis.rf_observations import compute_distance, compute_bearing
@@ -340,3 +340,4 @@ __all__ = [
     "compute_metrics_impl",
     "run_rf_models_impl",
 ]
+

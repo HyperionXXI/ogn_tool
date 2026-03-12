@@ -11,6 +11,8 @@ def build_observations(
     station_lon: float,
     vectors: Iterable[Any] | None = None,
     grid_for_analysis: pd.DataFrame | None = None,
+    timestamp: Any | None = None,
+    timestamp_ns: Any | None = None,
 ) -> dict[str, Any]:
     """Build canonical observation payload shared by RF stages."""
 
@@ -20,4 +22,6 @@ def build_observations(
         "station_lat": station_lat,
         "station_lon": station_lon,
         "vectors": list(vectors or []),
+        "timestamp": timestamp,
+        "timestamp_ns": timestamp_ns,
     }

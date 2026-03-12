@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from ogn_tool.rf import signal_distance as analysis_signal_distance
-from ogn_tool.analysis import altitude_distance as analysis_altitude_distance
-from ogn_tool.analysis import radio_horizon as analysis_radio_horizon
-from ogn_tool.analysis import terrain as analysis_terrain
-from ogn_tool.analysis import terrain_visibility as analysis_terrain_visibility
+from ogn_tool.analysis.rf_models import altitude_distance as analysis_altitude_distance
+from ogn_tool.analysis.rf_models import radio_horizon as analysis_radio_horizon
+from ogn_tool.analysis.rf_models import terrain as analysis_terrain
+from ogn_tool.analysis.rf_models import terrain_visibility as analysis_terrain_visibility
 
 MODELS = {
     "signal_distance": analysis_signal_distance.analyze,
@@ -13,3 +13,5 @@ MODELS = {
     "terrain": analysis_terrain.analyze,
     "terrain_visibility": analysis_terrain_visibility.analyze,
 }
+
+

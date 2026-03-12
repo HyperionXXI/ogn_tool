@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ogn_tool.network.network_intelligence import (
+from ogn_tool.analysis.network.network_intelligence import (
     compute_network_topology,
     compute_station_roles
 )

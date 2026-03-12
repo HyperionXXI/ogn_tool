@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ogn_tool.ui.layout import DASHBOARD_COLUMNS
-from ogn_tool.ui.view_models.station_view import StationAnalysisView
+from apps.ui.layout import DASHBOARD_COLUMNS
+from apps.ui.view_models.station_view import StationAnalysisView
 from apps.ui.metrics import metric_card
 
 
@@ -42,3 +42,4 @@ def render_terrain_page(ctx):
         st.line_chart(shadow_map, x="azimuth_center_deg", y="p95_distance_km", height=220)
     else:
         st.dataframe(shadow_map, use_container_width=True, height=300)
+

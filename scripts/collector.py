@@ -186,6 +186,7 @@ def db_connect(db_path: str) -> sqlite3.Connection:
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
             ts_utc   TEXT    NOT NULL,
             ts_epoch INTEGER,
+            ts_ns    INTEGER,
             src      TEXT,
             dst      TEXT,
             igate    TEXT,
@@ -200,6 +201,8 @@ def db_connect(db_path: str) -> sqlite3.Connection:
     cols = {row[1] for row in con.execute("PRAGMA table_info(packets)")}
     if "ts_epoch" not in cols:
         con.execute("ALTER TABLE packets ADD COLUMN ts_epoch INTEGER;")
+    if "ts_ns" not in cols:
+        con.execute("ALTER TABLE packets ADD COLUMN ts_ns INTEGER;")
 
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_ts    ON packets(ts_utc);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch ON packets(ts_epoch DESC);")
@@ -215,8 +218,8 @@ def db_connect(db_path: str) -> sqlite3.Connection:
 def insert_many(con: sqlite3.Connection, rows: Iterable[Dict[str, Any]]) -> None:
     con.executemany(
         """
-        INSERT INTO packets (ts_utc, ts_epoch, src, dst, igate, qas, lat, lon, raw)
-        VALUES (:ts_utc, :ts_epoch, :src, :dst, :igate, :qas, :lat, :lon, :raw)
+        INSERT INTO packets (ts_utc, ts_epoch, ts_ns, src, dst, igate, qas, lat, lon, raw)
+        VALUES (:ts_utc, :ts_epoch, :ts_ns, :src, :dst, :igate, :qas, :lat, :lon, :raw)
         """,
         rows,
     )
@@ -285,6 +288,7 @@ def collect_forever() -> None:
                 now = dt.datetime.now(dt.timezone.utc)
                 pkt["ts_utc"] = now.isoformat()
                 pkt["ts_epoch"] = int(now.timestamp())
+                pkt["ts_ns"] = time.time_ns()
                 pending.append(pkt)
 
                 if DEBUG and received_total % 250 == 0:

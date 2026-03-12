@@ -40,7 +40,7 @@ def normalize_observations(packet_rows: Iterable[Dict]) -> pd.DataFrame:
         if not required.issubset(set(normalized_df.columns)):
             return original_df
 
-        for col in rf_normalization.CANONICAL_COLUMNS + ["igate", "src", "ts_epoch"]:
+        for col in rf_normalization.CANONICAL_COLUMNS + ["igate", "src", "ts_epoch", "ts_ns"]:
             if col in normalized_df.columns:
                 original_df[col] = normalized_df[col]
 
@@ -58,7 +58,7 @@ def _coalesce(series: pd.Series) -> float | None:
 
 def _extract_rf_receptions(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
-        return pd.DataFrame(columns=list(rf_normalization.CANONICAL_COLUMNS) + ["igate", "src", "ts_epoch"])
+        return pd.DataFrame(columns=list(rf_normalization.CANONICAL_COLUMNS) + ["igate", "src", "ts_epoch", "ts_ns"])
     return rf_normalization.normalize_packets(df, keep_legacy_aliases=True)
 
 
@@ -118,6 +118,7 @@ def _build_rf_observations_frame(packet_rows: Iterable[Dict]) -> pd.DataFrame:
     obs["station_id"] = expanded.get("station_id")
     obs["aircraft_id"] = expanded.get("aircraft_id")
     obs["timestamp"] = pd.to_numeric(expanded.get("timestamp"), errors="coerce").astype("Int64")
+    obs["timestamp_ns"] = pd.to_numeric(expanded.get("timestamp_ns", expanded.get("ts_ns")), errors="coerce").astype("Int64")
     obs["lat"] = pd.to_numeric(expanded.get("lat", expanded.get("state_lat")), errors="coerce")
     obs["lon"] = pd.to_numeric(expanded.get("lon", expanded.get("state_lon")), errors="coerce")
     obs["altitude"] = pd.to_numeric(expanded.get("altitude", expanded.get("state_altitude")), errors="coerce")
@@ -133,6 +134,7 @@ def _build_rf_observations_frame(packet_rows: Iterable[Dict]) -> pd.DataFrame:
     obs["igate"] = expanded.get("igate", expanded.get("station_id"))
     obs["src"] = expanded.get("src", expanded.get("aircraft_id"))
     obs["ts_epoch"] = pd.to_numeric(expanded.get("ts_epoch", expanded.get("timestamp")), errors="coerce").astype("Int64")
+    obs["ts_ns"] = pd.to_numeric(expanded.get("ts_ns", expanded.get("timestamp_ns")), errors="coerce").astype("Int64")
 
     for col in ["_row_id", "raw", "qas", "dst", "ts_utc"]:
         if col in expanded.columns:
@@ -239,6 +241,8 @@ def build_observation_vector(
         bearing_deg=float(bearing_deg),
         radio_horizon_km=float(radio_horizon_km),
         terrain_blocked=terrain_blocked,
+        timestamp=int(float(row.get("timestamp"))) if row.get("timestamp") is not None and pd.notna(row.get("timestamp")) else None,
+        timestamp_ns=int(float(row.get("timestamp_ns"))) if row.get("timestamp_ns") is not None and pd.notna(row.get("timestamp_ns")) else None,
     )
 
 

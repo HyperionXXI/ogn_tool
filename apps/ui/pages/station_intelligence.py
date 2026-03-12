@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 import pydeck as pdk
 
-from ogn_tool.ui.view_models.station_view import StationAnalysisView
+from apps.ui.view_models.station_view import StationAnalysisView
 from ogn_tool.pipeline.rf_analysis_pipeline import run_rf_analysis
 
 
@@ -244,3 +244,4 @@ def render_station_intelligence_page(ctx: dict) -> None:
             candidates.sort_values("traffic_score", ascending=False).head(10)
         )
     render_diagnostics(diagnostics)
+

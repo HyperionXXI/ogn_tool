@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ogn_tool.ui.view_models.station_view import StationAnalysisView
+from apps.ui.view_models.station_view import StationAnalysisView
 
 
 def render_debug_page(filters):
@@ -33,3 +33,4 @@ def render_debug_page(filters):
             st.info("No station metrics available in dataset.")
         else:
             st.write(station_metrics.head(10))
+

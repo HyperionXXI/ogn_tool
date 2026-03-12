@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import streamlit as st
 
-from ogn_tool.ui.charts import render_rf_cartography
-from ogn_tool.ui.view_models.station_view import StationAnalysisView
+from apps.ui.charts import render_rf_cartography
+from apps.ui.view_models.station_view import StationAnalysisView
 
 
 def render_rf_map_page(ctx):
@@ -68,3 +68,4 @@ def render_rf_map_page(ctx):
         return
 
     render_rf_cartography(rf_grid, view.station_lat, view.station_lon, ctx.get("basemap_label"), layers)
+

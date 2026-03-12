@@ -130,6 +130,8 @@ class RFAnalysisEngine:
             station_lon=self.station_lon,
             vectors=existing_vectors,
             grid_for_analysis=grid_for_analysis,
+            timestamp=distance_df.get("ts_epoch") if hasattr(distance_df, "get") else None,
+            timestamp_ns=distance_df.get("ts_ns") if hasattr(distance_df, "get") else None,
         )
 
         dataset = execute_rf_pipeline(dataset, self.pipeline)
@@ -139,6 +141,17 @@ class RFAnalysisEngine:
         metrics["distance_df"] = distance_df
         dataset.results.metrics = metrics
         aggregate_metrics(dataset)
+
+        previous_graph = getattr(dataset.results, "network_graph", None)
+        network_stage = importlib.import_module("ogn_tool.pipeline.network_graph_stage")
+        network = network_stage.run_network_graph_stage(dataset, previous_graph=previous_graph)
+        dataset.network_graph = network["graph"]
+        dataset.results.network_graph = network["graph"]
+        dataset.results.network_metrics = network["metrics"]
+        dataset.results.network_timeseries = network["timeseries"]
+        dataset.results.network_events = network["events"]
+        dataset.results.network_evolution = network["evolution"]
+        dataset.results.station_suggestions = network["station_suggestions"]
 
         return dataset.results
 

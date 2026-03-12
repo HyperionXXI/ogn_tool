@@ -3,8 +3,8 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from ogn_tool.ui.layout import DASHBOARD_COLUMNS
-from ogn_tool.ui.view_models.station_view import StationAnalysisView
+from apps.ui.layout import DASHBOARD_COLUMNS
+from apps.ui.view_models.station_view import StationAnalysisView
 from apps.ui.metrics import metric_card
 
 
@@ -72,3 +72,4 @@ def render_directional_rf_page(ctx):
 
 def render_legacy_rf_page(filters):
     st.info("Legacy RF tab removed. Use Overview / RF Map / Propagation / Directional RF / Terrain.")
+

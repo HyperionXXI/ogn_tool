@@ -15,3 +15,5 @@ class RFObservationVector:
 
     radio_horizon_km: float
     terrain_blocked: bool | None = None
+    timestamp: int | None = None
+    timestamp_ns: int | None = None

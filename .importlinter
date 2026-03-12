@@ -5,7 +5,6 @@ root_package = ogn_tool
 name = Architecture
 type = layers
 layers =
-    ogn_tool.ui
     ogn_tool.services
     ogn_tool.pipeline
     ogn_tool.engine

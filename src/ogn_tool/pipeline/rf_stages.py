@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.network_analysis import detect_network_blind_zones
+from ogn_tool.analysis.network_metrics import detect_network_blind_zones
 from ogn_tool.engine.rf_model_runner import run
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.analysis.network import station_quality as analysis_station_quality
@@ -198,5 +198,6 @@ __all__ = [
     "AntennaPatternStage",
     "RFDiagnosticsStage",
 ]
+
 
 
