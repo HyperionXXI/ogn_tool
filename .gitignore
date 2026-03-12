@@ -43,3 +43,7 @@ data/
 *.sqlite
 *.log
 scripts/rf_out/
+*.zip
+docs_full_dump.txt
+liste_fichiers.txt
+tmp_*
