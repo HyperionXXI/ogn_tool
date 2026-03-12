@@ -7,6 +7,7 @@ from .rf_stages import (
     RFCoverageStage,
     VisibilityModelStage,
     BlindZoneDetectionStage,
+    AntennaPatternStage,
     RFDiagnosticsStage,
 )
 
@@ -17,5 +18,6 @@ __all__ = [
     "RFCoverageStage",
     "VisibilityModelStage",
     "BlindZoneDetectionStage",
+    "AntennaPatternStage",
     "RFDiagnosticsStage",
 ]

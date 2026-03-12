@@ -26,7 +26,7 @@ class FeatureMatrixStage(RFAnalysisStage):
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
         from ogn_tool.analysis.rf_feature_matrix import build_feature_matrix
 
-        dataset.feature_matrix = build_feature_matrix(dataset.observations)
+        dataset.results.feature_matrix = build_feature_matrix(dataset.observations)
         return dataset
 
 
@@ -165,7 +165,7 @@ class AntennaPatternStage(RFAnalysisStage):
 
         from ogn_tool.analysis.rf_antenna_pattern import estimate_antenna_pattern, detect_shadow_sectors
 
-        pattern = estimate_antenna_pattern(dataset.feature_matrix)
+        pattern = estimate_antenna_pattern(dataset.results.feature_matrix)
 
         dataset.results.antenna_pattern = pattern
         dataset.results.antenna_shadow_sectors = detect_shadow_sectors(pattern)
