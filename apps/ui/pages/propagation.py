@@ -3,32 +3,31 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from ui.layout import DASHBOARD_COLUMNS
-from ui.metrics import metric_card
+from ogn_tool.ui.layout import DASHBOARD_COLUMNS
+from ogn_tool.ui.view_models.station_view import StationAnalysisView
+from apps.ui.metrics import metric_card
 
 
 def render_propagation_page(filters):
     ctx = filters
-    dataset = ctx.get("dataset", {})
+    view = StationAnalysisView.from_context(ctx)
     st.markdown("<h2>Propagation</h2>", unsafe_allow_html=True)
-    if ctx.get("rf_packets") is None or getattr(ctx.get("rf_packets"), "empty", False):
+
+    packets_signal = None
+    packets_all = view.metrics.get("packets_all")
+    packets_rf = view.metrics.get("packets_rf")
+
+    if isinstance(packets_rf, pd.DataFrame) and not packets_rf.empty:
+        packets_signal = packets_rf
+    elif isinstance(packets_all, pd.DataFrame) and not packets_all.empty:
+        packets_signal = packets_all
+
+    if packets_signal is None or getattr(packets_signal, "empty", False):
         st.warning("No packets for this station in APRS-IS dataset.")
         return
 
     station_callsign = ctx.get("station_callsign")
-
-    packets_signal = None
-    observations = dataset.get("observations")
-    packets_filtered = dataset.get("packets_filtered")
-    rf_packets_ctx = ctx.get("rf_packets")
-    if isinstance(observations, pd.DataFrame) and not observations.empty:
-        packets_signal = observations
-    elif isinstance(packets_filtered, pd.DataFrame) and not packets_filtered.empty:
-        packets_signal = packets_filtered
-    elif isinstance(rf_packets_ctx, pd.DataFrame) and not rf_packets_ctx.empty:
-        packets_signal = rf_packets_ctx
-
-    station_metrics = dataset.get("station_metrics")
+    station_metrics = view.metrics.get("station_metrics")
 
     rf_local_count = int(ctx.get("rf_local_count", 0))
     readiness = "GOOD" if rf_local_count >= 2000 else "FAIR" if rf_local_count >= 500 else "LOW"
@@ -39,9 +38,6 @@ def render_propagation_page(filters):
     if rf_local_count < 2000:
         st.warning("Dataset too small for reliable RF coverage analysis")
 
-    if packets_signal is None or getattr(packets_signal, "empty", False):
-        st.info("Not enough RF packets for this analysis.")
-        return
     if len(packets_signal) < 200:
         st.info("Not enough RF packets for this analysis.")
         return
@@ -56,6 +52,7 @@ def render_propagation_page(filters):
         and hasattr(station_metrics, "empty")
         and not station_metrics.empty
         and station_callsign
+        and "igate" in station_metrics.columns
     ):
         metric_row = station_metrics[station_metrics["igate"].astype(str) == str(station_callsign)]
         if not metric_row.empty:
