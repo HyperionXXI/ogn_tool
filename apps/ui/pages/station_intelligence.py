@@ -6,6 +6,7 @@ import pydeck as pdk
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.ui.view_models.station_view import StationAnalysisView
 from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
 
 
@@ -119,9 +120,10 @@ def render_station_intelligence_page(ctx: dict) -> None:
 
     engine = RFAnalysisEngine(rf_packets, station_lat, station_lon)
     results = engine.run(RFAnalysisDataset(observations=[]))
+    view = StationAnalysisView.from_results(results, packet_count=len(rf_packets))
 
-    metrics = results.metrics or {}
-    rf_models = metrics.get("rf_models", {})
+    metrics = view.metrics or {}
+    rf_models = view.rf_models
     diagnostics = ctx.get("rf_diagnostics", {})
 
     median_distance = None
@@ -131,15 +133,15 @@ def render_station_intelligence_page(ctx: dict) -> None:
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Max distance", metrics.get("max_range_km", "-"))
+        st.metric("Max distance", view.max_range_km if view.max_range_km is not None else "-")
     with col2:
         st.metric("Median distance", median_distance if median_distance is not None else "-")
     with col3:
-        st.metric("Observations", metrics.get("rf_packets", "-"))
+        st.metric("Observations", view.packet_count if view.packet_count is not None else "-")
 
     st.divider()
 
-    render_coverage_radar(metrics.get("azimuth_df"))
+    render_coverage_radar(view.azimuth_df)
     render_propagation_models(rf_models)
     st.subheader("RF Metrics Summary")
 
