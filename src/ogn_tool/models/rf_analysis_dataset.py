@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from .rf_analysis_results import RFAnalysisResults
-from .rf_feature_matrix import RFFeatureMatrix
 from .rf_observation_vector import RFObservationVector
 
 
@@ -12,8 +11,17 @@ class RFAnalysisDataset:
     observations: List[RFObservationVector]
 
     diagnostics: Optional[object] = None
-    feature_matrix: Optional[RFFeatureMatrix] = None
     results: RFAnalysisResults = field(default_factory=RFAnalysisResults)
+
+
+    @property
+    def feature_matrix(self):
+        """Backward-compatible alias to results.feature_matrix."""
+        return self.results.feature_matrix
+
+    @feature_matrix.setter
+    def feature_matrix(self, value):
+        self.results.feature_matrix = value
 
     def available_fields(self) -> set[str]:
         """Return currently available dataset fields for stage dependency checks."""
@@ -21,7 +29,7 @@ class RFAnalysisDataset:
         fields: set[str] = set()
         if self.observations is not None:
             fields.add("observations")
-        if self.feature_matrix is not None:
+        if self.results.feature_matrix is not None:
             fields.add("feature_matrix")
         if self.results.coverage is not None:
             fields.add("coverage")
@@ -43,8 +51,8 @@ class RFAnalysisDataset:
         if self.observations is None:
             raise RuntimeError("RFAnalysisDataset invalid: observations is None")
 
-        if self.feature_matrix is None:
-            raise RuntimeError("RFAnalysisDataset invalid: feature_matrix is missing")
+        if self.results.feature_matrix is None:
+            raise RuntimeError("RFAnalysisDataset invalid: results.feature_matrix is missing")
 
         if self.results.coverage is None:
             raise RuntimeError("RFAnalysisDataset invalid: results.coverage is missing")
@@ -74,7 +82,7 @@ class RFAnalysisDataset:
             if rec is not None and len(rec) != bins:
                 raise RuntimeError("RFAnalysisDataset invalid: results.antenna_pattern received size mismatch")
 
-            bearing = getattr(self.feature_matrix, "bearing", None)
+            bearing = getattr(self.results.feature_matrix, "bearing", None)
             if bearing is not None and exp is not None:
                 total_exposure = float(sum(exp))
                 if total_exposure > float(len(bearing)):
