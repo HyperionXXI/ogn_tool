@@ -5,7 +5,7 @@ import streamlit as st
 import pydeck as pdk
 
 from ogn_tool.ui.view_models.station_view import StationAnalysisView
-from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
+from ogn_tool.pipeline.rf_analysis_pipeline import run_rf_analysis
 
 
 try:
@@ -96,7 +96,7 @@ def render_diagnostics(diagnostics: dict) -> None:
 
 @st.cache_data
 def cached_rf_analysis(df):
-    from ogn_tool.services.rf_analysis_pipeline import run_rf_analysis
+    from ogn_tool.pipeline.rf_analysis_pipeline import run_rf_analysis
     return run_rf_analysis(df)
 
 def render_station_intelligence_page(ctx: dict) -> None:

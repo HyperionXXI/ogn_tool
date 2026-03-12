@@ -39,3 +39,16 @@ def test_ui_layer_has_no_sql_or_services():
             violations.append((path, "imports ogn_tool.api.*"))
 
     assert not violations, "\n".join([f"{p}: {reason}" for p, reason in violations])
+
+
+import shutil
+import subprocess
+
+
+def test_architecture():
+    if shutil.which("lint-imports") is None:
+        return
+    env = dict(**__import__("os").environ)
+    env["PYTHONPATH"] = str((Path(__file__).resolve().parents[1] / "src"))
+    result = subprocess.run(["lint-imports"], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stdout + "\n" + result.stderr

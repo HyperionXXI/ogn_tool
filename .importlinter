@@ -1,0 +1,15 @@
+[importlinter]
+root_package = ogn_tool
+
+[importlinter:contract:layers]
+name = Architecture
+type = layers
+layers =
+    ogn_tool.ui
+    ogn_tool.services
+    ogn_tool.pipeline
+    ogn_tool.engine
+    ogn_tool.analysis
+    ogn_tool.rf
+    ogn_tool.domain
+    ogn_tool.data
