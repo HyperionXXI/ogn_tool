@@ -19,7 +19,7 @@ from ogn_tool.analysis.geo import compute_distance_bearing
 from ogn_tool.analysis.network_analysis import detect_network_blind_zones
 from ogn_tool.analysis.rf_diagnosis import RFDiagnosis
 from ogn_tool.analysis.shadow import detect_rf_shadows
-from ogn_tool.analysis.rf_observations import build_rf_observations, compute_distance, compute_bearing
+from ogn_tool.analysis.rf_observations import compute_distance, compute_bearing
 from ogn_tool.analysis.observation_pipeline import build_observations
 from ogn_tool.rf_probability_field import build_rf_probability_field
 from ogn_tool.models.rf.rf_model_adapter import run_rf_model
