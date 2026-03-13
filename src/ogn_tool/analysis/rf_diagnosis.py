@@ -19,3 +19,12 @@ class RFDiagnosis:
             "directional_balance": self.directional_balance,
             "blind_zones": self.blind_zones,
         }
+
+
+
+def evaluate_rf_diagnosis(metrics=None, directional_balance=None) -> dict:
+    diagnosis = RFDiagnosis(metrics, directional_balance)
+    return {
+        "health": diagnosis.health_score(),
+        "issues": diagnosis.evaluate(),
+    }

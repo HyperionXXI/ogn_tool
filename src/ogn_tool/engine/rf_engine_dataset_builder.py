@@ -15,7 +15,7 @@ from ogn_tool.analysis.network_metrics import (
     detect_network_blind_zones,
     enrich_coverage_grid,
 )
-from ogn_tool.analysis.rf_diagnosis import RFDiagnosis
+from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis
 from ogn_tool.analysis.rf_observations import compute_distance, compute_bearing
 from ogn_tool.engine.rf_dataset_builder import build_observations
 from ogn_tool.analysis.rf_metrics.directional_analysis import build_directional_diagnostics
@@ -159,9 +159,9 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
 
     metrics.update(summarize_signal_quality(packets_filtered))
 
-    rf_diagnosis = RFDiagnosis(metrics, directional_balance)
-    rf_issues = rf_diagnosis.evaluate()
-    rf_health = rf_diagnosis.health_score()
+    rf_diagnosis = evaluate_rf_diagnosis(metrics, directional_balance)
+    rf_issues = rf_diagnosis.get("issues", [])
+    rf_health = rf_diagnosis.get("health", "UNKNOWN")
 
     dataset = {
         "observations": observations_df,

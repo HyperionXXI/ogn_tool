@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from ogn_tool.analysis.rf_diagnosis import RFDiagnosis
+from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis
 
 
 def build_metrics_summary(dataset) -> Dict[str, Any]:
@@ -16,11 +16,7 @@ def build_metrics_summary(dataset) -> Dict[str, Any]:
 
 
 def compute_rf_health(metrics: Dict[str, Any], directional_balance: Any | None = None) -> Dict[str, Any]:
-    diagnosis = RFDiagnosis(metrics, directional_balance)
-    return {
-        "health": diagnosis.health_score(),
-        "issues": diagnosis.evaluate(),
-    }
+    return evaluate_rf_diagnosis(metrics, directional_balance)
 
 
 def aggregate_metrics(dataset) -> Dict[str, Any]:
