@@ -1,3 +1,32 @@
+"""
+ARCHITECTURAL NOTE - TRANSITIONAL MODULE
+
+This module exists as a compatibility layer between the legacy runtime
+(dict-based data flow) and the modern typed analytical kernel.
+
+Its responsibility is strictly limited to:
+
+* assembling datasets for the engine runtime
+* adapting legacy structures to typed data contracts
+* maintaining backward compatibility during the migration phase
+
+This module MUST NOT introduce:
+
+* new analytical computations
+* normalization semantics
+* RF metrics or network metrics logic
+* business rules related to analysis
+
+All analytical logic must reside in:
+
+    src/ogn_tool/analysis/
+    src/ogn_tool/pipeline/
+    src/ogn_tool/models/
+
+This module is considered transitional and may be removed once the
+typed runtime fully replaces the legacy dataset path.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List

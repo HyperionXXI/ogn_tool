@@ -1,3 +1,30 @@
+"""
+ARCHITECTURAL NOTE - TRANSITIONAL DATA ADAPTER
+
+This module historically participated in dataset construction for the RF
+analysis engine.
+
+After the introduction of the typed architecture, the canonical data flow is:
+
+    normalization -> typed dataset -> analysis -> network metrics -> results
+
+The purpose of this file is now limited to transitional adaptation.
+
+Rules:
+
+* Do not add analytical computations here.
+* Do not implement normalization logic here.
+* Do not treat this module as a canonical dataset definition.
+
+New transformations must instead be implemented in:
+
+    src/ogn_tool/analysis/normalization/
+    src/ogn_tool/pipeline/
+
+This module should progressively shrink as the legacy runtime path
+disappears.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List
