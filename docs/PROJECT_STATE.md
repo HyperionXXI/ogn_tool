@@ -1,84 +1,85 @@
 # PROJECT_STATE
 
-Date: 2026-03-12
+Date: 2026-03-14
 Branch: main
 Scope: repository-wide architectural snapshot
+Status: transitional snapshot, not canonical source of truth
+
+Canonical governance documents:
+- `docs/architecture/ADR-001-project-vision.md`
+- `docs/architecture/REPOSITORY_CLASSIFICATION.md`
+- `docs/architecture/ENGINE_RULES.md`
 
 ## ACTIVE ARCHITECTURE
 
-### Engine Core (active)
-- `src/ogn_tool/engine/rf_engine.py`
-- `src/ogn_tool/pipeline/rf_analysis_pipeline.py`
-- `src/ogn_tool/pipeline/rf_stages.py`
+### Core typed contracts
 - `src/ogn_tool/models/rf_analysis_dataset.py`
 - `src/ogn_tool/models/rf_analysis_results.py`
 - `src/ogn_tool/models/rf_observation_vector.py`
+- `src/ogn_tool/models/network_graph_model.py`
 
-### Analysis Layer (active)
-- `src/ogn_tool/analysis/rf_feature_matrix.py`
-- `src/ogn_tool/analysis/rf_visibility_model.py`
-- `src/ogn_tool/analysis/rf_blind_zone_detection.py`
-- `src/ogn_tool/analysis/rf_antenna_pattern.py`
-- `src/ogn_tool/analysis/observation_pipeline.py`
+### Analysis layer
+- `src/ogn_tool/analysis/normalization/`
+- `src/ogn_tool/analysis/rf_metrics/`
+- `src/ogn_tool/analysis/rf_models/`
+- `src/ogn_tool/analysis/network_metrics/`
+- `src/ogn_tool/analysis/network_graph/`
+- `src/ogn_tool/analysis/intelligence/`
 
-### RF Primitives (active)
-- `src/ogn_tool/rf/geometry.py`
-- `src/ogn_tool/rf/azimuth.py`
-- `src/ogn_tool/rf/signal_distance.py`
-- `src/ogn_tool/rf/propagation.py`
+### Intelligence layer (active)
+- `station_health.py`
+- `network_summary.py`
+- `station_dependency.py`
+- `station_removal_simulation.py`
+- `station_redundancy_planner.py`
+- `network_single_point_of_failure_detector.py`
+- `coverage_gap_detector.py`
+- `coverage_gap_prioritizer.py`
+- `station_addition_simulation.py`
 
-### Network Intelligence (active)
-- `src/ogn_tool/network/network_intelligence.py`
-- `src/ogn_tool/network/station_range.py`
-- `src/ogn_tool/network/station_quality.py`
-- `src/ogn_tool/network/station_compare.py`
+### Pipeline layer
+- `src/ogn_tool/pipeline/rf_analysis_pipeline.py`
+- `src/ogn_tool/pipeline/rf_stages.py`
+- `src/ogn_tool/pipeline/network_graph_stage.py`
 
-### UI Runtime (active)
-- `apps/dashboard.py`
-- `apps/ui/pages/*`
-- `apps/ui/sections.py`
-
-## SUPPORT LAYERS
-
-### Services (partially active)
-- `src/ogn_tool/services/data_service.py`
+### Engine / runtime layer
+- `src/ogn_tool/engine/rf_engine.py`
+- `src/ogn_tool/runtime/`
 - `src/ogn_tool/services/rf_analysis_service.py`
-- `src/ogn_tool/services/rf_analysis_pipeline.py`
 
-### Data Access (active)
-- `src/ogn_tool/data/db_repository.py`
-- `src/ogn_tool/data/packets_repository.py`
-- `src/ogn_tool/data/receptions_repository.py`
-- `src/ogn_tool/data/stations_repository.py`
+### Reporting layer
+- `src/ogn_tool/reporting/models.py`
+- `src/ogn_tool/reporting/network_engineering_report.py`
 
-### Scripts / Tests / Benchmarks (active)
-- `scripts/run_rf_analysis.py`
-- `scripts/run_network_analysis.py`
-- `tests/*` (contract + pipeline + architecture checks)
-- `benchmarks/*` (RF state engine performance)
+### UI layer
+- `apps/dashboard.py`
+- `apps/ui/pages/`
+- `apps/ui/view_models/`
+- `apps/ui/map_engine/`
 
-## LEGACY / TRANSITION
+## CURRENT STABLE MILESTONES
 
-### Legacy module paths (moved or removed)
-- `src/ogn_tool/analysis/azimuth.py` -> moved to `src/ogn_tool/rf/azimuth.py`
-- `src/ogn_tool/analysis/signal_distance.py` -> moved to `src/ogn_tool/rf/signal_distance.py`
-- `src/ogn_tool/analysis/station_range.py` -> moved to `src/ogn_tool/network/station_range.py`
-- `src/ogn_tool/analysis/station_quality.py` -> moved to `src/ogn_tool/network/station_quality.py`
-- `src/ogn_tool/analysis/station_compare.py` -> moved to `src/ogn_tool/network/station_compare.py`
+- `v0.4-network-intelligence`
+- `v0.5-network-diagnostics`
+- `v0.6-network-engineering`
+- `v0.7-spof-detection`
+- `v0.8-coverage-gap-analysis`
+- `v0.9-station-addition-simulation`
+- `v1.0-network-reporting-foundation`
 
-### Transitional behavior still present
-- UI pages still read `ctx["dataset"]` / `dataset.get(...)` directly.
-- Engine still exposes compatibility surfaces for legacy callers.
+## KNOWN TRANSITIONAL AREAS
 
-## CURRENT MIGRATION STATUS
+- `src/ogn_tool/engine/rf_engine_dataset_builder.py`
+- `src/ogn_tool/engine/rf_dataset_builder.py`
+- `src/ogn_tool/engine/rf_engine_network.py`
+- some UI/runtime compatibility paths still reading `ctx[...]`
 
-- PR1 Pipeline stabilization: done
-- PR2 Engine API stabilization (`run(dataset) -> RFAnalysisResults`): done
-- PR2.5 Repository stabilization: in progress
-- PR3 UI contract (`UIAnalysisView`) and page-by-page migration: pending
+## RECOMMENDED USE OF THIS DOCUMENT
 
-## NEXT FOCUS (SHORT TERM)
+Use this file as a dated snapshot only.
 
-1. Introduce `UIAnalysisView` under `src/ogn_tool/ui/view_models/`.
-2. Migrate one UI page at a time away from direct `dataset.get(...)` usage.
-3. Remove remaining legacy compatibility fields after UI migration is complete.
+Do not use it as the primary source of truth for:
+- contracts
+- architecture rules
+- repository classification
+- runtime migration policy

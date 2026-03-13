@@ -1,79 +1,111 @@
 STATUS: canonical
-SOURCE_OF_TRUTH: docs/SYSTEM_ARCHITECTURE.md
+SOURCE_OF_TRUTH: docs/core/SYSTEM_ARCHITECTURE.md
 
-This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+This document describes the current runtime and package-layer system
+architecture.
+
+The canonical governance rules live in:
+- `docs/architecture/ADR-001-project-vision.md`
+- `docs/architecture/REPOSITORY_CLASSIFICATION.md`
+- `docs/architecture/ENGINE_RULES.md`
 
 # System Architecture
 
-The system follows a strict layered architecture.
+The system follows a layered architecture with a typed analytical core.
 
-collector
-↓
-database
-↓
-rf_receptions
-↓
-rf_metrics
-↓
-network_intelligence
-↓
-ui
+```text
+data ingestion
+  -> data access
+  -> analysis
+  -> pipeline
+  -> engine
+  -> runtime/services
+  -> UI
+```
 
----
-
-## collector
+## Data ingestion
 
 Responsible for:
+- APRS / OGN packet collection
+- persistence into SQLite
+- preserving raw observations and timestamps
 
-- connecting to APRS-IS
-- receiving packets
-- parsing
-- storing into SQLite
+Primary implementation:
+- `scripts/collector.py`
+- `src/ogn_tool/data/db_repository.py`
 
-No RF analysis happens here.
+## Data access
 
----
+Responsible for:
+- loading packet windows
+- loading receptions and stations
+- schema migration and repository access
 
-## database
+Primary implementation:
+- `src/ogn_tool/data/packets_repository.py`
+- `src/ogn_tool/data/receptions_repository.py`
+- `src/ogn_tool/data/stations_repository.py`
 
-SQLite database storing:
+## Analysis
 
-- packets (raw APRS/APRS-IS traffic)
-- rf_receptions (RF reception events)
-- station information
-- derived coverage grids
+Responsible for all analytical computation:
+- normalization
+- RF models and RF metrics
+- network metrics
+- network graph
+- intelligence layer
 
-The database should remain simple and fast.
+Primary implementation:
+- `src/ogn_tool/analysis/normalization/`
+- `src/ogn_tool/analysis/rf_metrics/`
+- `src/ogn_tool/analysis/rf_models/`
+- `src/ogn_tool/analysis/network_metrics/`
+- `src/ogn_tool/analysis/network_graph/`
+- `src/ogn_tool/analysis/intelligence/`
 
----
+Analysis must not depend on UI or runtime state.
 
-## RF reception layer
+## Pipeline
 
-RF analysis is performed on `rf_receptions`, not on raw `packets`.
+Responsible for orchestration of analytical stages only.
 
-`packets` represent network traffic, while `rf_receptions` represent
-receiver-level RF events used by the RF metrics pipeline.
+Primary implementation:
+- `src/ogn_tool/pipeline/rf_analysis_pipeline.py`
+- `src/ogn_tool/pipeline/rf_stages.py`
+- `src/ogn_tool/pipeline/network_graph_stage.py`
 
----
+Pipeline must not become a second analysis layer.
 
-## analysis engine
+## Engine
 
-Responsible for all calculations:
+Responsible for execution and compatibility orchestration.
 
-- station RF analysis
-- spatial coverage
-- network analysis
-- simulation
+Primary implementation:
+- `src/ogn_tool/engine/rf_engine.py`
+- `src/ogn_tool/engine/rf_pipeline_executor.py`
 
-The engine must not depend on the UI.
+Transitional builder modules may still exist, but they are not canonical
+sources of analytical semantics.
 
----
+## Runtime and services
+
+Responsible for exposing typed runtime entry points and migration away
+from legacy `ctx[...]` consumers.
+
+Primary implementation:
+- `src/ogn_tool/runtime/`
+- `src/ogn_tool/services/rf_analysis_service.py`
 
 ## UI
 
-Streamlit-based interface responsible only for:
-
+Responsible only for:
 - visualization
-- interaction
-- exploration
+- filtering
+- sorting
+- operator interaction
 
+Primary implementation:
+- `apps/dashboard.py`
+- `apps/ui/pages/`
+
+UI must not recalculate RF or network metrics.
