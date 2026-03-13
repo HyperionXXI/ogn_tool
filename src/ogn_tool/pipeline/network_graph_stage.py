@@ -2,6 +2,11 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ogn_tool.analysis.intelligence import (
+    compute_network_summary,
+    compute_station_dependency,
+    compute_station_health,
+)
 from ogn_tool.analysis.intelligence.station_planner import suggest_station_locations
 from ogn_tool.analysis.network_metrics import (
     compute_station_influence,
@@ -89,6 +94,9 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     else:
         placement = compute_optimal_station_locations(metrics, candidate_grid)
     metrics["station_placement"] = placement
+    metrics["station_health"] = compute_station_health(metrics)
+    metrics["network_summary"] = compute_network_summary(metrics)
+    metrics["station_dependency"] = compute_station_dependency(metrics)
 
     timeseries = network_timeseries.compute_station_activity_timeseries(dataset.observations)
     anomalies = network_events.detect_network_anomalies(timeseries)
