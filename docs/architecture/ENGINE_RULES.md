@@ -63,6 +63,45 @@ The canonical data flow of the project is:
 The engine layer should progressively shrink toward orchestration-only
 responsibilities as the typed runtime becomes the primary execution path.
 
+## Intelligence Layer Rule
+
+Modules under `analysis/intelligence/` must never recompute RF metrics
+or network metrics.
+
+They operate only on outputs of:
+
+- `analysis/rf_metrics/`
+- `analysis/network_metrics/`
+- `analysis/network_graph/`
+
+The intelligence layer is reserved for:
+
+- interpretation
+- operator-facing synthesis
+- rule-based diagnostics
+- explainable decision support
+
+It must not:
+
+- access raw datasets directly
+- reconstruct network structures already produced elsewhere
+- re-estimate metrics already defined in the analytical layers
+
+## UI Rule
+
+UI modules may:
+
+- format values
+- filter rows
+- sort tables
+- select subsets for display
+
+UI modules must not:
+
+- recompute analytical metrics
+- implement operator diagnostics logic
+- redefine metric semantics
+
 ## Governance
 
 Any change that introduces new analytical logic inside `engine/`
