@@ -5,6 +5,7 @@ from .network_summary import compute_network_summary
 from .station_dependency import compute_station_dependency
 from .station_removal_simulation import simulate_station_removal
 from .station_redundancy_planner import plan_redundancy_improvements
+from .network_single_point_of_failure_detector import detect_single_points_of_failure
 from .contracts import NetworkMetrics, ensure_metrics
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "compute_station_dependency",
     "simulate_station_removal",
     "plan_redundancy_improvements",
+    "detect_single_points_of_failure",
     "NetworkMetrics",
     "ensure_metrics",
 ]
