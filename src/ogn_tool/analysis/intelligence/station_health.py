@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .contracts import NetworkMetrics, ensure_metrics
+
 HEALTH_RULES = {
     "CRITICAL": {
         "impact_score_min": 5.0,
@@ -32,14 +34,14 @@ def _build_anomaly_lookup(anomalies: pd.DataFrame | None) -> dict[str, dict]:
     return lookup
 
 
-def compute_station_health(network_metrics: dict | None) -> pd.DataFrame:
+def compute_station_health(network_metrics: NetworkMetrics | None) -> pd.DataFrame:
     """Build an operator-facing station health table from network metrics.
 
     This is an intelligence-layer interpretation of existing network metrics.
     It does not compute new network metrics and should remain a thin,
     explainable synthesis layer.
     """
-    network_metrics = network_metrics or {}
+    network_metrics = ensure_metrics(network_metrics)
     influence = network_metrics.get("station_influence")
     robustness = network_metrics.get("network_robustness")
     anomalies = network_metrics.get("station_anomalies")
@@ -82,7 +84,6 @@ def compute_station_health(network_metrics: dict | None) -> pd.DataFrame:
         anomaly_info = anomaly_lookup.get(station_id, {"count": 0, "primary": "", "types": set()})
         anomaly_count = int(anomaly_info["count"])
         primary_anomaly = str(anomaly_info["primary"] or "")
-        anomaly_types = anomaly_info["types"]
 
         if primary_anomaly in HEALTH_RULES["CRITICAL"]["anomaly_types"] or impact_score >= HEALTH_RULES["CRITICAL"]["impact_score_min"]:
             health_status = "CRITICAL"
