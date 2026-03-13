@@ -4,15 +4,11 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from apps.ui.layout import DASHBOARD_COLUMNS
 from apps.ui.metrics import metric_card
-from apps.ui import charts as ui_charts
-from apps.ui.charts import render_rf_cartography
-from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
 
 
 def render_diagnostics_page(ctx):
-    dataset = ctx.get("dataset", {})
+    results = ctx.get("results")
     st.markdown("<h2>Diagnostics</h2>", unsafe_allow_html=True)
     packets_window = ctx.get("packets_window")
     rf_packets = ctx.get("rf_packets")
@@ -52,7 +48,10 @@ def render_diagnostics_page(ctx):
         st.info("No qas column available for SQL-style counts.")
 
     st.markdown("**Station comparison**")
-    st.info("Station comparison is not yet migrated to the engine dataset.")
+    if results is not None:
+        st.info("Station comparison is not yet migrated to the typed runtime results.")
+    else:
+        st.info("Station comparison is not yet migrated to the engine dataset.")
 
     polar_coverage = ctx.get("polar_coverage") or []
     if polar_coverage:
