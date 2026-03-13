@@ -124,18 +124,72 @@ def render_network_intelligence(ctx):
     station_anomalies = None
     network_robustness = None
     placement = None
+    station_health = None
+    network_summary = None
+    station_dependency = None
     if results is not None:
         network_metrics_result = getattr(results, "network_metrics", None)
         if isinstance(network_metrics_result, dict):
             station_anomalies = network_metrics_result.get("station_anomalies")
             network_robustness = network_metrics_result.get("network_robustness")
             placement = network_metrics_result.get("station_placement")
+            station_health = network_metrics_result.get("station_health")
+            network_summary = network_metrics_result.get("network_summary")
+            station_dependency = network_metrics_result.get("station_dependency")
     if station_anomalies is None:
         station_anomalies = legacy_network.get("station_anomalies")
     if network_robustness is None:
         network_robustness = legacy_network.get("network_robustness")
     if placement is None:
         placement = legacy_network.get("station_placement")
+    if station_health is None:
+        station_health = legacy_network.get("station_health")
+    if network_summary is None:
+        network_summary = legacy_network.get("network_summary")
+    if station_dependency is None:
+        station_dependency = legacy_network.get("station_dependency")
+
+    if isinstance(network_summary, dict) and network_summary:
+        status = str(network_summary.get("network_status") or "UNKNOWN")
+        if status == "DEGRADED":
+            st.error(f"Network status: {status}")
+        elif status == "WARNING":
+            st.warning(f"Network status: {status}")
+        else:
+            st.success(f"Network status: {status}")
+
+        st.subheader("Network Summary")
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("Network status", status)
+        s2.metric("Critical stations", int(network_summary.get("critical_station_count", 0) or 0))
+        s3.metric("Warning stations", int(network_summary.get("warning_station_count", 0) or 0))
+        s4.metric(
+            "Mean stations / aircraft",
+            f"{float(network_summary.get('mean_stations_per_aircraft', 0.0) or 0.0):.2f}",
+        )
+        if network_summary.get("top_critical_station"):
+            st.caption(f"Top critical station: {network_summary['top_critical_station']}")
+        if network_summary.get("notes"):
+            st.caption(str(network_summary["notes"]))
+
+    if station_health is not None and not station_health.empty:
+        st.subheader("Station Diagnostics")
+        show_critical = st.checkbox("Show only critical stations", value=False)
+        health_df = station_health
+        if show_critical and "health_status" in health_df.columns:
+            health_df = health_df[health_df["health_status"] == "CRITICAL"]
+        st.dataframe(
+            health_df.sort_values("impact_score", ascending=False),
+            use_container_width=True,
+        )
+        st.caption("Stations sorted by impact score")
+
+    if station_dependency is not None and not station_dependency.empty:
+        st.subheader("Station Dependencies")
+        st.dataframe(
+            station_dependency.sort_values("dependency_strength", ascending=False),
+            use_container_width=True,
+        )
 
     if station_influence is not None and not station_influence.empty:
         st.subheader("Station influence")
