@@ -123,15 +123,19 @@ def render_network_intelligence(ctx):
 
     station_anomalies = None
     network_robustness = None
+    placement = None
     if results is not None:
         network_metrics_result = getattr(results, "network_metrics", None)
         if isinstance(network_metrics_result, dict):
             station_anomalies = network_metrics_result.get("station_anomalies")
             network_robustness = network_metrics_result.get("network_robustness")
+            placement = network_metrics_result.get("station_placement")
     if station_anomalies is None:
         station_anomalies = legacy_network.get("station_anomalies")
     if network_robustness is None:
         network_robustness = legacy_network.get("network_robustness")
+    if placement is None:
+        placement = legacy_network.get("station_placement")
 
     if station_influence is not None and not station_influence.empty:
         st.subheader("Station influence")
@@ -168,6 +172,24 @@ def render_network_intelligence(ctx):
         top_robustness = robustness_sorted.head(10)
         if not top_robustness.empty:
             st.bar_chart(top_robustness.set_index("station_id")["impact_score"])
+
+    st.subheader("Station placement candidates")
+    if placement is not None and not placement.empty:
+        st.dataframe(
+            placement.sort_values("placement_score", ascending=False)[
+                [
+                    "lat",
+                    "lon",
+                    "placement_score",
+                    "coverage_gain",
+                    "redundancy_gain",
+                    "critical_aircraft_supported",
+                ]
+            ].head(20),
+            use_container_width=True,
+        )
+    else:
+        st.info("No station placement candidates available.")
 
     st.subheader("Network overview")
     c1, c2, c3, c4 = st.columns(4)
