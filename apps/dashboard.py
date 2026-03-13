@@ -54,6 +54,7 @@ from ogn_tool.data.db_repository import db_meta as repo_db_meta, db_max_ts_epoch
 from ogn_tool.data.packets_repository import load_packets_window
 from ogn_tool.data.receptions_repository import load_rf_receptions
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 
 
 # Optional profiling (enable with OGN_PROFILE=1)
@@ -619,12 +620,13 @@ elif data_source_mode == "FANET local":
 elif data_source_mode == "OGN live tracking":
     dataset_mode = "NETWORK"
 engine = RFAnalysisEngine(receptions_window, station_lat, station_lon)
+results = engine.run(RFAnalysisDataset(observations=[]))
 dataset = engine.build_analysis_dataset(dataset_mode=dataset_mode, station_id=station_cs_effective)
 station_analysis = engine.run_station_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
 network_analysis = engine.run_network_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
 rf_diagnostics = engine.run_rf_diagnostics(dataset_mode=dataset_mode, station_id=station_cs_effective)
 # Sync grid status with dataset coverage grid
-grid_df_status = dataset.get("coverage_grid")
+grid_df_status = getattr(results, "coverage", None)
 if grid_df_status is None:
     grid_df_status = pd.DataFrame()
 st.session_state["grid_df"] = grid_df_status
@@ -636,7 +638,7 @@ if not grid_df_status.empty and "max_distance_km" in grid_df_status.columns:
     max_distance_grid = float(pd.to_numeric(grid_df_status.get("max_distance_km"), errors="coerce").max())
 st.write("packets_window:", len(packets_window)) 
 st.write("rf_packets:", len(dataset.get("packets_rf", []))) 
-st.write("coverage_grid:", len(dataset.get("coverage_grid", [])))
+st.write("coverage_grid:", len(getattr(results, "coverage", []) or []))
 rf_packets = dataset.get("rf_receptions")
 if rf_packets is None:
     rf_packets = pd.DataFrame()
@@ -646,7 +648,7 @@ if rf_packets.empty:
     )
     # st.stop()
 polar_coverage = []
-rf_grid = first_valid_df(dataset.get("coverage_grid"))
+rf_grid = first_valid_df(getattr(results, "coverage", None))
 rf_packets_global = first_valid_df(dataset.get("packets_rf"))
 rf_gated_packets = rf_packets
 rf_gated_grid = rf_grid
@@ -773,7 +775,7 @@ st.caption(f"Active filters: Station={station_callsign} | Window={hours}h | Type
 
 raw_packets_mode = bool(st.session_state.get("filters_apply", {}).get("raw_packets_mode", False))
 st.sidebar.write("Dataset mode:", dataset.get("dataset_mode"))
-st.sidebar.write("Coverage cells:", len(dataset.get("coverage_grid", [])))
+st.sidebar.write("Coverage cells:", len(getattr(results, "coverage", []) or []))
 st.sidebar.write("Stations detected:", len(dataset.get("stations", [])))
 
 with navigation_container:
@@ -981,6 +983,7 @@ ui_ctx = {
     "hours": hours,
     "raw_packets_mode": raw_packets_mode,
     "dataset": dataset,
+    "results": results,
     "station_analysis": station_analysis,
     "network_analysis": network_analysis,
     "rf_diagnostics": rf_diagnostics,

@@ -76,22 +76,16 @@ def render_coverage_explorer_page(ctx):
         ]
     )
 
-    dataset_for_map = {
-        "packets_all": view.metrics.get("packets_all"),
-        "packets_rf": view.metrics.get("packets_rf"),
-        "coverage_grid": view.coverage,
-        "station_metrics": view.metrics.get("station_metrics"),
-        "stations_df": stations_df,
-    }
+    station_source = {"stations_df": stations_df}
 
     with col_map:
         layers = []
         if show_stations:
-            layers.append(build_station_layer(dataset_for_map))
+            layers.append(build_station_layer(station_source))
         if show_aircraft:
-            layers.append(build_aircraft_layer(dataset_for_map))
+            layers.append(build_aircraft_layer(view))
         if show_coverage and view.has_rf:
-            layers.append(build_coverage_layer(dataset_for_map))
+            layers.append(build_coverage_layer(view))
         deck = build_deck_map(
             layers,
             view.station_lat,

@@ -8,6 +8,32 @@ def _empty_layer():
     return pdk.Layer("ScatterplotLayer", data=[])
 
 
+def _source_get(source: object, key: str, default=None):
+    if isinstance(source, dict):
+        return source.get(key, default)
+
+    alias_map = {
+        "coverage_grid": "coverage",
+        "blind_cells": "blind_zones",
+    }
+
+    if hasattr(source, key):
+        value = getattr(source, key)
+        return default if value is None else value
+
+    alias = alias_map.get(key)
+    if alias and hasattr(source, alias):
+        value = getattr(source, alias)
+        return default if value is None else value
+
+    metrics = getattr(source, "metrics", None)
+    if isinstance(metrics, dict) and key in metrics:
+        value = metrics.get(key, default)
+        return default if value is None else value
+
+    return default
+
+
 def compute_station_degree(links_df: pd.DataFrame) -> pd.DataFrame:
     if links_df is None or links_df.empty:
         return pd.DataFrame(columns=["station_id", "network_degree"])
@@ -18,7 +44,7 @@ def compute_station_degree(links_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_station_layer(dataset: dict):
-    stations_df = dataset.get("stations_df")
+    stations_df = _source_get(dataset, "stations_df")
     if stations_df is None or stations_df.empty:
         return _empty_layer()
     if "network_degree" not in stations_df.columns:
@@ -37,7 +63,7 @@ def build_station_layer(dataset: dict):
 
 
 def build_aircraft_layer(dataset: dict):
-    packets_df = dataset.get("packets_all")
+    packets_df = _source_get(dataset, "packets_all")
     if packets_df is None or packets_df.empty:
         return _empty_layer()
     packets_df = packets_df.iloc[::5].copy()
@@ -55,7 +81,7 @@ def build_aircraft_layer(dataset: dict):
 
 
 def build_coverage_layer(dataset: dict):
-    packets_df = dataset.get("packets_rf")
+    packets_df = _source_get(dataset, "packets_rf")
     if packets_df is None or packets_df.empty:
         return _empty_layer()
     return pdk.Layer(
@@ -70,7 +96,7 @@ def build_coverage_layer(dataset: dict):
 
 
 def build_redundancy_layer(dataset: dict):
-    redundancy_df = dataset.get("coverage_redundancy_grid")
+    redundancy_df = _source_get(dataset, "coverage_redundancy_grid")
     if redundancy_df is None or redundancy_df.empty:
         return _empty_layer()
 
@@ -96,7 +122,7 @@ def build_redundancy_layer(dataset: dict):
 
 
 def build_blind_zone_layer(dataset: dict):
-    blind_df = dataset.get("blind_cells")
+    blind_df = _source_get(dataset, "blind_cells")
     if blind_df is None or blind_df.empty:
         return _empty_layer()
     return pdk.Layer(
@@ -111,9 +137,9 @@ def build_blind_zone_layer(dataset: dict):
 
 
 def build_rf_link_dataframe(dataset: dict):
-    radio_events = dataset.get("radio_events")
-    station_reception = dataset.get("station_reception")
-    stations_df = dataset.get("stations_df")
+    radio_events = _source_get(dataset, "radio_events")
+    station_reception = _source_get(dataset, "station_reception")
+    stations_df = _source_get(dataset, "stations_df")
     if (
         radio_events is None
         or station_reception is None
@@ -201,8 +227,8 @@ def build_rf_link_layer(dataset: dict, links_df=None):
 
 
 def build_station_network_dataframe(dataset: dict):
-    overlap = dataset.get("station_overlap_matrix")
-    stations_df = dataset.get("stations_df")
+    overlap = _source_get(dataset, "station_overlap_matrix")
+    stations_df = _source_get(dataset, "stations_df")
     if overlap is None or stations_df is None or overlap.empty or stations_df.empty:
         return None
 

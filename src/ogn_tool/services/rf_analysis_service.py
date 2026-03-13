@@ -4,13 +4,27 @@ from __future__ import annotations
 
 from typing import Optional
 
+
 import pandas as pd
 
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.models.rf_analysis_results import RFAnalysisResults
+from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.services import data_service
 from ogn_tool.services.data_service import get_config
 
 _LAST_ENGINE: RFAnalysisEngine | None = None
+
+
+def _filter_packets_for_station(packets_df: pd.DataFrame, station_id: Optional[str]) -> pd.DataFrame:
+    if not station_id or packets_df is None or packets_df.empty:
+        return packets_df if packets_df is not None else pd.DataFrame()
+    if "igate" in packets_df.columns:
+        return packets_df[packets_df["igate"].astype(str) == str(station_id)].copy()
+    if "receiver" in packets_df.columns:
+        return packets_df[packets_df["receiver"].astype(str) == str(station_id)].copy()
+    return packets_df
 
 
 def build_rf_dataset(
@@ -20,22 +34,30 @@ def build_rf_dataset(
     dataset_mode: str = "STRICT_RF",
     station_id: Optional[str] = None,
 ) -> dict:
-    """
-    Build the RF analysis dataset using the engine.
-
-    This service layer keeps orchestration out of UI code and
-    provides a stable entry point for future API integrations.
-    """
+    """Legacy compatibility entrypoint returning the historical dataset dict."""
     global _LAST_ENGINE
-    if station_id and packets_df is not None and not packets_df.empty:
-        if "igate" in packets_df.columns:
-            packets_df = packets_df[packets_df["igate"].astype(str) == str(station_id)].copy()
-        elif "receiver" in packets_df.columns:
-            packets_df = packets_df[packets_df["receiver"].astype(str) == str(station_id)].copy()
+    packets_df = _filter_packets_for_station(packets_df, station_id)
 
     engine = RFAnalysisEngine(packets_df, station_lat, station_lon)
     _LAST_ENGINE = engine
     return engine.build_analysis_dataset(dataset_mode=dataset_mode, station_id=station_id)
+
+
+def run_rf_analysis(
+    packets_df: pd.DataFrame,
+    station_lat: float,
+    station_lon: float,
+    observations: list[RFObservationVector] | None = None,
+    station_id: Optional[str] = None,
+) -> RFAnalysisResults:
+    """Canonical typed service entrypoint for RF analysis."""
+    global _LAST_ENGINE
+    packets_df = _filter_packets_for_station(packets_df, station_id)
+
+    engine = RFAnalysisEngine(packets_df, station_lat, station_lon)
+    _LAST_ENGINE = engine
+    dataset = RFAnalysisDataset(observations=observations or [])
+    return engine.run(dataset)
 
 
 def run_rf_diagnostics(dataset_mode: str | None = None, station_id: str | None = None) -> dict:

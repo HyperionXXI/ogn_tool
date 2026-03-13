@@ -11,6 +11,7 @@ def render_overview_page(ctx):
     import streamlit as st
     st.write("DEBUG: page renderer executed")
     dataset = ctx.get("dataset", {})
+    results = ctx.get("results")
     st.markdown("<h2>Overview</h2>", unsafe_allow_html=True)
     rf_packets = ctx.get("rf_packets")
 
@@ -44,8 +45,15 @@ not necessarily the RF receiver.
 
     aircraft_seen = rf_packets["src"].nunique() if rf_packets is not None and "src" in rf_packets.columns else None
     max_range = None
+    if isinstance(metrics, dict):
+        max_range = metrics.get("observed_max_km")
+        if max_range is None:
+            max_range = metrics.get("max_range_km")
     health = None
-    if isinstance(dataset.get("rf_diagnosis"), dict):
+    metrics = getattr(results, "metrics", None) if results is not None else None
+    if isinstance(metrics, dict):
+        health = (metrics.get("rf_diagnosis") or {}).get("health") if isinstance(metrics.get("rf_diagnosis"), dict) else None
+    if health is None and isinstance(dataset.get("rf_diagnosis"), dict):
         health = dataset.get("rf_diagnosis", {}).get("health")
     try:
         health_val = float(health) if health is not None else None

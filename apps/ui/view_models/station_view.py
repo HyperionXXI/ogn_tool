@@ -3,11 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-import pandas as pd
+from ogn_tool.models.rf_analysis_results import RFAnalysisResults
 
 
 @dataclass
 class StationAnalysisView:
+    """UI boundary adapter for station-focused analysis views.
+
+    Canonical path: `from_results(...)`.
+    Legacy compatibility path: `from_dataset_dict(...)`, which first converts the
+    dataset dict into an `RFAnalysisResults`-shaped object before delegating to
+    the canonical typed constructor.
+    """
     packet_count: int = 0
     max_range_km: float | None = None
     shadow_sectors: list = field(default_factory=list)
@@ -28,8 +35,30 @@ class StationAnalysisView:
     dst_types: list[str] = field(default_factory=list)
     rf_local_count: int = 0
 
+    @staticmethod
+    def _results_from_dataset_dict(dataset: dict | None) -> RFAnalysisResults:
+        dataset = dataset or {}
+        metrics = dict(dataset.get("metrics") or {})
+
+        packets_all = dataset.get("packets_all")
+        packets_rf = dataset.get("packets_rf")
+        metrics.setdefault("packets_all", packets_all)
+        metrics.setdefault("packets_rf", packets_rf)
+        metrics.setdefault("station_metrics", dataset.get("station_metrics"))
+        metrics.setdefault("azimuth_df", dataset.get("azimuth_df"))
+        metrics.setdefault("azimuth_histogram", dataset.get("azimuth_histogram"))
+        metrics.setdefault("directional_balance", dataset.get("directional_balance"))
+        metrics.setdefault("shadow_map", dataset.get("shadow_map"))
+
+        return RFAnalysisResults(
+            coverage=dataset.get("coverage_grid"),
+            blind_zones=dataset.get("blind_cells"),
+            antenna_shadow_sectors=metrics.get("antenna_shadow_sectors") or [],
+            metrics=metrics,
+        )
+
     @classmethod
-    def from_results(cls, results: Any, packet_count: int = 0) -> "StationAnalysisView":
+    def from_results(cls, results: RFAnalysisResults | Any, packet_count: int = 0, **context: Any) -> "StationAnalysisView":
         metrics = getattr(results, "metrics", None) or {}
         max_range_km = metrics.get("observed_max_km")
         if max_range_km is None:
@@ -47,34 +76,21 @@ class StationAnalysisView:
             azimuth_histogram=metrics.get("azimuth_histogram") if isinstance(metrics, dict) else None,
             directional_balance=metrics.get("directional_balance") if isinstance(metrics, dict) else None,
             shadow_map=metrics.get("shadow_map") if isinstance(metrics, dict) else None,
+            station_id=context.get("station_id") or "-",
+            station_lat=context.get("station_lat"),
+            station_lon=context.get("station_lon"),
+            hours=context.get("hours"),
+            data_source=context.get("data_source"),
+            dst_types=list(context.get("dst_types") or []),
+            rf_local_count=int(context.get("rf_local_count", 0) or 0),
         )
 
     @classmethod
-    def from_dataset_dict(cls, dataset: dict | None) -> "StationAnalysisView":
+    def from_dataset_dict(cls, dataset: dict | None, **context: Any) -> "StationAnalysisView":
         dataset = dataset or {}
-        metrics = dict(dataset.get("metrics") or {})
-
-        packets_all = dataset.get("packets_all")
-        packets_rf = dataset.get("packets_rf")
-        metrics.setdefault("packets_all", packets_all)
-        metrics.setdefault("packets_rf", packets_rf)
-        metrics.setdefault("station_metrics", dataset.get("station_metrics"))
-
         packet_count = len(dataset.get("rf_receptions") or [])
-
-        return cls(
-            packet_count=packet_count,
-            max_range_km=metrics.get("max_range_km"),
-            shadow_sectors=metrics.get("antenna_shadow_sectors") or [],
-            blind_zones=dataset.get("blind_cells"),
-            coverage=dataset.get("coverage_grid"),
-            metrics=metrics,
-            rf_models=metrics.get("rf_models", {}),
-            azimuth_df=dataset.get("azimuth_df") or metrics.get("azimuth_df"),
-            azimuth_histogram=dataset.get("azimuth_histogram") or metrics.get("azimuth_histogram"),
-            directional_balance=dataset.get("directional_balance") or metrics.get("directional_balance"),
-            shadow_map=dataset.get("shadow_map") or metrics.get("shadow_map"),
-        )
+        results = cls._results_from_dataset_dict(dataset)
+        return cls.from_results(results, packet_count=packet_count, **context)
 
     @classmethod
     def from_context(cls, ctx: dict) -> "StationAnalysisView":
