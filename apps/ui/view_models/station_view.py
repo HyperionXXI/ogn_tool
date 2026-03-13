@@ -94,6 +94,21 @@ class StationAnalysisView:
 
     @classmethod
     def from_context(cls, ctx: dict) -> "StationAnalysisView":
+        results = ctx.get("results")
+        if results is not None:
+            packet_count = int(ctx.get("rf_local_count", 0) or 0)
+            return cls.from_results(
+                results,
+                packet_count=packet_count,
+                station_id=ctx.get("station_callsign") or "—",
+                station_lat=ctx.get("station_lat"),
+                station_lon=ctx.get("station_lon"),
+                hours=ctx.get("hours"),
+                data_source=ctx.get("data_source"),
+                dst_types=list(ctx.get("dst_types") or []),
+                rf_local_count=int(ctx.get("rf_local_count", 0) or 0),
+            )
+
         pd_mod = ctx["pd"]
         dataset = ctx.get("dataset", {}) or {}
 
