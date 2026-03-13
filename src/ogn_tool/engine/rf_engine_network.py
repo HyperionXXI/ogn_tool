@@ -5,120 +5,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-
-def build_radio_events(packets_df: pd.DataFrame) -> pd.DataFrame:
-    if packets_df is None or packets_df.empty or "src" not in packets_df.columns:
-        return pd.DataFrame()
-    df = packets_df.copy()
-    if "ts_epoch" in df.columns:
-        df["time_bucket"] = (pd.to_numeric(df["ts_epoch"], errors="coerce") // 2) * 2
-    elif "ts_utc" in df.columns:
-        ts = pd.to_datetime(df["ts_utc"], errors="coerce")
-        df["time_bucket"] = (ts.view("int64") // 1_000_000_000 // 2) * 2
-    else:
-        df["time_bucket"] = pd.NA
-    df["lat_round"] = pd.to_numeric(df.get("lat"), errors="coerce").round(3)
-    df["lon_round"] = pd.to_numeric(df.get("lon"), errors="coerce").round(3)
-    df["event_key"] = (
-        df["src"].astype(str)
-        + "_"
-        + df["time_bucket"].astype(str)
-        + "_"
-        + df["lat_round"].astype(str)
-        + "_"
-        + df["lon_round"].astype(str)
-    )
-    agg = {
-        "timestamp": ("ts_epoch", "min") if "ts_epoch" in df.columns else ("time_bucket", "min"),
-        "aircraft": ("src", "first"),
-        "lat": ("lat", "mean"),
-        "lon": ("lon", "mean"),
-        "packet_count": ("src", "size"),
-    }
-    if "altitude_m" in df.columns:
-        agg["altitude"] = ("altitude_m", "mean")
-    if "igate" in df.columns:
-        agg["station_count"] = ("igate", "nunique")
-    events = df.groupby("event_key", dropna=False).agg(**agg).reset_index()
-    if "altitude" not in events.columns:
-        events["altitude"] = pd.NA
-    if "station_count" not in events.columns:
-        events["station_count"] = events["packet_count"]
-    return events
-
-
-def build_station_reception(packets_df: pd.DataFrame) -> pd.DataFrame:
-    if packets_df is None or packets_df.empty or "src" not in packets_df.columns:
-        return pd.DataFrame()
-    df = packets_df.copy()
-    if "ts_epoch" in df.columns:
-        df["time_bucket"] = (pd.to_numeric(df["ts_epoch"], errors="coerce") // 2) * 2
-    elif "ts_utc" in df.columns:
-        ts = pd.to_datetime(df["ts_utc"], errors="coerce")
-        df["time_bucket"] = (ts.view("int64") // 1_000_000_000 // 2) * 2
-    else:
-        df["time_bucket"] = pd.NA
-    df["lat_round"] = pd.to_numeric(df.get("lat"), errors="coerce").round(3)
-    df["lon_round"] = pd.to_numeric(df.get("lon"), errors="coerce").round(3)
-    df["event_key"] = (
-        df["src"].astype(str)
-        + "_"
-        + df["time_bucket"].astype(str)
-        + "_"
-        + df["lat_round"].astype(str)
-        + "_"
-        + df["lon_round"].astype(str)
-    )
-    cols = ["event_key"]
-    if "igate" in df.columns:
-        cols.append("igate")
-    if "rssi_db" in df.columns:
-        cols.append("rssi_db")
-    elif "rssi" in df.columns:
-        cols.append("rssi")
-    if "snr_db" in df.columns:
-        cols.append("snr_db")
-    elif "snr" in df.columns:
-        cols.append("snr")
-    if "distance_km" in df.columns:
-        cols.append("distance_km")
-    return df[cols].rename(columns={"igate": "station_id"})
-
-
-def compute_coverage_redundancy(radio_events: pd.DataFrame, station_reception: pd.DataFrame) -> pd.DataFrame:
-    if radio_events is None or station_reception is None or radio_events.empty or station_reception.empty:
-        return pd.DataFrame()
-    df = station_reception.merge(
-        radio_events[["event_key", "lat", "lon"]],
-        on="event_key",
-        how="left",
-    )
-    df["lat_cell"] = (pd.to_numeric(df["lat"], errors="coerce") / 0.05).round() * 0.05
-    df["lon_cell"] = (pd.to_numeric(df["lon"], errors="coerce") / 0.05).round() * 0.05
-    return (
-        df.groupby(["lat_cell", "lon_cell"], dropna=False)
-        .agg(
-            station_count=("station_id", "nunique"),
-            reception_count=("event_key", "count"),
-        )
-        .reset_index()
-    )
-
-
-def compute_blind_zones(coverage_redundancy: pd.DataFrame) -> pd.DataFrame:
-    if coverage_redundancy is None or coverage_redundancy.empty or "station_count" not in coverage_redundancy.columns:
-        return pd.DataFrame()
-    return coverage_redundancy[coverage_redundancy["station_count"] <= 1].copy()
-
-
-def compute_station_overlap(station_reception: pd.DataFrame) -> pd.DataFrame:
-    if station_reception is None or station_reception.empty:
-        return pd.DataFrame()
-    if "event_key" not in station_reception.columns or "station_id" not in station_reception.columns:
-        return pd.DataFrame()
-    incidence = pd.crosstab(station_reception["event_key"], station_reception["station_id"]) > 0
-    overlap = incidence.T.dot(incidence)
-    return overlap
+from ogn_tool.analysis.network_metrics import (
+    build_reception_events as build_radio_events,
+    build_station_reception,
+    compute_blind_zones,
+    compute_coverage_redundancy,
+    compute_station_overlap,
+)
 
 
 def inspect_zone_impl(engine: Any, lat: float, lon: float, radius_km: float = 5.0) -> dict:

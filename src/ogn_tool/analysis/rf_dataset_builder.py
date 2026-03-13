@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .packets import deduplicate_packets
-from .rf_metrics import compute_distance
+from .rf_metrics.rf_statistics import compute_distance
 from .geo.grid import build_rf_grid
 from .shadow import compute_shadow_proxy
 

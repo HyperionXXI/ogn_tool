@@ -85,7 +85,6 @@ def compute_altitude_delta(
     return pd.Series([np.nan] * len(df), index=df.index)
 
 
-# Legacy compatibility helpers (kept for existing callers)
 def compute_distance(df: pd.DataFrame, station_lat: float, station_lon: float) -> pd.DataFrame:
     if df is None or df.empty:
         return df
@@ -101,3 +100,39 @@ def compute_distance(df: pd.DataFrame, station_lat: float, station_lon: float) -
     out = df.copy()
     out["distance_km"] = dist
     return out
+
+
+
+def summarize_signal_quality(df: pd.DataFrame) -> dict:
+    metrics: dict = {}
+    if df is None or df.empty:
+        return metrics
+
+    if "snr" in df.columns:
+        values = pd.to_numeric(df["snr"], errors="coerce").dropna()
+        if not values.empty:
+            metrics["snr"] = float(values.mean())
+    elif "snr_db" in df.columns:
+        values = pd.to_numeric(df["snr_db"], errors="coerce").dropna()
+        if not values.empty:
+            metrics["snr"] = float(values.mean())
+    elif "rssi_db" in df.columns:
+        values = pd.to_numeric(df["rssi_db"], errors="coerce").dropna()
+        if not values.empty:
+            metrics["rssi"] = float(values.mean())
+    elif "rssi" in df.columns:
+        values = pd.to_numeric(df["rssi"], errors="coerce").dropna()
+        if not values.empty:
+            metrics["rssi"] = float(values.mean())
+
+    if "noise_floor" in df.columns:
+        values = pd.to_numeric(df["noise_floor"], errors="coerce").dropna()
+        if not values.empty:
+            metrics["noise_floor"] = float(values.mean())
+
+    if "packet_loss" in df.columns:
+        values = pd.to_numeric(df["packet_loss"], errors="coerce").dropna()
+        if not values.empty:
+            metrics["packet_loss"] = float(values.mean())
+
+    return metrics

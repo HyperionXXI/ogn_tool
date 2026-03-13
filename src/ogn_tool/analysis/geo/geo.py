@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ogn_tool.analysis.rf_metrics import compute_distance_bearing as _compute_distance_bearing
+from ogn_tool.analysis.rf_metrics.rf_statistics import compute_distance_bearing as _compute_distance_bearing
 
 
 def compute_distance_bearing(

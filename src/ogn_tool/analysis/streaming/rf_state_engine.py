@@ -5,6 +5,9 @@ from typing import Any, Dict, Optional
 
 import math
 
+from ogn_tool.analysis.rf_models.rf_visibility_model import compute_radio_horizon
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event
 from ogn_tool.rf.geometry import compute_distance_bearing_scalar
 
@@ -40,7 +43,6 @@ def _altitude_difference(aircraft_alt_m: float | None, station_alt_m: float | No
         return float(aircraft_alt_m) - float(station_alt_m)
     except (TypeError, ValueError):
         return None
-
 
 
 class _SpatialIndex:
@@ -109,7 +111,12 @@ class IncrementalMetrics:
 
 
 class RFStateEngine:
-    """Incremental RF state engine for streaming packet analysis."""
+    """Incremental RF state engine for streaming packet analysis.
+
+    This component is a streaming adapter. The canonical analysis kernel remains
+    batch/snapshot oriented. Use `snapshot()` to materialize a compatible
+    `RFAnalysisDataset` for the batch engine.
+    """
 
     def __init__(
         self,
@@ -128,6 +135,7 @@ class RFStateEngine:
         self.aircraft_states: Dict[str, AircraftState] = {}
         self.metrics = IncrementalMetrics()
         self._ingest_counter = 0
+        self._observation_vectors: list[RFObservationVector] = []
         self.spatial_index = _SpatialIndex(self.station_coords, self.grid_cell_deg)
 
     def cleanup_states(self, current_timestamp: int | None = None) -> int:
@@ -194,7 +202,46 @@ class RFStateEngine:
         if event.altitude_difference is None:
             event.altitude_difference = _safe_float(packet.get("relative_alt_m"))
 
+        if packet.get("ts_ns") is not None:
+            metadata = dict(event.metadata or {})
+            metadata["ts_ns"] = packet.get("ts_ns")
+            event.metadata = metadata
+
         return event
+
+    def _event_to_vector(self, obs: RFObservationEvent, state: AircraftState | None) -> RFObservationVector | None:
+        if obs.station_id is None or obs.aircraft_id is None or obs.timestamp is None:
+            return None
+
+        lat = obs.lat if obs.lat is not None else getattr(state, "lat", None)
+        lon = obs.lon if obs.lon is not None else getattr(state, "lon", None)
+        altitude = obs.altitude if obs.altitude is not None else getattr(state, "altitude", None)
+        distance = obs.distance
+        bearing = obs.bearing
+
+        if lat is None or lon is None or altitude is None or distance is None or bearing is None:
+            return None
+
+        station_alt = None
+        if obs.station_id in self.station_coords:
+            _st_lat, _st_lon, station_alt = self.station_coords[obs.station_id]
+        horizon = compute_radio_horizon(station_alt or 0.0, altitude).get("radio_horizon_km", 0.0)
+
+        metadata = obs.metadata or {}
+        timestamp_ns = _safe_int(metadata.get("ts_ns")) if metadata else None
+
+        return RFObservationVector(
+            station_id=str(obs.station_id),
+            aircraft_id=str(obs.aircraft_id),
+            lat=float(lat),
+            lon=float(lon),
+            altitude_m=float(altitude),
+            distance_km=float(distance),
+            bearing_deg=float(bearing),
+            radio_horizon_km=float(horizon),
+            timestamp=int(obs.timestamp),
+            timestamp_ns=timestamp_ns,
+        )
 
     def _update_incremental_metrics(self, obs: RFObservationEvent, state: AircraftState | None) -> None:
         self.metrics.packet_count += 1
@@ -238,11 +285,19 @@ class RFStateEngine:
 
         self._update_incremental_metrics(obs, state)
 
+        vector = self._event_to_vector(obs, state)
+        if vector is not None:
+            self._observation_vectors.append(vector)
+
         self._ingest_counter += 1
         if self._ingest_counter % self.cleanup_interval_packets == 0 and obs.timestamp is not None:
             self.cleanup_states(current_timestamp=obs.timestamp)
 
         return obs
+
+    def snapshot(self) -> RFAnalysisDataset:
+        """Materialize a batch-compatible snapshot dataset from the current stream state."""
+        return RFAnalysisDataset(observations=list(self._observation_vectors))
 
     def get_metrics_snapshot(self) -> Dict[str, Any]:
         coverage_cells_count = {st: len(cells) for st, cells in self.metrics.station_coverage_cells.items()}
@@ -257,3 +312,4 @@ class RFStateEngine:
 
 
 __all__ = ["AircraftState", "RFObservationEvent", "IncrementalMetrics", "RFStateEngine"]
+

@@ -7,7 +7,7 @@ from apps.ui.layout import DASHBOARD_COLUMNS
 from apps.ui.metrics import metric_card
 from apps.ui import charts as ui_charts
 from apps.ui.charts import render_rf_cartography
-from ogn_tool.analysis.rf_probability_field import build_rf_probability_field
+from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
 
 
 def render_aircraft_page(ctx):
@@ -136,5 +136,6 @@ def render_aircraft_page(ctx):
         if "lat" in aircraft_packets.columns and "lon" in aircraft_packets.columns:
             st.subheader("Aircraft positions")
             st.scatter_chart(aircraft_packets.rename(columns={"lat": "x", "lon": "y"})[["x", "y"]])
+
 
 

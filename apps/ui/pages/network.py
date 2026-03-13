@@ -6,7 +6,7 @@ from apps.ui.layout import DASHBOARD_COLUMNS
 from apps.ui.metrics import metric_card
 from apps.ui import charts as ui_charts
 from apps.ui.charts import render_rf_cartography
-from ogn_tool.analysis.rf_probability_field import build_rf_probability_field
+from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
 
 
 def render_network_page(ctx):
@@ -38,6 +38,7 @@ def render_network_page(ctx):
     if redundancy is not None and not redundancy.empty:
         st.subheader("Aircraft redundancy")
         st.bar_chart(redundancy)
+
 
 
 

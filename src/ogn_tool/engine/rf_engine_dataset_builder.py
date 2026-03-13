@@ -8,18 +8,23 @@ from ogn_tool.analysis.rf_dataset_builder import build_rf_dataset
 from ogn_tool.rf import azimuth as analysis_azimuth
 from ogn_tool.analysis.network import station_range as analysis_station_range
 from ogn_tool.analysis.network import station_quality as analysis_station_quality
-from ogn_tool.rf.azimuth import compute_azimuth_histogram, analyze_directional_balance
 from ogn_tool.analysis.geo import compute_distance_bearing
-from ogn_tool.analysis.network_metrics import detect_network_blind_zones
+from ogn_tool.analysis.network_metrics import (
+    build_network_metrics,
+    build_station_metrics,
+    detect_network_blind_zones,
+    enrich_coverage_grid,
+)
 from ogn_tool.analysis.rf_diagnosis import RFDiagnosis
-from ogn_tool.analysis.shadow import detect_rf_shadows
 from ogn_tool.analysis.rf_observations import compute_distance, compute_bearing
 from ogn_tool.engine.rf_dataset_builder import build_observations
-from ogn_tool.analysis.rf_probability_field import build_rf_probability_field
-from ogn_tool.analysis.observation_builder import build_observations as build_observation_payload
+from ogn_tool.analysis.rf_metrics.directional_analysis import build_directional_diagnostics
+from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
+from ogn_tool.analysis.rf_metrics.rf_statistics import summarize_signal_quality
+from ogn_tool.analysis.normalization.observation_builder import build_observations as build_observation_payload
 from ogn_tool.engine.rf_model_runner import run
 from ogn_tool.engine.rf_models_registry import MODELS
-from ogn_tool.engine.rf_engine_observations import observations_to_rows
+from ogn_tool.analysis.normalization.observation_rows import observations_to_rows
 from ogn_tool.engine.rf_engine_network import (
     build_radio_events,
     build_station_reception,
@@ -106,12 +111,14 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
     if "altitude" in packets_filtered.columns and "altitude_m" not in packets_filtered.columns:
         packets_filtered["altitude_m"] = pd.to_numeric(packets_filtered["altitude"], errors="coerce")
 
-    azimuth_histogram = None
-    directional_balance = None
-    if "bearing_deg" in packets_rf.columns and len(packets_rf) > 0:
-        azimuth_histogram = compute_azimuth_histogram(packets_rf["bearing_deg"])
-        if azimuth_histogram is not None:
-            directional_balance = analyze_directional_balance(azimuth_histogram)
+    directional = build_directional_diagnostics(
+        packets_rf=packets_rf,
+        packets_filtered=packets_filtered,
+        station_lat=engine.station_lat,
+        station_lon=engine.station_lon,
+    )
+    azimuth_histogram = directional.get("azimuth_histogram")
+    directional_balance = directional.get("directional_balance")
 
     rf_issues = []
     rf_health = "UNKNOWN"
@@ -122,35 +129,9 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
 
     distance_df, _grid = build_rf_dataset(packets_filtered, engine.station_lat, engine.station_lon)
     coverage_grid = build_rf_probability_field(distance_df)
-    shadow_map = None
+    shadow_map = directional.get("shadow_map")
 
-    if azimuth_histogram is not None and directional_balance is not None:
-        shadow_map = detect_rf_shadows(
-            packets_filtered,
-            azimuth_histogram,
-            directional_balance,
-            station_lat=engine.station_lat,
-            station_lon=engine.station_lon,
-        )
-
-    if not distance_df.empty and "lat" in distance_df.columns and "lon" in distance_df.columns:
-        cell_size = float(coverage_grid["cell_size_deg"].iloc[0]) if not coverage_grid.empty and "cell_size_deg" in coverage_grid.columns else 0.01
-        df_cells = distance_df.copy()
-        df_cells["grid_lat"] = (pd.to_numeric(df_cells.get("lat"), errors="coerce") // cell_size) * cell_size
-        df_cells["grid_lon"] = (pd.to_numeric(df_cells.get("lon"), errors="coerce") // cell_size) * cell_size
-        agg = {
-            "max_distance": ("distance_km", "max"),
-        }
-        if "altitude_m" in df_cells.columns:
-            agg["mean_altitude"] = ("altitude_m", "mean")
-        cell_stats = (
-            df_cells.groupby(["grid_lat", "grid_lon"], dropna=False)
-            .agg(**agg)
-            .reset_index()
-            .rename(columns={"grid_lat": "lat", "grid_lon": "lon"})
-        )
-        if not coverage_grid.empty:
-            coverage_grid = coverage_grid.merge(cell_stats, on=["lat", "lon"], how="left")
+    coverage_grid = enrich_coverage_grid(distance_df, coverage_grid)
 
     radio_events = build_radio_events(packets_filtered)
     station_reception = build_station_reception(packets_filtered)
@@ -160,57 +141,13 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
 
     network_blind_zones = detect_network_blind_zones(coverage_redundancy_grid)
 
-    coverage_cells = int((coverage_grid["packets"] > 0).sum()) if not coverage_grid.empty and "packets" in coverage_grid.columns else 0
-    redundancy_cells = int((coverage_redundancy_grid["station_count"] > 1).sum()) if not coverage_redundancy_grid.empty and "station_count" in coverage_redundancy_grid.columns else 0
-    blind_cells_count = int(len(blind_cells)) if blind_cells is not None else 0
-    network_metrics = {
-        "station_count": 0,
-        "coverage_cells": coverage_cells,
-        "redundancy_cells": redundancy_cells,
-        "blind_cells": blind_cells_count,
-        "network_resilience_score": (redundancy_cells / coverage_cells * 100.0) if coverage_cells else 0.0,
-    }
-
-    station_metrics = pd.DataFrame()
-    if not distance_df.empty and "igate" in distance_df.columns:
-        df_station = distance_df.copy()
-        cell_size = float(coverage_grid["cell_size_deg"].iloc[0]) if not coverage_grid.empty and "cell_size_deg" in coverage_grid.columns else 0.01
-        df_station["grid_lat"] = (pd.to_numeric(df_station.get("lat"), errors="coerce") // cell_size) * cell_size
-        df_station["grid_lon"] = (pd.to_numeric(df_station.get("lon"), errors="coerce") // cell_size) * cell_size
-        station_metrics_df = (
-            df_station.groupby("igate")
-            .agg(
-                packet_count=("igate", "size"),
-                aircraft_count=("src", "nunique"),
-                max_distance=("distance_km", "max"),
-                p95_distance=("distance_km", lambda x: pd.Series(x).quantile(0.95)),
-                coverage_cells=("grid_lat", "nunique"),
-            )
-            .reset_index()
-        )
-        src_igates = distance_df.groupby("src")["igate"].nunique()
-        unique_src = src_igates[src_igates == 1].index
-        shared_src = src_igates[src_igates > 1].index
-        contrib = []
-        for callsign in station_metrics_df["igate"].tolist():
-            subset = df_station[df_station["igate"] == callsign]
-            unique_packets = int(subset[subset["src"].isin(unique_src)].shape[0])
-            shared_packets = int(subset[subset["src"].isin(shared_src)].shape[0])
-            redundant_packets = shared_packets
-            total_packets = int(subset.shape[0])
-            contribution_score = (unique_packets / total_packets * 100.0) if total_packets else 0.0
-            contrib.append(
-                {
-                    "igate": callsign,
-                    "unique_packets": unique_packets,
-                    "shared_packets": shared_packets,
-                    "redundant_packets": redundant_packets,
-                    "contribution_score": contribution_score,
-                }
-            )
-        contrib_df = pd.DataFrame(contrib)
-        station_metrics = station_metrics_df.merge(contrib_df, on="igate", how="left")
-        network_metrics["station_count"] = int(len(station_metrics))
+    station_metrics = build_station_metrics(distance_df, coverage_grid)
+    network_metrics = build_network_metrics(
+        coverage_grid=coverage_grid,
+        coverage_redundancy_grid=coverage_redundancy_grid,
+        blind_cells=blind_cells,
+        station_metrics=station_metrics,
+    )
 
     metrics: dict[str, Any] = {
         "p95_range_km": station_metrics["p95_distance"].max() if not station_metrics.empty else None,
@@ -220,20 +157,7 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
         "network_resilience_score": network_metrics.get("network_resilience_score"),
     }
 
-    if "snr" in packets_filtered.columns:
-        metrics["snr"] = float(packets_filtered["snr"].dropna().mean())
-    elif "snr_db" in packets_filtered.columns:
-        metrics["snr"] = float(packets_filtered["snr_db"].dropna().mean())
-    elif "rssi_db" in packets_filtered.columns:
-        metrics["rssi"] = float(packets_filtered["rssi_db"].dropna().mean())
-    elif "rssi" in packets_filtered.columns:
-        metrics["rssi"] = float(packets_filtered["rssi"].dropna().mean())
-
-    if "noise_floor" in packets_filtered.columns:
-        metrics["noise_floor"] = float(packets_filtered["noise_floor"].dropna().mean())
-
-    if "packet_loss" in packets_filtered.columns:
-        metrics["packet_loss"] = float(packets_filtered["packet_loss"].dropna().mean())
+    metrics.update(summarize_signal_quality(packets_filtered))
 
     rf_diagnosis = RFDiagnosis(metrics, directional_balance)
     rf_issues = rf_diagnosis.evaluate()
@@ -340,4 +264,6 @@ __all__ = [
     "compute_metrics_impl",
     "run_rf_models_impl",
 ]
+
+
 

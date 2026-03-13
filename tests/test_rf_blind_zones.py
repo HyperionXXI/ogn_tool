@@ -1,5 +1,5 @@
 import pandas as pd
-from ogn_tool.analysis.rf_blind_zone_detection import detect_rf_blind_zones
+from ogn_tool.analysis.rf_metrics.blind_zone_detection import detect_rf_blind_zones
 
 
 def test_blind_zone_detection():
@@ -15,3 +15,4 @@ def test_blind_zone_detection():
     grid = detect_rf_blind_zones(df)
 
     assert "blind_score" in grid.columns
+

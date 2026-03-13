@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ogn_tool.analysis.intelligence.station_planner import suggest_station_locations
 from ogn_tool.analysis.network_graph import network_events, network_timeseries
-from ogn_tool.analysis.network_graph.network_metrics import compute_network_evolution_metrics
+from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics
 from ogn_tool.engine import network_graph_engine
 
 

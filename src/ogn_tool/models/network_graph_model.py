@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Iterator, Optional
+from typing import Any, Dict, Iterator, Optional
 
 
 @dataclass
@@ -94,6 +94,34 @@ class NetworkGraph:
             edges=[NetworkEdge.from_dict(edge) for edge in data.get("edges", [])],
             metrics=dict(data.get("metrics") or {}),
         )
+
+    def validate(self) -> None:
+        if not isinstance(self.nodes, list):
+            raise RuntimeError("NetworkGraph invalid: nodes must be a list")
+        if not isinstance(self.edges, list):
+            raise RuntimeError("NetworkGraph invalid: edges must be a list")
+        if not isinstance(self.metrics, dict):
+            raise RuntimeError("NetworkGraph invalid: metrics must be a dictionary")
+
+        node_ids: set[str] = set()
+        for node in self.nodes:
+            if not isinstance(node, NetworkNode):
+                raise RuntimeError("NetworkGraph invalid: nodes must contain NetworkNode instances")
+            if not node.id:
+                raise RuntimeError("NetworkGraph invalid: node id must be non-empty")
+            if not node.type:
+                raise RuntimeError("NetworkGraph invalid: node type must be non-empty")
+            node_ids.add(node.id)
+
+        for edge in self.edges:
+            if not isinstance(edge, NetworkEdge):
+                raise RuntimeError("NetworkGraph invalid: edges must contain NetworkEdge instances")
+            if not edge.source or not edge.target:
+                raise RuntimeError("NetworkGraph invalid: edge source and target must be non-empty")
+            if not edge.relation:
+                raise RuntimeError("NetworkGraph invalid: edge relation must be non-empty")
+            if node_ids and (edge.source not in node_ids or edge.target not in node_ids):
+                raise RuntimeError("NetworkGraph invalid: edge references unknown node ids")
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.to_dict().get(key, default)

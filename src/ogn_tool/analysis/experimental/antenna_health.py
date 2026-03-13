@@ -10,7 +10,7 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
-from ogn_tool.analysis.rf_metrics import compute_bearing
+from ogn_tool.analysis.rf_metrics.rf_statistics import compute_bearing
 
 
 

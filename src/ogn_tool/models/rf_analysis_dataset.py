@@ -90,5 +90,5 @@ class RFAnalysisDataset:
                         "RFAnalysisDataset invalid: results.antenna_pattern exposure exceeds feature_matrix size"
                     )
 
-        if not isinstance(self.results.metrics, dict):
-            raise RuntimeError("RFAnalysisDataset invalid: results.metrics must be a dictionary")
+        self.results.validate()
+
