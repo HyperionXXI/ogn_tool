@@ -30,4 +30,27 @@ __all__ = [
     "aircraft_redundancy",
     "detect_network_blind_zones",
     "enrich_coverage_grid",
+    "build_visibility_matrix",
+    "compute_station_dependency",
+    "compute_visibility_metrics",
+    "compute_visibility_overlap",
+    "compute_visibility_redundancy",
+    "compute_visibility_summary",
+    "compute_station_influence",
+    "detect_station_anomalies",
+    "compute_station_removal_impact",
 ]
+
+from .visibility import (
+    build_visibility_matrix,
+    compute_station_dependency,
+    compute_visibility_metrics,
+    compute_visibility_overlap,
+    compute_visibility_redundancy,
+    compute_visibility_summary,
+)
+
+from .station_influence import compute_station_influence
+
+from .station_anomaly import detect_station_anomalies
+from .network_robustness import compute_station_removal_impact

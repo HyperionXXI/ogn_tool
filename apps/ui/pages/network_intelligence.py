@@ -70,6 +70,105 @@ def render_network_intelligence(ctx):
     connectivity = graph_metrics.get("connectivity") or {}
     redundancy_metrics = graph_metrics.get("redundancy") or {}
 
+    visibility = None
+    if results is not None:
+        network_metrics_result = getattr(results, "network_metrics", None)
+        if isinstance(network_metrics_result, dict):
+            visibility = network_metrics_result.get("visibility")
+    if not visibility:
+        visibility = legacy_network.get("visibility")
+
+    summary = visibility.get("summary") if isinstance(visibility, dict) else None
+    if isinstance(summary, dict):
+        st.subheader("Network Visibility Summary")
+        v1, v2, v3, v4 = st.columns(4)
+        v1.metric("Aircraft", int(summary.get("aircraft_count", 0) or 0))
+        v2.metric("Stations", int(summary.get("station_count", 0) or 0))
+        v3.metric(
+            "Mean stations / aircraft",
+            f"{float(summary.get('mean_stations_per_aircraft', 0.0) or 0.0):.2f}",
+        )
+        v4.metric(
+            "Single-station ratio",
+            f"{float(summary.get('single_station_ratio', 0.0) or 0.0):.2%}",
+        )
+
+    dependency = visibility.get("dependency") if isinstance(visibility, dict) else None
+    if dependency is not None and not dependency.empty:
+        st.subheader("Aircraft dependency")
+        single_station = dependency[dependency["single_station"]]
+        st.write(f"{len(single_station)} aircraft seen by only one station")
+        st.dataframe(
+            single_station[["aircraft_id", "station_count", "critical_station_id"]],
+            use_container_width=True,
+        )
+
+    overlap = visibility.get("overlap") if isinstance(visibility, dict) else None
+    if overlap is not None and not overlap.empty:
+        st.subheader("Station overlap")
+        st.dataframe(overlap.head(20), use_container_width=True)
+
+    matrix = visibility.get("matrix") if isinstance(visibility, dict) else None
+    if matrix is not None and not matrix.empty:
+        with st.expander("Visibility matrix preview"):
+            st.dataframe(matrix.head(50), use_container_width=True)
+
+    station_influence = None
+    if results is not None:
+        network_metrics_result = getattr(results, "network_metrics", None)
+        if isinstance(network_metrics_result, dict):
+            station_influence = network_metrics_result.get("station_influence")
+    if station_influence is None:
+        station_influence = legacy_network.get("station_influence")
+
+    station_anomalies = None
+    network_robustness = None
+    if results is not None:
+        network_metrics_result = getattr(results, "network_metrics", None)
+        if isinstance(network_metrics_result, dict):
+            station_anomalies = network_metrics_result.get("station_anomalies")
+            network_robustness = network_metrics_result.get("network_robustness")
+    if station_anomalies is None:
+        station_anomalies = legacy_network.get("station_anomalies")
+    if network_robustness is None:
+        network_robustness = legacy_network.get("network_robustness")
+
+    if station_influence is not None and not station_influence.empty:
+        st.subheader("Station influence")
+        influence_sorted = station_influence.sort_values("influence_score", ascending=False)
+        st.dataframe(influence_sorted, use_container_width=True)
+
+        top = influence_sorted.head(10)
+        if not top.empty:
+            st.bar_chart(top.set_index("station_id")["influence_score"])
+
+        critical = influence_sorted[influence_sorted["single_station_aircraft_count"] > 0]
+        if not critical.empty:
+            st.subheader("Stations with unique coverage")
+            st.dataframe(
+                critical[
+                    [
+                        "station_id",
+                        "single_station_aircraft_count",
+                        "unique_aircraft_count",
+                        "influence_score",
+                    ]
+                ].sort_values("single_station_aircraft_count", ascending=False),
+                use_container_width=True,
+            )
+
+    if station_anomalies is not None and not station_anomalies.empty:
+        st.subheader("Station anomalies")
+        st.dataframe(station_anomalies, use_container_width=True)
+
+    if network_robustness is not None and not network_robustness.empty:
+        st.subheader("Network robustness")
+        robustness_sorted = network_robustness.sort_values("impact_score", ascending=False)
+        st.dataframe(robustness_sorted, use_container_width=True)
+        top_robustness = robustness_sorted.head(10)
+        if not top_robustness.empty:
+            st.bar_chart(top_robustness.set_index("station_id")["impact_score"])
+
     st.subheader("Network overview")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Stations", int(connectivity.get("station_count", 0)))
