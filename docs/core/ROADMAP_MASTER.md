@@ -1,187 +1,64 @@
-STATUS: canonical
-SOURCE_OF_TRUTH: docs/core/ROADMAP_MASTER.md
+STATUS: planning
+REFERENCE: docs/architecture/ADR-001-project-vision.md
 
-# ROADMAP MASTER — OGN / FANET RF Network Intelligence Platform
+# Roadmap Master
 
-> Canonical reference for project direction, architecture, and execution rules.  
-> If any document conflicts with this roadmap, **this file is the source of truth**.
+This document is a planning roadmap, not the primary source of truth for
+architecture contracts.
 
-## Current capabilities
+Use this file for:
+- product direction
+- implementation phases
+- milestone sequencing
+- future feature planning
 
-### Collector + database
-- **Collector**: `scripts/collector.py` connects to APRS‑IS, parses packets, stores into SQLite `packets` table (`igate`, `qas`, `raw`, `lat/lon`, etc.).
-- **Database**: SQLite with single `packets` table (mixing RF vs APRS‑IS sources).
+Do not use this file as the canonical source for:
+- runtime contracts
+- architectural layer rules
+- repository classification
+- reporting contracts
 
-### Analysis + engine
-- **Analysis modules**: `src/ogn_tool/analysis/*` (polar, station_range, station_quality, terrain, azimuth, network, etc.).
-- **Engine**: `src/ogn_tool/engine/rf_engine.py` orchestrates analysis, builds the dataset, and computes:
-  - `coverage_grid`, `RF probability field`
-  - `azimuth_histogram` / `directional_balance`
-  - `station_metrics`, `network_metrics`
-  - `radio_events`, `station_reception`, `network_blind_zones`
+Canonical architecture sources are now:
+- `docs/architecture/ADR-001-project-vision.md`
+- `docs/architecture/REPOSITORY_CLASSIFICATION.md`
+- `docs/architecture/ENGINE_RULES.md`
+- `docs/architecture/RF_METRIC_CONTRACT.md`
+- `docs/architecture/RUNTIME_API_MIGRATION.md`
+- `docs/architecture/NETWORK_ENGINEERING_REPORT.md`
 
-### UI
-- **Streamlit app** under `apps/ui/pages/*` with a map‑centric **Coverage Explorer** and supporting dashboards.
-- **Map engine**: `apps/ui/map_engine/*` uses pydeck.
+## Current role
 
-## Missing capabilities
+This roadmap records the broad product and engineering direction of the
+project.
 
-- **Canonical RF data model**: repository currently uses a single mixed `packets` table. A proper split into `rf_packets` vs `aprs_packets` is missing.
-- **Coverage inference documentation**: current docs do not explain how reception probability is estimated from sparse packet observations.
-- **Network intelligence documentation**: need clearer coverage of station overlap, redundancy, and blind-zone detection.
-- **Feature roadmap**: no consolidated list of upcoming features and priorities (currently scattered).
+It should be used to answer:
+- what major capabilities exist or are planned?
+- what milestone comes next?
+- what long-range themes organize the work?
 
-## Feature roadmap
+It should not be used to resolve low-level architecture conflicts.
 
-This project’s roadmap is built around **RF coverage intelligence**, **station health**, and **network overlap analysis**.
+## Current trajectory
 
-### High‑level feature themes
-- **Coverage analysis**: probability grid, azimuth coverage, polar coverage.
-- **Station diagnostics**: health scoring, antenna bias, shadow/terrain detection.
-- **Network intelligence**: redundancy matrix, blind-zone detection, critical stations.
-- **Dataset hygiene**: separate RF vs APRS traffic, stable filtering by station/igate.
+Recent milestones:
+- `v0.4-network-intelligence`
+- `v0.5-network-diagnostics`
+- `v0.6-network-engineering`
+- `v0.7-spof-detection`
+- `v0.8-coverage-gap-analysis`
+- `v0.9-station-addition-simulation`
+- `v1.0-network-reporting-foundation`
 
-## Implementation phases
+## High-level roadmap themes
 
-**Phase 0 — Stabilization / cleanup**
-Objective: remove UI inconsistencies, keep map visible, remove redundant controls.
-Deliverables: map‑centric layout, single station source, no UI analysis logic.
+- typed analytical kernel
+- network intelligence
+- operator diagnostics
+- reporting and product surface
+- future mobility and planning extensions
 
-**Phase 1 — Canonical data model**
-Objective: separate RF receptions vs APRS traffic.
-Deliverables: `rf_packets` / `aprs_packets` or equivalent separation.
+## Guardrail
 
-**Phase 2 — Reliable station filtering**
-Objective: consistent station selection via `igate` (APRS proxy).
-Deliverables: igate‑based filtering across analysis.
-
-**Phase 3 — Map readability & object semantics**
-Objective: improve map visuals, layers, object inspection.
-Deliverables: clear layers, readable markers, inspector semantics.
-
-**Phase 4 — RF coverage intelligence**
-Objective: stable coverage probability / confidence.
-Deliverables: robust RF coverage grids & diagnostics.
-
-**Phase 5 — Network topology & diagnostics**
-Objective: station overlap / redundancy / blind zones.
-Deliverables: network metrics + visualizations.
-
-**Phase 6 — FANET integration**
-Objective: FANET local RF coverage & device health.
-Deliverables: FANET datasets and map overlays.
-
-**Phase 7 — Terrain‑aware RF modelling**
-Objective: terrain shadow and visibility envelopes.
-Deliverables: terrain metrics tied to station health.
-
-**Phase 8 — Simulation / planning**
-Objective: virtual station placement & network impact.
-Deliverables: coverage deltas, redundancy improvements.
-
-**Phase 9 — Advanced observatory platform**
-Objective: multi‑station observatory with diagnostics automation.
-Deliverables: scheduling, anomaly detection, reporting.
-
-## Coverage inference model
-
-Aircraft traffic is **not** spatially uniform.
-Absence of packets does **not** imply absence of RF coverage.
-
-The engine estimates reception probability from observed packets using a model approximating:
-
-```
-P(reception | distance, azimuth, altitude)
-```
-
-This allows detection of:
-
-- terrain masking
-- weak stations
-- antenna misalignment
-- coverage holes
-
-## RF intelligence pipeline
-
-```
-Raw packets
-↓
-Observations
-↓
-Metrics
-↓
-RF diagnostics
-↓
-Network intelligence
-```
-
-### Packets
-
-Source of packets:
-
-- APRS‑IS network
-- OGN receiver infrastructure
-
-Packets contain:
-
-```
-timestamp
-latitude
-longitude
-altitude
-aircraft id
-receiver station
-```
-
-### Observations
-
-Derived radio observations:
-
-```
-distance_km
-bearing_deg
-relative_altitude
-```
-
-### Metrics
-
-Computed statistics:
-
-```
-coverage_grid
-azimuth_histogram
-distance_distribution
-RSSI_vs_distance
-```
-
-### RF diagnostics
-
-Derived diagnostics:
-
-```
-shadow_sectors
-terrain_masking
-antenna_orientation
-coverage_degradation
-```
-
-### Network intelligence
-
-Multi-station analysis:
-
-```
-station_overlap
-coverage_redundancy
-network_blind_zones
-critical_stations
-```
-
-## Non‑goals / guardrails
-- Do **not** reintroduce analysis logic in UI.
-- Do **not** add features outside `RF_FEATURES_INDEX` without updating roadmap.
-- Do **not** split roadmap into multiple competing docs.
-- Do **not** invent new data models without mapping to repo reality.
-
-## Execution rules for future Codex tasks
-- If contradictions exist, update this roadmap or flag the conflict.
-
+If this roadmap diverges from code reality, update the roadmap.
+If architecture rules diverge, update the canonical documents in
+`docs/architecture/` first.

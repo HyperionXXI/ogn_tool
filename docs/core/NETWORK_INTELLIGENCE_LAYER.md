@@ -1,31 +1,11 @@
-STATUS: derived
-REFERENCE: docs/core/ROADMAP_MASTER.md
-
-This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+STATUS: historical
+REFERENCE: docs/core/NETWORK_INTELLIGENCE.md
 
 # Network Intelligence Layer
 
-## 1. Vision
+This document is retained as a short historical note.
 
-The system is not only an RF analysis tool. It is a Network Intelligence
-platform for OGN, designed to understand network behavior, redundancy,
-and coverage beyond single-station metrics.
+The canonical explanatory document for this topic is now:
+- `docs/core/NETWORK_INTELLIGENCE.md`
 
-## 2. Layers
-
-- RF observations
-- RF metrics
-- RF models
-- Network intelligence
-
-## 3. Capabilities
-
-- station diagnostics
-- coverage inference
-- network topology
-- station comparison
-
-## 4. UI philosophy
-
-The UI is an exploratory RF laboratory, not a simple dashboard.
-
+Use that file for current scope and capabilities.

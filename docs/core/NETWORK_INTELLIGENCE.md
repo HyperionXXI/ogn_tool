@@ -1,41 +1,36 @@
-STATUS: canonical
-SOURCE_OF_TRUTH: docs/NETWORK_INTELLIGENCE.md
-
-This document is subordinate to docs/core/ROADMAP_MASTER.md. If contradictions exist, ROADMAP_MASTER.md is the canonical source.
+STATUS: explanatory
+REFERENCE: docs/architecture/ADR-001-project-vision.md
 
 # Network Intelligence
 
-## Coverage inference limitations
+This document describes the current network-intelligence problem space.
 
-Aircraft tracks do not represent RF coverage.
+For canonical contracts and governance, use:
+- `docs/architecture/RF_METRIC_CONTRACT.md`
+- `docs/architecture/OBSERVATION_GRAPH_CONTRACT.md`
+- `docs/architecture/NETWORK_ENGINEERING_REPORT.md`
 
-Coverage must be inferred from RF reception events (rf_receptions) and
-signal statistics, not from raw APRS/APRS-IS traffic alone. Using only
-aircraft position tracks can overstate coverage and hide blind zones.
+## Scope
 
+The network intelligence layer covers:
+- visibility matrices
+- overlap and redundancy
+- station influence
+- robustness and SPOF analysis
+- placement and gap prioritization
+- operator diagnostics
 
-## Network Coverage Optimization
+## Practical capabilities
 
-The RF analysis engine can be used to evaluate the impact of new OGN stations and support network planning decisions.
-
-Potential capabilities include:
-
+The current engine can support:
 - detection of RF coverage gaps
-- station redundancy analysis
-- blind zone detection
-- simulation of candidate station locations
-- network coverage gain estimation
+- redundancy analysis
+- blind-zone candidates
+- simulation of station removal
+- empirical station addition simulation
+- engineering reporting
 
-### Conceptual Planning Pipeline
+## Important limitation
 
-```
-coverage_grid
-  ↓
-blind_cells
-  ↓
-candidate_station_locations
-  ↓
-coverage_simulation
-  ↓
-optimal_station_positions
-```
+Aircraft tracks alone do not represent RF coverage.
+Coverage must be inferred from receptions and multi-station visibility.
