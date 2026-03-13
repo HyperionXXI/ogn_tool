@@ -54,7 +54,7 @@ from ogn_tool.data.db_repository import db_meta as repo_db_meta, db_max_ts_epoch
 from ogn_tool.data.packets_repository import load_packets_window
 from ogn_tool.data.receptions_repository import load_rf_receptions
 from ogn_tool.engine.rf_engine import RFAnalysisEngine
-from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.runtime.rf_runtime import run_dashboard_analysis
 
 
 # Optional profiling (enable with OGN_PROFILE=1)
@@ -620,7 +620,13 @@ elif data_source_mode == "FANET local":
 elif data_source_mode == "OGN live tracking":
     dataset_mode = "NETWORK"
 engine = RFAnalysisEngine(receptions_window, station_lat, station_lon)
-results = engine.run(RFAnalysisDataset(observations=[]))
+results = run_dashboard_analysis(
+    receptions_window,
+    station_lat,
+    station_lon,
+    station_id=station_cs_effective,
+    dataset_mode=dataset_mode,
+)
 dataset = engine.build_analysis_dataset(dataset_mode=dataset_mode, station_id=station_cs_effective)
 station_analysis = engine.run_station_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
 network_analysis = engine.run_network_analysis(dataset_mode=dataset_mode, station_id=station_cs_effective)
