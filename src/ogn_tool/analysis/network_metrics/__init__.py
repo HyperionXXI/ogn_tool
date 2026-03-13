@@ -39,6 +39,8 @@ __all__ = [
     "compute_station_influence",
     "detect_station_anomalies",
     "compute_station_removal_impact",
+    "compute_optimal_station_locations",
+    "extract_fragile_aircraft",
 ]
 
 from .visibility import (
@@ -54,3 +56,4 @@ from .station_influence import compute_station_influence
 
 from .station_anomaly import detect_station_anomalies
 from .network_robustness import compute_station_removal_impact
+from .station_placement import compute_optimal_station_locations, extract_fragile_aircraft
