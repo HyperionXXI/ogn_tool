@@ -118,7 +118,6 @@ class VisibilityModelStage(RFAnalysisStage):
                 "max_range_km": summary.get("max_distance_km"),
                 "rf_packets": int(len(distance_df)),
                 "health": (quality_stats.get("summary") or {}).get("quality_score"),
-                "grid_base": grid_for_analysis,
             }
         )
 
@@ -179,10 +178,6 @@ class RFDiagnosticsStage(RFAnalysisStage):
             "terrain_visibility": metrics.get("terrain_visibility"),
             "altitude_distance": metrics.get("altitude_distance"),
         }
-        if dataset.results.blind_zones is not None:
-            metrics["blind_zone_grid"] = dataset.results.blind_zones
-        if dataset.results.antenna_pattern is not None:
-            metrics["antenna_pattern"] = dataset.results.antenna_pattern
         if dataset.results.antenna_shadow_sectors is not None:
             metrics["antenna_shadow_sectors"] = dataset.results.antenna_shadow_sectors
 

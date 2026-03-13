@@ -12,6 +12,7 @@ def build_metrics_summary(dataset) -> Dict[str, Any]:
     distance_df = metrics.get("distance_df")
     if isinstance(distance_df, pd.DataFrame) and not distance_df.empty:
         metrics.setdefault("rf_packets", int(len(distance_df)))
+    metrics.pop("distance_df", None)
     return metrics
 
 

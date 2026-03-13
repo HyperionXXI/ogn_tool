@@ -51,6 +51,7 @@ class RFAnalysisDataset:
         if self.observations is None:
             raise RuntimeError("RFAnalysisDataset invalid: observations is None")
 
+        # feature_matrix is a required intermediate pipeline artifact, not a stable public result.
         if self.results.feature_matrix is None:
             raise RuntimeError("RFAnalysisDataset invalid: results.feature_matrix is missing")
 
