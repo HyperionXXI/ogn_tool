@@ -19,7 +19,7 @@ def test_build_network_engineering_report_from_typed_metrics() -> None:
                     {"station_id": "S2", "health_status": "WARNING", "impact_score": 0.4},
                 ]
             ),
-            "network_robustness": pd.DataFrame(
+            "spof": pd.DataFrame(
                 [
                     {
                         "station_id": "S1",

@@ -34,8 +34,27 @@ def test_network_pipeline_stage_builds_outputs():
     dataset = RFAnalysisDataset(observations=observations, results=RFAnalysisResults(coverage=None))
 
     network = run_network_graph_stage(dataset)
+    metrics = network["metrics"]
 
     assert network["graph"] is not None
-    assert network["metrics"]["connectivity"]["station_count"] == 2
+    assert metrics["connectivity"]["station_count"] == 2
     assert "events" in network
     assert "anomalies" in network["events"]
+
+    for key in [
+        "station_health",
+        "network_summary",
+        "station_dependency",
+        "spof",
+        "coverage_gaps",
+        "coverage_gap_priorities",
+        "station_redundancy_planner",
+        "station_addition_simulation",
+    ]:
+        assert key in metrics
+
+    assert not metrics["spof"].empty
+    assert not metrics["coverage_gaps"].empty
+    assert not metrics["coverage_gap_priorities"].empty
+    assert not metrics["station_redundancy_planner"].empty
+    assert not metrics["station_addition_simulation"].empty

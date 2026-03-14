@@ -44,21 +44,38 @@ Current canonical keys:
 - `station_anomalies`
 - `network_robustness`
 - `station_placement`
+- `station_health`
+- `network_summary`
+- `station_dependency`
+- `spof`
+- `coverage_gaps`
+- `coverage_gap_priorities`
+- `station_redundancy_planner`
+- `station_addition_simulation`
 
-Additional keys may exist for transitional reasons, but the keys above
-represent the current typed network intelligence surface.
+These keys represent the current typed network intelligence surface.
+Any new runtime key must be documented here before being treated as part
+of the public typed contract.
 
 ---
 
 ## Metric Stability Levels
 
-| Metric | Stability |
-|--------|-----------|
-| `visibility` | stable |
-| `station_influence` | stable |
-| `station_anomalies` | experimental |
-| `network_robustness` | experimental |
-| `station_placement` | experimental |
+| Metric | Stability | Primary Consumer |
+|--------|-----------|------------------|
+| `visibility` | stable | analysis / runtime |
+| `station_influence` | stable | analysis / runtime |
+| `station_anomalies` | experimental | diagnostics / UI |
+| `network_robustness` | experimental | analysis / intelligence |
+| `station_placement` | experimental | analysis / runtime |
+| `station_health` | exposed | reporting / UI |
+| `network_summary` | exposed | reporting / UI |
+| `station_dependency` | exposed | reporting / UI |
+| `spof` | exposed | reporting / UI |
+| `coverage_gaps` | exposed | reporting / UI |
+| `coverage_gap_priorities` | exposed | reporting / planning |
+| `station_redundancy_planner` | experimental | reporting / planning |
+| `station_addition_simulation` | experimental | reporting / planning |
 
 Stable metrics should not change shape or meaning without explicit
 architectural review.
@@ -253,6 +270,156 @@ Notes:
 - v1 is heuristic only
 - no RF propagation model is implied by this metric
 - larger `placement_score` means more promising candidate placement
+
+---
+
+### `station_health`
+
+Type:
+- `pandas.DataFrame`
+
+Semantic meaning:
+- operator-facing health classification for stations derived from
+  existing network metrics
+
+Stability:
+- exposed
+
+---
+
+### `network_summary`
+
+Type:
+- `dict`
+
+Semantic meaning:
+- compact operator-facing summary of overall network state
+
+Stability:
+- exposed
+
+---
+
+### `station_dependency`
+
+Type:
+- `pandas.DataFrame`
+
+Semantic meaning:
+- structural dependency ranking between stations derived from overlap and
+  station importance signals
+
+Stability:
+- exposed
+
+---
+
+### `spof`
+
+Type:
+- `pandas.DataFrame`
+
+Columns:
+- `station_id`
+- `aircraft_lost`
+- `coverage_loss_ratio`
+- `spof_score`
+- `network_status_after_removal`
+- `spof_level`
+- `notes`
+
+Semantic meaning:
+- single-point-of-failure ranking derived from station removal
+  simulation
+
+Stability:
+- exposed
+
+---
+
+### `coverage_gaps`
+
+Type:
+- `pandas.DataFrame`
+
+Columns:
+- `lat`
+- `lon`
+- `station_count`
+- `gap_level`
+- `notes`
+
+Semantic meaning:
+- spatial cells with insufficient observed station coverage
+
+Stability:
+- exposed
+
+---
+
+### `coverage_gap_priorities`
+
+Type:
+- `pandas.DataFrame`
+
+Columns:
+- `lat`
+- `lon`
+- `station_count`
+- `gap_level`
+- `priority_score`
+- `recommended_action`
+- `notes`
+
+Semantic meaning:
+- operator-facing ranking of detected coverage gaps
+
+Stability:
+- exposed
+
+---
+
+### `station_redundancy_planner`
+
+Type:
+- `pandas.DataFrame`
+
+Columns:
+- `target_station`
+- `coverage_loss`
+- `aircraft_lost`
+- `priority`
+- `status_after_removal`
+- `notes`
+
+Semantic meaning:
+- ranking of stations whose loss most justifies redundancy work
+
+Stability:
+- experimental
+
+---
+
+### `station_addition_simulation`
+
+Type:
+- `pandas.DataFrame`
+
+Columns:
+- `lat`
+- `lon`
+- `aircraft_supported`
+- `coverage_gain`
+- `redundancy_gain`
+- `priority_score`
+- `notes`
+
+Semantic meaning:
+- empirical simulation of candidate station additions built from the
+  current observed network geometry
+
+Stability:
+- experimental
 
 ---
 

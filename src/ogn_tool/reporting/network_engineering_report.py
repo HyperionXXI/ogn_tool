@@ -23,7 +23,7 @@ def build_network_engineering_report(results: RFAnalysisResults) -> NetworkEngin
 
     summary = dict(metrics.get("network_summary") or {})
     health = metrics.get("station_health")
-    spof = metrics.get("network_robustness")
+    spof = metrics.get("spof")
     gaps = metrics.get("coverage_gaps")
     redundancy = metrics.get("station_redundancy_planner")
     addition = metrics.get("station_addition_simulation")
