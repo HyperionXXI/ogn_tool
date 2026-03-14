@@ -3,6 +3,11 @@ from __future__ import annotations
 import pandas as pd
 
 from ogn_tool.analysis.normalization.observation_rows import observations_to_rows
+from ogn_tool.analysis.observation_schema import (
+    SHADOW_COLUMNS,
+    SPATIAL_COLUMNS,
+    VISIBILITY_COLUMNS,
+)
 
 
 def _observations_to_dataframe(observations) -> pd.DataFrame:
@@ -38,16 +43,16 @@ def build_spatial_observation_frame(observations) -> pd.DataFrame:
     """
     df = _observations_to_dataframe(observations)
     if df.empty:
-        return pd.DataFrame(columns=["station_id", "lat", "lon"])
+        return pd.DataFrame(columns=SPATIAL_COLUMNS)
 
     if "station_id" not in df.columns and "igate" in df.columns:
         df["station_id"] = df["igate"]
 
-    for column in ["station_id", "lat", "lon"]:
+    for column in SPATIAL_COLUMNS:
         if column not in df.columns:
             df[column] = pd.NA
 
-    df = df[["station_id", "lat", "lon"]].copy()
+    df = df[SPATIAL_COLUMNS].copy()
     df["lat"] = pd.to_numeric(df["lat"], errors="coerce").astype("float64")
     df["lon"] = pd.to_numeric(df["lon"], errors="coerce").astype("float64")
     df = df.dropna(subset=["station_id", "lat", "lon"])
@@ -68,18 +73,18 @@ def build_visibility_observation_frame(observations) -> pd.DataFrame:
     """
     df = _observations_to_dataframe(observations)
     if df.empty:
-        return pd.DataFrame(columns=["src", "igate"])
+        return pd.DataFrame(columns=VISIBILITY_COLUMNS)
 
     if "src" not in df.columns and "aircraft_id" in df.columns:
         df["src"] = df["aircraft_id"]
     if "igate" not in df.columns and "station_id" in df.columns:
         df["igate"] = df["station_id"]
 
-    for column in ["src", "igate"]:
+    for column in VISIBILITY_COLUMNS:
         if column not in df.columns:
             df[column] = pd.NA
 
-    return df[["src", "igate"]].dropna(subset=["src", "igate"]).copy()
+    return df[VISIBILITY_COLUMNS].dropna(subset=VISIBILITY_COLUMNS).copy()
 
 
 def build_shadow_observation_frame(observations) -> pd.DataFrame:
@@ -101,7 +106,7 @@ def build_shadow_observation_frame(observations) -> pd.DataFrame:
     """
     df = _observations_to_dataframe(observations)
     if df.empty:
-        return pd.DataFrame(columns=["station_id", "bearing_deg"])
+        return pd.DataFrame(columns=SHADOW_COLUMNS)
 
     if "station_id" not in df.columns and "igate" in df.columns:
         df["station_id"] = df["igate"]
@@ -110,14 +115,14 @@ def build_shadow_observation_frame(observations) -> pd.DataFrame:
 
     if "station_id" not in df.columns:
         return pd.DataFrame(
-            columns=["station_id", "bearing_deg", "lat", "lon", "station_lat", "station_lon"]
+            columns=SHADOW_COLUMNS
         )
 
-    for column in ["bearing_deg", "lat", "lon", "station_lat", "station_lon"]:
+    for column in SHADOW_COLUMNS[1:]:
         if column not in df.columns:
             df[column] = pd.NA
 
-    return df[["station_id", "bearing_deg", "lat", "lon", "station_lat", "station_lon"]].copy()
+    return df[SHADOW_COLUMNS].copy()
 
 
 __all__ = [
