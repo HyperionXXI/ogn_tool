@@ -3,12 +3,6 @@ from __future__ import annotations
 import pandas as pd
 
 from ogn_tool.analysis.intelligence import (
-    compute_network_summary,
-    compute_station_dependency,
-    compute_station_dominance,
-    compute_station_health,
-    compute_network_redundancy_score,
-    compute_network_confidence,
     check_intelligence_coherence,
     detect_coverage_gaps,
     detect_single_points_of_failure,
@@ -20,6 +14,7 @@ from ogn_tool.analysis.intelligence.station_planner import suggest_station_locat
 from ogn_tool.analysis.network_metrics.station_placement import (
     compute_optimal_station_locations,
 )
+from ogn_tool.analysis.network_intelligence_assembly import assemble_network_intelligence
 from ogn_tool.analysis.network_metrics_assembly import assemble_network_metrics
 from ogn_tool.analysis.rf.shadow_coverage import (
     compute_shadow_risk_scores,
@@ -32,7 +27,6 @@ from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolut
 from ogn_tool.analysis.observation_views import (
     build_shadow_observation_frame,
     build_spatial_observation_frame,
-    build_visibility_observation_frame,
 )
 from ogn_tool.engine import network_graph_engine
 
@@ -95,18 +89,8 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     else:
         placement = compute_optimal_station_locations(metrics, candidate_grid)
     metrics["station_placement"] = placement
-    metrics["station_health"] = compute_station_health(metrics)
-    metrics["network_summary"] = compute_network_summary(metrics)
 
-    spatial_observations = build_spatial_observation_frame(dataset.observations)
-    dominance_observations = build_visibility_observation_frame(dataset.observations)
-    metrics["station_dominance"] = compute_station_dominance(dominance_observations, metrics)
-    metrics["station_dependency"] = compute_station_dependency(metrics)
-    metrics["network_redundancy"] = compute_network_redundancy_score(metrics)
-    confidence_score, confidence_warnings = compute_network_confidence(metrics)
-    metrics["network_confidence"] = {"confidence_score": confidence_score}
-    if confidence_warnings:
-        metrics["_confidence_warnings"] = confidence_warnings
+    metrics, spatial_observations = assemble_network_intelligence(metrics, dataset)
     metrics["spof"] = detect_single_points_of_failure(metrics)
     metrics["station_redundancy_planner"] = plan_redundancy_improvements(metrics)
 
