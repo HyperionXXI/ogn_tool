@@ -37,9 +37,9 @@ def test_plan_multi_station_additions_uses_greedy_selected_solution(monkeypatch)
     monkeypatch.setattr(
         "ogn_tool.runtime.network_multi_station_planner.build_candidate_station_aircraft_sets",
         lambda candidates, observations: {
-            "candidate_1": {"a1", "a2", "a3"},
-            "candidate_2": {"a2", "a3", "a4"},
-            "candidate_3": {"a5", "a6"},
+            "cand_47.31000_7.28000": {"a1", "a2", "a3"},
+            "cand_47.35000_7.20000": {"a2", "a3", "a4"},
+            "cand_47.29000_7.25000": {"a5", "a6"},
         },
     )
 

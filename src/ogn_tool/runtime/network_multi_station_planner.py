@@ -50,25 +50,24 @@ def plan_multi_station_additions(
     )
     selected_candidates = sorted_candidates[:top_n_candidates]
 
-    candidates_df = pd.DataFrame(
-        [
-            {"lat": result.candidate["lat"], "lon": result.candidate["lon"]}
-            for result in selected_candidates
-        ]
-    )
+    candidate_lookup: dict[str, dict[str, float]] = {}
+    candidate_rows = []
+    for result in selected_candidates:
+        candidate = result.candidate
+        if candidate is None:
+            continue
+        candidate_id = _candidate_id_from_candidate(candidate)
+        candidate_lookup[candidate_id] = candidate
+        candidate_rows.append({"candidate_id": candidate_id, "lat": candidate["lat"], "lon": candidate["lon"]})
+
+    if not candidate_rows:
+        return []
+
+    candidates_df = pd.DataFrame(candidate_rows)
     station_aircraft = build_candidate_station_aircraft_sets(candidates_df, observations)
     selected_station_ids, _ = select_stations_greedy(station_aircraft, station_count)
 
-    positions = []
-    for station_id in selected_station_ids:
-        try:
-            index = int(station_id.removeprefix("candidate_")) - 1
-        except ValueError:
-            continue
-        if 0 <= index < len(selected_candidates):
-            candidate = selected_candidates[index].candidate
-            if candidate is not None:
-                positions.append(candidate)
+    positions = [candidate_lookup[station_id] for station_id in selected_station_ids if station_id in candidate_lookup]
 
     if not positions:
         return []
@@ -79,6 +78,11 @@ def plan_multi_station_additions(
         candidate_positions=positions,
     )
     return [solution][:top_k_solutions]
+
+
+
+def _candidate_id_from_candidate(candidate: dict[str, float]) -> str:
+    return f"cand_{float(candidate['lat']):.5f}_{float(candidate['lon']):.5f}"
 
 
 __all__ = ["plan_multi_station_additions"]
