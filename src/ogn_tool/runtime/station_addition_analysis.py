@@ -4,8 +4,11 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence import simulate_station_addition
+from ogn_tool.analysis.intelligence.station_addition_evaluations import (
+    build_station_addition_evaluations,
+)
 from ogn_tool.models.scenario_result import ScenarioMetrics, ScenarioResult
+
 
 
 def analyze_station_addition(
@@ -29,18 +32,17 @@ def analyze_station_addition(
         {"lat": lat, "lon": lon}
     ])
 
-    result_df = simulate_station_addition(
+    evaluations = build_station_addition_evaluations(
         candidates,
         observations,
     )
-
-    row = result_df.iloc[0].to_dict() if not result_df.empty else {}
+    evaluation = evaluations[0] if evaluations else None
 
     scenario_metrics: dict[str, Any] = {
-        "aircraft_supported": row.get("aircraft_supported", 0),
-        "coverage_gain": row.get("coverage_gain", 0),
-        "redundancy_gain": row.get("redundancy_gain", 0),
-        "priority_score": row.get("priority_score", 0),
+        "aircraft_supported": evaluation.aircraft_supported if evaluation else 0,
+        "coverage_gain": evaluation.coverage_gain if evaluation else 0,
+        "redundancy_gain": evaluation.redundancy_gain if evaluation else 0,
+        "priority_score": evaluation.priority_score if evaluation else 0,
     }
 
     anomalies: list[str] = []

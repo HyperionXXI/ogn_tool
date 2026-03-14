@@ -4,7 +4,9 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence import simulate_station_addition
+from ogn_tool.analysis.intelligence.station_addition_evaluations import (
+    build_station_addition_evaluations,
+)
 from ogn_tool.models.multi_station_scenario_result import MultiStationScenarioResult
 from ogn_tool.models.scenario_result import ScenarioMetrics
 
@@ -36,8 +38,8 @@ def simulate_multi_station_addition(
     else:
         candidates = pd.DataFrame(columns=["lat", "lon"])
 
-    result_df = simulate_station_addition(candidates, observations)
-    metrics = _aggregate_multi_station_metrics(result_df)
+    evaluations = build_station_addition_evaluations(candidates, observations)
+    metrics = _aggregate_multi_station_metrics(evaluations)
 
     anomalies: list[str] = []
     if metrics.get("coverage_gain", 0) > 0:
@@ -60,8 +62,8 @@ def simulate_multi_station_addition(
 
 
 
-def _aggregate_multi_station_metrics(result_df: pd.DataFrame) -> dict[str, Any]:
-    if not isinstance(result_df, pd.DataFrame) or result_df.empty:
+def _aggregate_multi_station_metrics(evaluations) -> dict[str, Any]:
+    if not evaluations:
         return {
             "candidate_count": 0,
             "aircraft_supported": 0,
@@ -70,18 +72,12 @@ def _aggregate_multi_station_metrics(result_df: pd.DataFrame) -> dict[str, Any]:
             "priority_score": 0,
         }
 
-    def _sum_column(name: str) -> int:
-        if name not in result_df.columns:
-            return 0
-        values = pd.to_numeric(result_df[name], errors="coerce").fillna(0)
-        return int(values.sum())
-
     return {
-        "candidate_count": int(len(result_df)),
-        "aircraft_supported": _sum_column("aircraft_supported"),
-        "coverage_gain": _sum_column("coverage_gain"),
-        "redundancy_gain": _sum_column("redundancy_gain"),
-        "priority_score": _sum_column("priority_score"),
+        "candidate_count": int(len(evaluations)),
+        "aircraft_supported": int(sum(e.aircraft_supported for e in evaluations)),
+        "coverage_gain": int(sum(e.coverage_gain for e in evaluations)),
+        "redundancy_gain": int(sum(e.redundancy_gain for e in evaluations)),
+        "priority_score": int(sum(e.priority_score for e in evaluations)),
     }
 
 

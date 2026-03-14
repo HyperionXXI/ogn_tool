@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from ogn_tool.models.scenario_result import ScenarioResult
+from ogn_tool.models.station_addition_evaluation import StationAdditionEvaluation
 from ogn_tool.runtime.station_addition_analysis import analyze_station_addition
+
 
 
 def test_station_addition_analysis(monkeypatch) -> None:
@@ -22,21 +25,21 @@ def test_station_addition_analysis(monkeypatch) -> None:
         ]
     )
 
-    def fake_simulate_station_addition(candidates, observations):
-        return pd.DataFrame(
-            [
-                {
-                    "aircraft_supported": 10,
-                    "coverage_gain": 4,
-                    "redundancy_gain": 2,
-                    "priority_score": 6,
-                }
-            ]
-        )
+    def fake_build_station_addition_evaluations(candidates, observations):
+        return [
+            StationAdditionEvaluation(
+                lat=47.31,
+                lon=7.28,
+                aircraft_supported=10,
+                coverage_gain=4,
+                redundancy_gain=2,
+                priority_score=6,
+            )
+        ]
 
     monkeypatch.setattr(
-        "ogn_tool.runtime.station_addition_analysis.simulate_station_addition",
-        fake_simulate_station_addition,
+        "ogn_tool.runtime.station_addition_analysis.build_station_addition_evaluations",
+        fake_build_station_addition_evaluations,
     )
 
     result = analyze_station_addition(
@@ -60,3 +63,22 @@ def test_station_addition_analysis(monkeypatch) -> None:
     assert "coverage improved" in result.anomalies
     assert "redundancy improved" in result.anomalies
     assert "high-priority candidate" in result.anomalies
+
+
+
+def test_station_addition_analysis_defaults_when_no_evaluations(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "ogn_tool.runtime.station_addition_analysis.build_station_addition_evaluations",
+        lambda candidates, observations: [],
+    )
+
+    result = analyze_station_addition(
+        {},
+        observations=pd.DataFrame(),
+        lat=47.31,
+        lon=7.28,
+    )
+
+    assert result.metrics.get("coverage_gain") == 0
+    assert result.metrics.get("priority_score") == 0
+    assert result.anomalies == []
