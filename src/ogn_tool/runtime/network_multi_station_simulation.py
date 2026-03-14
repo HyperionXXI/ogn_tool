@@ -4,6 +4,10 @@ from typing import Any
 
 import pandas as pd
 
+from ogn_tool.analysis.intelligence.multi_station_coverage import (
+    build_candidate_station_aircraft_sets,
+    evaluate_multi_station_coverage,
+)
 from ogn_tool.analysis.intelligence.station_addition_evaluations import (
     build_station_addition_evaluations,
 )
@@ -39,7 +43,9 @@ def simulate_multi_station_addition(
         candidates = pd.DataFrame(columns=["lat", "lon"])
 
     evaluations = build_station_addition_evaluations(candidates, observations)
-    metrics = _aggregate_multi_station_metrics(evaluations)
+    station_aircraft = build_candidate_station_aircraft_sets(candidates, observations)
+    coverage = evaluate_multi_station_coverage(station_aircraft)
+    metrics = _aggregate_multi_station_metrics(evaluations, coverage)
 
     anomalies: list[str] = []
     if metrics.get("coverage_gain", 0) > 0:
@@ -62,22 +68,33 @@ def simulate_multi_station_addition(
 
 
 
-def _aggregate_multi_station_metrics(evaluations) -> dict[str, Any]:
+def _aggregate_multi_station_metrics(evaluations, coverage) -> dict[str, Any]:
     if not evaluations:
         return {
             "candidate_count": 0,
             "aircraft_supported": 0,
+            "unique_aircraft_supported": 0,
             "coverage_gain": 0,
             "redundancy_gain": 0,
             "priority_score": 0,
+            "total_station_aircraft": 0,
+            "overlapping_aircraft": 0,
+            "redundancy_factor": 0.0,
         }
+
+    redundancy_gain = int(sum(e.redundancy_gain for e in evaluations))
+    unique_aircraft_supported = int(coverage.unique_aircraft_supported)
 
     return {
         "candidate_count": int(len(evaluations)),
-        "aircraft_supported": int(sum(e.aircraft_supported for e in evaluations)),
-        "coverage_gain": int(sum(e.coverage_gain for e in evaluations)),
-        "redundancy_gain": int(sum(e.redundancy_gain for e in evaluations)),
-        "priority_score": int(sum(e.priority_score for e in evaluations)),
+        "aircraft_supported": unique_aircraft_supported,
+        "unique_aircraft_supported": unique_aircraft_supported,
+        "coverage_gain": unique_aircraft_supported,
+        "redundancy_gain": redundancy_gain,
+        "priority_score": int(unique_aircraft_supported * 2 + redundancy_gain),
+        "total_station_aircraft": int(coverage.total_station_aircraft),
+        "overlapping_aircraft": int(coverage.overlapping_aircraft),
+        "redundancy_factor": float(coverage.redundancy_factor),
     }
 
 
