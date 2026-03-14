@@ -5,7 +5,7 @@ import pandas as pd
 from ogn_tool.analysis.intelligence.multi_station_coverage import (
     build_candidate_station_aircraft_sets,
 )
-from ogn_tool.analysis.intelligence.multi_station_planner import select_stations_greedy
+from ogn_tool.analysis.intelligence.multi_station_planner import select_stations_lazy_greedy
 from ogn_tool.models.multi_station_scenario_result import MultiStationScenarioResult
 from ogn_tool.models.scenario_result import ScenarioResult
 from ogn_tool.runtime.network_multi_station_simulation import simulate_multi_station_addition
@@ -65,7 +65,7 @@ def plan_multi_station_additions(
 
     candidates_df = pd.DataFrame(candidate_rows)
     station_aircraft = build_candidate_station_aircraft_sets(candidates_df, observations)
-    selected_station_ids, _ = select_stations_greedy(station_aircraft, station_count)
+    selected_station_ids, _ = select_stations_lazy_greedy(station_aircraft, station_count)
 
     positions = [candidate_lookup[station_id] for station_id in selected_station_ids if station_id in candidate_lookup]
 

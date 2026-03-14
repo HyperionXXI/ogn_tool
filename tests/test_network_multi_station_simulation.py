@@ -22,6 +22,7 @@ def test_simulate_multi_station_addition_uses_deduplicated_coverage(monkeypatch)
         assert list(candidates.columns) == ["lat", "lon"]
         return [
             StationAdditionEvaluation(
+                candidate_id="cand_47.31000_7.28000",
                 lat=47.31,
                 lon=7.28,
                 aircraft_supported=10,
@@ -30,6 +31,7 @@ def test_simulate_multi_station_addition_uses_deduplicated_coverage(monkeypatch)
                 priority_score=10,
             ),
             StationAdditionEvaluation(
+                candidate_id="cand_47.35000_7.20000",
                 lat=47.35,
                 lon=7.20,
                 aircraft_supported=8,

@@ -28,6 +28,7 @@ def test_station_addition_analysis(monkeypatch) -> None:
     def fake_build_station_addition_evaluations(candidates, observations):
         return [
             StationAdditionEvaluation(
+                candidate_id="cand_47.31000_7.28000",
                 lat=47.31,
                 lon=7.28,
                 aircraft_supported=10,
