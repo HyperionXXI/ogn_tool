@@ -47,7 +47,8 @@ def build_candidate_station_aircraft_sets(
 
     for candidate in normalized.itertuples(index=False):
         candidate_id = getattr(candidate, "candidate_id", None)
-        station_id = str(candidate_id) if candidate_id not in (None, "", pd.NA) else _candidate_id_from_coordinates(candidate.lat, candidate.lon)
+        has_candidate_id = candidate_id is not None and not pd.isna(candidate_id) and str(candidate_id) != ""
+        station_id = str(candidate_id) if has_candidate_id else _candidate_id_from_coordinates(candidate.lat, candidate.lon)
         if work.empty:
             station_aircraft[station_id] = set()
             continue
