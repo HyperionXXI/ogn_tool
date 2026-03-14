@@ -48,6 +48,10 @@ def build_network_engineering_report(
     recommendations = [
         data for data in (_scenario_result_to_dict(result) for result in recommended_new_stations) if data
     ]
+    recommendations.sort(
+        key=lambda recommendation: recommendation.get("priority_score") or 0,
+        reverse=True,
+    )
 
     return NetworkEngineeringReport(
         network_status=summary.get("network_status"),

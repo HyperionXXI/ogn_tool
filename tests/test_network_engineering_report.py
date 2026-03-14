@@ -16,6 +16,19 @@ def test_build_network_engineering_report_with_all_inputs() -> None:
             ScenarioResult(
                 baseline_run_id="run_a",
                 scenario="station_addition",
+                candidate={"lat": 47.35, "lon": 7.2},
+                metrics=ScenarioMetrics(
+                    {
+                        "priority_score": 20,
+                        "coverage_gain": 8,
+                        "redundancy_gain": 4,
+                    }
+                ),
+                anomalies=[],
+            ),
+            ScenarioResult(
+                baseline_run_id="run_a",
+                scenario="station_addition",
                 candidate={"lat": 47.31, "lon": 7.28},
                 metrics=ScenarioMetrics(
                     {
@@ -25,7 +38,7 @@ def test_build_network_engineering_report_with_all_inputs() -> None:
                     }
                 ),
                 anomalies=[],
-            )
+            ),
         ],
         robustness_results=[
             ScenarioResult(
@@ -67,7 +80,16 @@ def test_build_network_engineering_report_with_all_inputs() -> None:
             "priority_score": 34,
             "coverage_gain": 12,
             "redundancy_gain": 7,
-        }
+        },
+        {
+            "station_id": None,
+            "candidate": {"lat": 47.35, "lon": 7.2},
+            "coverage_loss_ratio": None,
+            "stations_becoming_critical": [],
+            "priority_score": 20,
+            "coverage_gain": 8,
+            "redundancy_gain": 4,
+        },
     ]
 
 
