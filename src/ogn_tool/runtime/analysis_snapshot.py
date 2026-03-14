@@ -15,6 +15,14 @@ except Exception:
 
 SNAPSHOT_VERSION = "1"
 
+REQUIRED_SNAPSHOT_KEYS = {
+    "snapshot_version",
+    "engine_version",
+    "created_at",
+    "dataset_summary",
+    "network_metrics",
+}
+
 
 def _serialize_value(value: Any) -> Any:
     """Convert scalar values to a JSON-safe representation."""
@@ -51,6 +59,20 @@ def _serialize_metric(metric: Any) -> Any:
         return [_serialize_metric(value) for value in metric]
 
     return _serialize_value(metric)
+
+
+def _validate_snapshot_structure(snapshot: dict[str, Any]) -> None:
+    missing = REQUIRED_SNAPSHOT_KEYS - set(snapshot.keys())
+    if missing:
+        raise RuntimeError(
+            f"Invalid snapshot structure, missing keys: {sorted(missing)}"
+        )
+
+    if not isinstance(snapshot["dataset_summary"], dict):
+        raise RuntimeError("dataset_summary must be a dict")
+
+    if not isinstance(snapshot["network_metrics"], dict):
+        raise RuntimeError("network_metrics must be a dict")
 
 
 def _dataset_summary(dataset) -> dict[str, Any]:
@@ -126,13 +148,16 @@ def build_analysis_snapshot(dataset, network) -> dict[str, Any]:
         for name, value in metrics.items()
     }
 
-    return {
+    snapshot = {
         "snapshot_version": SNAPSHOT_VERSION,
         "engine_version": ENGINE_VERSION,
         "created_at": datetime.now(UTC).isoformat(),
         "dataset_summary": _dataset_summary(dataset),
         "network_metrics": serialized_metrics,
     }
+
+    _validate_snapshot_structure(snapshot)
+    return snapshot
 
 
 def write_analysis_snapshot(snapshot: dict[str, Any], path: str) -> None:
