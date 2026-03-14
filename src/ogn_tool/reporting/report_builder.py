@@ -1,64 +1,67 @@
 from __future__ import annotations
 
-from typing import Any
-
-from ogn_tool.models.scenario_result import ScenarioResult
-from ogn_tool.reporting.report_models import NetworkEngineeringReport
-
-
-def _scenario_result_to_dict(result: object) -> dict[str, Any]:
-    if not isinstance(result, ScenarioResult):
-        return {}
-
-    metrics = result.metrics
-    return {
-        "station_id": result.station_id,
-        "candidate": result.candidate,
-        "coverage_loss_ratio": metrics.get("coverage_loss_ratio"),
-        "stations_becoming_critical": metrics.get("stations_becoming_critical", []),
-        "priority_score": metrics.get("priority_score"),
-        "coverage_gain": metrics.get("coverage_gain"),
-        "redundancy_gain": metrics.get("redundancy_gain"),
-    }
+from .network_engineering_report import (
+    NetworkEngineeringReport,
+    StationRFDiagnostics,
+)
 
 
-def build_network_engineering_report(
-    *,
-    network_metrics: dict[str, object],
-    coverage_gaps: list[dict[str, object]] | None = None,
-    recommended_new_stations: list[object] | None = None,
-    robustness_results: list[object] | None = None,
-) -> NetworkEngineeringReport:
-    coverage_gaps = coverage_gaps or []
-    recommended_new_stations = recommended_new_stations or []
-    robustness_results = robustness_results or []
 
-    metrics = network_metrics if isinstance(network_metrics, dict) else {}
-    summary = metrics.get("network_summary", {})
-    if not isinstance(summary, dict):
-        summary = {}
+def _interpret_station(entropy: float, risk: float) -> str:
+    if entropy < 0.25:
+        return "Directional coverage strongly biased; likely corridor reception."
+    if entropy < 0.5:
+        return "Moderate directional bias."
+    if entropy >= 0.7:
+        return "Robust directional coverage."
+    return "Intermediate directional distribution."
 
-    station_health = metrics.get("station_health", [])
-    if not isinstance(station_health, list):
-        station_health = []
 
-    critical_stations = [
-        data for data in (_scenario_result_to_dict(result) for result in robustness_results) if data
-    ]
-    recommendations = [
-        data for data in (_scenario_result_to_dict(result) for result in recommended_new_stations) if data
-    ]
-    recommendations.sort(
-        key=lambda recommendation: recommendation.get("priority_score") or 0,
-        reverse=True,
-    )
+
+def _extract_network_metrics(results):
+    if isinstance(results, dict):
+        metrics = results.get("network_metrics", {})
+    else:
+        metrics = getattr(results, "network_metrics", {})
+    return metrics if isinstance(metrics, dict) else {}
+
+
+
+def build_network_engineering_report(results) -> NetworkEngineeringReport:
+    metrics = _extract_network_metrics(results)
+
+    entropy = metrics.get("station_angular_entropy", {})
+    if not isinstance(entropy, dict):
+        entropy = {}
+
+    risk = metrics.get("shadow_risk_scores", {})
+    if not isinstance(risk, dict):
+        risk = {}
+
+    diagnostics = {}
+
+    stations = set(entropy) | set(risk)
+
+    for station_id in stations:
+        station_key = str(station_id)
+        entropy_value = float(entropy.get(station_id, 0.0) or 0.0)
+        risk_value = float(risk.get(station_id, 0.0) or 0.0)
+
+        diagnostics[station_key] = StationRFDiagnostics(
+            station_id=station_key,
+            angular_entropy=entropy_value,
+            shadow_risk=risk_value,
+            interpretation=_interpret_station(entropy_value, risk_value),
+        )
+
+    network_summary = metrics.get("network_summary", {})
+    if not isinstance(network_summary, dict):
+        network_summary = {}
 
     return NetworkEngineeringReport(
-        network_status=summary.get("network_status"),
-        station_health=station_health,
-        critical_stations=critical_stations,
-        coverage_gaps=list(coverage_gaps),
-        recommended_new_stations=recommendations,
+        station_diagnostics=diagnostics,
+        network_summary=network_summary,
+        notes=[],
     )
 
 

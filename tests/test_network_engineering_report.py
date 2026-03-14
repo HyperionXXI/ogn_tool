@@ -1,112 +1,36 @@
 from __future__ import annotations
 
-from ogn_tool.models.scenario_result import ScenarioMetrics, ScenarioResult
-from ogn_tool.reporting.network_engineering_report import build_network_engineering_report
-from ogn_tool.reporting.report_models import NetworkEngineeringReport
+from ogn_tool.reporting.report_builder import build_network_engineering_report
 
 
-def test_build_network_engineering_report_with_all_inputs() -> None:
-    report = build_network_engineering_report(
-        network_metrics={
-            "network_summary": {"network_status": "WARNING"},
-            "station_health": [{"station_id": "S1", "health_score": 0.8}],
-        },
-        coverage_gaps=[{"lat": 47.3, "lon": 7.18, "observation_count": 1}],
-        recommended_new_stations=[
-            ScenarioResult(
-                baseline_run_id="run_a",
-                scenario="station_addition",
-                candidate={"lat": 47.35, "lon": 7.2},
-                metrics=ScenarioMetrics(
-                    {
-                        "priority_score": 20,
-                        "coverage_gain": 8,
-                        "redundancy_gain": 4,
-                    }
-                ),
-                anomalies=[],
-            ),
-            ScenarioResult(
-                baseline_run_id="run_a",
-                scenario="station_addition",
-                candidate={"lat": 47.31, "lon": 7.28},
-                metrics=ScenarioMetrics(
-                    {
-                        "priority_score": 34,
-                        "coverage_gain": 12,
-                        "redundancy_gain": 7,
-                    }
-                ),
-                anomalies=[],
-            ),
-        ],
-        robustness_results=[
-            ScenarioResult(
-                baseline_run_id="run_a",
-                scenario="station_removal",
-                station_id="S9",
-                metrics=ScenarioMetrics(
-                    {
-                        "coverage_loss_ratio": 0.18,
-                        "stations_becoming_critical": ["S2"],
-                    }
-                ),
-                anomalies=[],
-            )
-        ],
-    )
+class DummyResults:
+    def __init__(self, metrics):
+        self.network_metrics = metrics
 
-    assert isinstance(report, NetworkEngineeringReport)
-    assert report.network_status == "WARNING"
-    assert report.station_health == [{"station_id": "S1", "health_score": 0.8}]
-    assert report.coverage_gaps == [{"lat": 47.3, "lon": 7.18, "observation_count": 1}]
-    assert report.critical_stations == [
+
+
+def test_station_corridor_interpretation() -> None:
+    results = DummyResults(
         {
-            "station_id": "S9",
-            "candidate": None,
-            "coverage_loss_ratio": 0.18,
-            "stations_becoming_critical": ["S2"],
-            "priority_score": None,
-            "coverage_gain": None,
-            "redundancy_gain": None,
+            "station_angular_entropy": {"A": 0.1},
+            "shadow_risk_scores": {"A": 0.9},
         }
-    ]
-    assert report.recommended_new_stations == [
-        {
-            "station_id": None,
-            "candidate": {"lat": 47.31, "lon": 7.28},
-            "coverage_loss_ratio": None,
-            "stations_becoming_critical": [],
-            "priority_score": 34,
-            "coverage_gain": 12,
-            "redundancy_gain": 7,
-        },
-        {
-            "station_id": None,
-            "candidate": {"lat": 47.35, "lon": 7.2},
-            "coverage_loss_ratio": None,
-            "stations_becoming_critical": [],
-            "priority_score": 20,
-            "coverage_gain": 8,
-            "redundancy_gain": 4,
-        },
-    ]
-
-
-def test_build_network_engineering_report_handles_missing_optional_inputs() -> None:
-    report = build_network_engineering_report(
-        network_metrics={"network_summary": {"network_status": "GOOD"}},
     )
 
-    assert report.network_status == "GOOD"
-    assert report.station_health == []
-    assert report.critical_stations == []
-    assert report.coverage_gaps == []
-    assert report.recommended_new_stations == []
+    report = build_network_engineering_report(results)
+
+    assert "corridor" in report.station_diagnostics["A"].interpretation.lower()
 
 
-def test_build_network_engineering_report_handles_empty_network_metrics() -> None:
-    report = build_network_engineering_report(network_metrics={})
 
-    assert report.network_status is None
-    assert report.station_health == []
+def test_builder_accepts_dict_input() -> None:
+    results = {
+        "network_metrics": {
+            "station_angular_entropy": {"A": 0.8},
+            "shadow_risk_scores": {"A": 0.2},
+        }
+    }
+
+    report = build_network_engineering_report(results)
+
+    assert "robust" in report.station_diagnostics["A"].interpretation.lower()
