@@ -8,6 +8,7 @@ from ogn_tool.analysis.intelligence import (
     compute_station_dominance,
     compute_station_health,
     compute_network_redundancy_score,
+    check_intelligence_coherence,
     detect_coverage_gaps,
     detect_single_points_of_failure,
     plan_redundancy_improvements,
@@ -29,6 +30,7 @@ from ogn_tool.analysis.rf.shadow_coverage import (
     compute_station_angular_entropy,
 )
 from ogn_tool.analysis.network_metrics.validate import validate_network_metrics
+from ogn_tool.analysis.network_metrics_contract import collect_network_metric_warnings
 from ogn_tool.analysis.network_graph import network_events, network_timeseries
 from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics
 from ogn_tool.analysis.normalization.observation_rows import observations_to_rows
@@ -245,6 +247,14 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     coverage_grid = getattr(dataset.results, "coverage", None)
     network_evolution = compute_network_evolution_metrics(graph_result.graph, previous_graph)
     station_suggestions = suggest_station_locations(graph_result.graph, coverage_grid)
+
+    contract_warnings = collect_network_metric_warnings(metrics)
+    if contract_warnings:
+        metrics["_contract_warnings"] = contract_warnings
+
+    coherence_warnings = check_intelligence_coherence(metrics)
+    if coherence_warnings:
+        metrics["_coherence_warnings"] = coherence_warnings
 
     validate_network_metrics(metrics)
 

@@ -12,6 +12,7 @@ from .coverage_gap_detector import detect_coverage_gaps
 from .coverage_gap_prioritizer import prioritize_coverage_gaps
 from .station_addition_simulation import simulate_station_addition
 from .contracts import NetworkMetrics, ensure_metrics
+from .coherence import check_intelligence_coherence
 
 __all__ = [
     "RFCoverageMap",
@@ -30,4 +31,5 @@ __all__ = [
     "simulate_station_addition",
     "NetworkMetrics",
     "ensure_metrics",
+    "check_intelligence_coherence",
 ]
