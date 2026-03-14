@@ -26,7 +26,7 @@ def test_deduplicated_coverage() -> None:
 
 
 
-def test_build_candidate_station_aircraft_sets_uses_aircraft_union() -> None:
+def test_build_candidate_station_aircraft_sets_uses_stable_candidate_ids() -> None:
     candidates = __import__("pandas").DataFrame(
         [
             {"lat": 47.30, "lon": 7.20},
@@ -44,6 +44,6 @@ def test_build_candidate_station_aircraft_sets_uses_aircraft_union() -> None:
     result = build_candidate_station_aircraft_sets(candidates, observations, coverage_radius_km=5.0)
 
     assert result == {
-        "candidate_1": {"A1", "A2"},
-        "candidate_2": {"A3"},
+        "cand_47.30000_7.20000": {"A1", "A2"},
+        "cand_47.50000_7.50000": {"A3"},
     }

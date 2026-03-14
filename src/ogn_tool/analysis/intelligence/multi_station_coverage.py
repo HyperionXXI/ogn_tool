@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ogn_tool.analysis.intelligence.station_addition_evaluations import _candidate_id_from_coordinates
 from ogn_tool.analysis.intelligence.station_addition_simulation import _distance_km
 from ogn_tool.models.multi_station_coverage_evaluation import MultiStationCoverageEvaluation
 
@@ -33,13 +34,20 @@ def build_candidate_station_aircraft_sets(
 
     station_aircraft: dict[str, set[str]] = {}
 
-    normalized = candidates[["lat", "lon"]].copy()
+    selected_columns = ["lat", "lon"]
+    if "candidate_id" in candidates.columns:
+        selected_columns.append("candidate_id")
+    normalized = candidates[selected_columns].copy()
     normalized["lat"] = pd.to_numeric(normalized["lat"], errors="coerce")
     normalized["lon"] = pd.to_numeric(normalized["lon"], errors="coerce")
     normalized = normalized.dropna(subset=["lat", "lon"])
 
-    for index, candidate in enumerate(normalized.itertuples(index=False), start=1):
-        station_id = f"candidate_{index}"
+    if "candidate_id" in normalized.columns:
+        normalized["candidate_id"] = normalized["candidate_id"].astype("string")
+
+    for candidate in normalized.itertuples(index=False):
+        candidate_id = getattr(candidate, "candidate_id", None)
+        station_id = str(candidate_id) if candidate_id not in (None, "", pd.NA) else _candidate_id_from_coordinates(candidate.lat, candidate.lon)
         if work.empty:
             station_aircraft[station_id] = set()
             continue
