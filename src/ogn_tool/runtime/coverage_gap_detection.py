@@ -43,8 +43,8 @@ def detect_coverage_gaps(
 
     return [
         {
-            "lat": float(row.grid_lat),
-            "lon": float(row.grid_lon),
+            "lat": round(float(row.grid_lat), 6),
+            "lon": round(float(row.grid_lon), 6),
             "observation_count": int(row.observation_count),
         }
         for row in gaps.itertuples()

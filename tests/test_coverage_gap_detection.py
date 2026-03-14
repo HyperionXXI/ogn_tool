@@ -31,7 +31,7 @@ def test_detect_coverage_gaps_groups_points_and_filters_by_threshold() -> None:
     gaps = detect_coverage_gaps(observations, min_points=2, grid_size=0.02)
 
     assert gaps == [
-        {"lat": 47.36, "lon": 7.1000000000000005, "observation_count": 1}
+        {"lat": 47.36, "lon": 7.1, "observation_count": 1}
     ]
 
 
@@ -47,5 +47,5 @@ def test_detect_coverage_gaps_drops_invalid_rows() -> None:
     gaps = detect_coverage_gaps(observations, min_points=1, grid_size=0.02)
 
     assert gaps == [
-        {"lat": 47.300000000000004, "lon": 7.28, "observation_count": 1}
+        {"lat": 47.3, "lon": 7.28, "observation_count": 1}
     ]
