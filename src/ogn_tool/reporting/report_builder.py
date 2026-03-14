@@ -60,6 +60,10 @@ def build_network_engineering_report(results) -> NetworkEngineeringReport:
     if isinstance(coherence_warnings, list):
         warnings.extend(str(warning) for warning in coherence_warnings)
 
+    confidence_warnings = metrics.get("_confidence_warnings", [])
+    if isinstance(confidence_warnings, list):
+        warnings.extend(str(warning) for warning in confidence_warnings)
+
     for key in sorted(EXPECTED_REPORT_METRICS):
         if key not in metrics:
             warnings.append(f"{key} missing from network_metrics")

@@ -99,3 +99,17 @@ def test_builder_surfaces_pipeline_coherence_warnings() -> None:
     report = build_network_engineering_report(results)
 
     assert "High network redundancy reported but strong station dependencies detected." in report.input_warnings
+
+
+def test_builder_surfaces_pipeline_confidence_warnings() -> None:
+    results = {
+        "network_metrics": {
+            "_confidence_warnings": [
+                "Insufficient dataset for reliable network inference.",
+            ]
+        }
+    }
+
+    report = build_network_engineering_report(results)
+
+    assert "Insufficient dataset for reliable network inference." in report.input_warnings
