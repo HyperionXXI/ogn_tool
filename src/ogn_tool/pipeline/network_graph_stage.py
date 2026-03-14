@@ -81,7 +81,8 @@ def _build_candidate_grid(observations, step_deg: float = 0.05, max_points: int 
 
 def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     graph_result = network_graph_engine.build_graph(dataset.observations)
-    metrics = assemble_network_metrics(graph_result, dataset)
+    base_metrics = network_graph_engine.compute_network_metrics(graph_result)
+    metrics = assemble_network_metrics(base_metrics, dataset)
 
     candidate_grid = _build_candidate_grid(dataset.observations)
     if candidate_grid.empty:

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
+
+import pandas as pd
 
 
 @dataclass
 class StationRFDiagnostics:
+    """Legacy compatibility model retained for older reporting consumers."""
+
     station_id: str
     angular_entropy: float
     shadow_risk: float
@@ -14,12 +18,23 @@ class StationRFDiagnostics:
 
 @dataclass
 class NetworkEngineeringReport:
-    station_diagnostics: Dict[str, StationRFDiagnostics] = field(default_factory=dict)
-    network_summary: Dict[str, Any] = field(default_factory=dict)
-    notes: List[str] = field(default_factory=list)
-    input_warnings: List[str] = field(default_factory=list)
+    """Canonical typed report projection for the network analysis engine."""
+
+    network_summary: dict[str, Any] = field(default_factory=dict)
+    station_health_table: pd.DataFrame = field(default_factory=pd.DataFrame)
+    network_redundancy: dict[str, Any] = field(default_factory=dict)
+    network_confidence: dict[str, Any] = field(default_factory=dict)
+    station_dependency: pd.DataFrame = field(default_factory=pd.DataFrame)
+    station_dominance: pd.DataFrame = field(default_factory=pd.DataFrame)
+    spatial_observations: pd.DataFrame = field(default_factory=pd.DataFrame)
+    recommended_actions: list[str] = field(default_factory=list)
+    input_warnings: list[str] = field(default_factory=list)
 
 
-from .report_builder import build_network_engineering_report
+from .network_engineering_report_builder import build_network_engineering_report
 
-__all__ = ["StationRFDiagnostics", "NetworkEngineeringReport", "build_network_engineering_report"]
+__all__ = [
+    'StationRFDiagnostics',
+    'NetworkEngineeringReport',
+    'build_network_engineering_report',
+]
