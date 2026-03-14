@@ -3,9 +3,23 @@ from __future__ import annotations
 import heapq
 
 
+def _coverage_gain(
+    aircraft: set[str],
+    covered: set[str],
+    aircraft_weights: dict[str, float] | None,
+) -> float:
+    uncovered = aircraft - covered
+    if aircraft_weights is None:
+        return float(len(uncovered))
+    return float(sum(aircraft_weights.get(aircraft_id, 1.0) for aircraft_id in uncovered))
+
+
+
 def select_stations_greedy(
     station_aircraft: dict[str, set[str]],
     k: int,
+    *,
+    aircraft_weights: dict[str, float] | None = None,
 ) -> tuple[list[str], set[str]]:
     if k < 1:
         raise ValueError("k must be >= 1")
@@ -23,11 +37,11 @@ def select_stations_greedy(
 
     while len(selected) < k and remaining:
         best_station = None
-        best_gain = -1
+        best_gain = -1.0
 
         for station_id in sorted(remaining):
             aircraft = remaining[station_id]
-            gain = len(aircraft - covered)
+            gain = _coverage_gain(aircraft, covered, aircraft_weights)
             if gain > best_gain:
                 best_gain = gain
                 best_station = station_id
@@ -46,6 +60,8 @@ def select_stations_greedy(
 def select_stations_lazy_greedy(
     station_aircraft: dict[str, set[str]],
     k: int,
+    *,
+    aircraft_weights: dict[str, float] | None = None,
 ) -> tuple[list[str], set[str]]:
     if k < 1:
         raise ValueError("k must be >= 1")
@@ -60,17 +76,17 @@ def select_stations_lazy_greedy(
 
     covered: set[str] = set()
     selected: list[str] = []
-    heap: list[tuple[int, str]] = []
+    heap: list[tuple[float, str]] = []
 
     for station_id in sorted(remaining):
-        gain = len(remaining[station_id])
+        gain = _coverage_gain(remaining[station_id], covered, aircraft_weights)
         heapq.heappush(heap, (-gain, station_id))
 
     while heap and len(selected) < k:
         while True:
             neg_gain, station_id = heapq.heappop(heap)
             aircraft = remaining[station_id]
-            real_gain = len(aircraft - covered)
+            real_gain = _coverage_gain(aircraft, covered, aircraft_weights)
 
             if not heap:
                 break
