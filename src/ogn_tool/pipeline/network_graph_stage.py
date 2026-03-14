@@ -34,7 +34,11 @@ from ogn_tool.analysis.network_metrics.validate import validate_network_metrics
 from ogn_tool.analysis.network_metrics_contract import collect_network_metric_warnings
 from ogn_tool.analysis.network_graph import network_events, network_timeseries
 from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics
-from ogn_tool.analysis.normalization.observation_rows import observations_to_rows
+from ogn_tool.analysis.observation_views import (
+    build_shadow_observation_frame,
+    build_spatial_observation_frame,
+    build_visibility_observation_frame,
+)
 from ogn_tool.engine import network_graph_engine
 
 
@@ -59,108 +63,8 @@ EMPTY_ADDITION_COLUMNS = [
 ]
 
 
-def _observations_to_frame(observations) -> pd.DataFrame:
-    if observations is None:
-        return pd.DataFrame(columns=["station_id", "lat", "lon"])
-
-    if isinstance(observations, dict):
-        vectors = observations.get("vectors")
-        if vectors is not None and len(vectors) > 0:
-            rows = observations_to_rows(vectors)
-            df = pd.DataFrame(rows)
-        else:
-            distance_df = observations.get("distance_df")
-            df = pd.DataFrame(distance_df).copy() if distance_df is not None else pd.DataFrame()
-    elif isinstance(observations, pd.DataFrame):
-        df = observations.copy()
-    else:
-        df = pd.DataFrame(observations_to_rows(observations))
-
-    if df.empty:
-        return pd.DataFrame(columns=["station_id", "lat", "lon"])
-
-    if "station_id" not in df.columns and "igate" in df.columns:
-        df["station_id"] = df["igate"]
-
-    for column in ["station_id", "lat", "lon"]:
-        if column not in df.columns:
-            df[column] = pd.NA
-
-    df = df[["station_id", "lat", "lon"]].copy()
-    df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
-    df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
-    df = df.dropna(subset=["station_id", "lat", "lon"])
-    return df.reset_index(drop=True)
-
-
-def _observations_to_dominance_frame(observations) -> pd.DataFrame:
-    if observations is None:
-        return pd.DataFrame(columns=["src", "igate"])
-
-    if isinstance(observations, dict):
-        vectors = observations.get("vectors")
-        if vectors is not None and len(vectors) > 0:
-            df = pd.DataFrame(observations_to_rows(vectors))
-        else:
-            distance_df = observations.get("distance_df")
-            df = pd.DataFrame(distance_df).copy() if distance_df is not None else pd.DataFrame()
-    elif isinstance(observations, pd.DataFrame):
-        df = observations.copy()
-    else:
-        df = pd.DataFrame(observations_to_rows(observations))
-
-    if df.empty:
-        return pd.DataFrame(columns=["src", "igate"])
-
-    if "src" not in df.columns and "aircraft_id" in df.columns:
-        df["src"] = df["aircraft_id"]
-    if "igate" not in df.columns and "station_id" in df.columns:
-        df["igate"] = df["station_id"]
-
-    for column in ["src", "igate"]:
-        if column not in df.columns:
-            df[column] = pd.NA
-
-    return df[["src", "igate"]].dropna(subset=["src", "igate"]).copy()
-
-
-def _observations_to_shadow_frame(observations) -> pd.DataFrame:
-    if observations is None:
-        return pd.DataFrame(columns=["station_id", "bearing_deg"])
-
-    if isinstance(observations, dict):
-        vectors = observations.get("vectors")
-        if vectors is not None and len(vectors) > 0:
-            df = pd.DataFrame(observations_to_rows(vectors))
-        else:
-            distance_df = observations.get("distance_df")
-            df = pd.DataFrame(distance_df).copy() if distance_df is not None else pd.DataFrame()
-    elif isinstance(observations, pd.DataFrame):
-        df = observations.copy()
-    else:
-        df = pd.DataFrame(observations_to_rows(observations))
-
-    if df.empty:
-        return pd.DataFrame(columns=["station_id", "bearing_deg"])
-
-    if "station_id" not in df.columns and "igate" in df.columns:
-        df["station_id"] = df["igate"]
-    if "bearing_deg" not in df.columns and "bearing" in df.columns:
-        df["bearing_deg"] = df["bearing"]
-
-    relevant_columns = [
-        column
-        for column in ["station_id", "bearing_deg", "lat", "lon", "station_lat", "station_lon"]
-        if column in df.columns
-    ]
-    if "station_id" not in relevant_columns:
-        return pd.DataFrame(columns=["station_id", "bearing_deg"])
-
-    return df[relevant_columns].copy()
-
-
 def _build_candidate_grid(observations, step_deg: float = 0.05, max_points: int = 400) -> pd.DataFrame:
-    df = _observations_to_frame(observations)
+    df = build_spatial_observation_frame(observations)
     if df.empty:
         return pd.DataFrame(columns=["lat", "lon"])
 
@@ -204,8 +108,8 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     metrics["station_health"] = compute_station_health(metrics)
     metrics["network_summary"] = compute_network_summary(metrics)
 
-    observations_df = _observations_to_frame(dataset.observations)
-    dominance_observations = _observations_to_dominance_frame(dataset.observations)
+    spatial_observations = build_spatial_observation_frame(dataset.observations)
+    dominance_observations = build_visibility_observation_frame(dataset.observations)
     metrics["station_dominance"] = compute_station_dominance(dominance_observations, metrics)
     metrics["station_dependency"] = compute_station_dependency(metrics)
     metrics["network_redundancy"] = compute_network_redundancy_score(metrics)
@@ -216,24 +120,23 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     metrics["spof"] = detect_single_points_of_failure(metrics)
     metrics["station_redundancy_planner"] = plan_redundancy_improvements(metrics)
 
-    shadow_observations = _observations_to_shadow_frame(dataset.observations)
+    shadow_observations = build_shadow_observation_frame(dataset.observations)
     metrics["station_angular_entropy"] = compute_station_angular_entropy(shadow_observations)
     metrics["shadow_risk_scores"] = compute_shadow_risk_scores(shadow_observations)
 
-    observations_df = _observations_to_frame(dataset.observations)
-    if observations_df.empty:
+    if spatial_observations.empty:
         metrics["coverage_gaps"] = pd.DataFrame(columns=EMPTY_GAP_COLUMNS)
         metrics["coverage_gap_priorities"] = pd.DataFrame(columns=EMPTY_GAP_PRIORITY_COLUMNS)
         metrics["station_addition_simulation"] = pd.DataFrame(columns=EMPTY_ADDITION_COLUMNS)
     else:
-        coverage_gaps = detect_coverage_gaps(observations_df)
+        coverage_gaps = detect_coverage_gaps(spatial_observations)
         coverage_gap_priorities = prioritize_coverage_gaps(coverage_gaps)
         if coverage_gap_priorities.empty:
             station_addition = pd.DataFrame(columns=EMPTY_ADDITION_COLUMNS)
         else:
             station_addition = simulate_station_addition(
                 coverage_gap_priorities[["lat", "lon"]],
-                observations_df,
+                spatial_observations,
             )
         metrics["coverage_gaps"] = coverage_gaps
         metrics["coverage_gap_priorities"] = coverage_gap_priorities
