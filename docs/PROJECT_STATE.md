@@ -20,9 +20,13 @@ Canonical governance documents:
 
 ### Analysis layer
 - `src/ogn_tool/analysis/normalization/`
+- `src/ogn_tool/analysis/observation_schema.py`
+- `src/ogn_tool/analysis/observation_views.py`
 - `src/ogn_tool/analysis/rf_metrics/`
 - `src/ogn_tool/analysis/rf_models/`
 - `src/ogn_tool/analysis/network_metrics/`
+- `src/ogn_tool/analysis/network_metric_registry.py`
+- `src/ogn_tool/analysis/network_metric_views.py`
 - `src/ogn_tool/analysis/network_graph/`
 - `src/ogn_tool/analysis/intelligence/`
 
@@ -30,6 +34,10 @@ Canonical governance documents:
 - `station_health.py`
 - `network_summary.py`
 - `station_dependency.py`
+- `station_dominance.py`
+- `network_redundancy_score.py`
+- `network_confidence.py`
+- `coherence.py`
 - `station_removal_simulation.py`
 - `station_redundancy_planner.py`
 - `network_single_point_of_failure_detector.py`
@@ -48,8 +56,8 @@ Canonical governance documents:
 - `src/ogn_tool/services/rf_analysis_service.py`
 
 ### Reporting layer
-- `src/ogn_tool/reporting/models.py`
 - `src/ogn_tool/reporting/network_engineering_report.py`
+- `src/ogn_tool/reporting/report_builder.py`
 
 ### UI layer
 - `apps/dashboard.py`

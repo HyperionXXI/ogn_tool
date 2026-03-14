@@ -38,7 +38,10 @@ Do not use this directory for:
 7. `NETWORK_ENGINEERING_REPORT.md`
    Contract for the reporting layer built on typed results.
 
-8. `CAPABILITY_AUDIT.md`
+8. `EXECUTIVE_ARCHITECTURE_AUDIT.md`
+   Current executive-level maturity, risk and effort assessment.
+
+9. `CAPABILITY_AUDIT.md`
    Capability inventory and reconnection status.
 
 ## Status Rules
