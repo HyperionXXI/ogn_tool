@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
+from ogn_tool.models.scenario_result import ScenarioResult
 from ogn_tool.runtime.station_addition_analysis import analyze_station_addition
 
 
@@ -10,8 +9,8 @@ def rank_station_addition_candidates(
     *,
     observations,
     candidates: list[dict[str, float]],
-) -> list[dict[str, object]]:
-    results: list[dict[str, object]] = []
+) -> list[ScenarioResult]:
+    results: list[ScenarioResult] = []
 
     for candidate in candidates:
         if not isinstance(candidate, dict):
@@ -30,13 +29,7 @@ def rank_station_addition_candidates(
         )
         results.append(result)
 
-    def _priority(result: dict[str, object]) -> Any:
-        metrics = result.get("scenario_metrics", {})
-        if isinstance(metrics, dict):
-            return metrics.get("priority_score", 0)
-        return 0
-
-    return sorted(results, key=_priority, reverse=True)
+    return sorted(results, key=lambda result: result.priority_score(), reverse=True)
 
 
 __all__ = ["rank_station_addition_candidates"]

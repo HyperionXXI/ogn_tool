@@ -5,6 +5,7 @@ from typing import Any
 import pandas as pd
 
 from ogn_tool.analysis.intelligence import simulate_station_addition
+from ogn_tool.models.scenario_result import ScenarioMetrics, ScenarioResult
 
 
 def analyze_station_addition(
@@ -13,7 +14,7 @@ def analyze_station_addition(
     observations,
     lat: float,
     lon: float,
-) -> dict[str, object]:
+) -> ScenarioResult:
     if not isinstance(baseline_snapshot, dict):
         raise ValueError("baseline_snapshot must be a dict")
 
@@ -53,16 +54,16 @@ def analyze_station_addition(
     if scenario_metrics["priority_score"] > 0:
         anomalies.append("high-priority candidate")
 
-    return {
-        "baseline_run_id": baseline_run_id,
-        "scenario": "station_addition",
-        "candidate": {
+    return ScenarioResult(
+        baseline_run_id=baseline_run_id,
+        scenario="station_addition",
+        candidate={
             "lat": lat,
             "lon": lon,
         },
-        "scenario_metrics": scenario_metrics,
-        "anomalies": anomalies,
-    }
+        metrics=ScenarioMetrics(scenario_metrics),
+        anomalies=anomalies,
+    )
 
 
 __all__ = ["analyze_station_addition"]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from ogn_tool.models.scenario_result import ScenarioResult
 from ogn_tool.runtime.station_addition_analysis import analyze_station_addition
 
 
@@ -45,16 +46,17 @@ def test_station_addition_analysis(monkeypatch) -> None:
         lon=7.28,
     )
 
-    assert result["baseline_run_id"] == "run_a"
-    assert result["scenario"] == "station_addition"
-    assert result["candidate"] == {"lat": 47.31, "lon": 7.28}
+    assert isinstance(result, ScenarioResult)
+    assert result.baseline_run_id == "run_a"
+    assert result.scenario == "station_addition"
+    assert result.candidate == {"lat": 47.31, "lon": 7.28}
 
-    metrics = result["scenario_metrics"]
-    assert metrics["aircraft_supported"] == 10
-    assert metrics["coverage_gain"] == 4
-    assert metrics["redundancy_gain"] == 2
-    assert metrics["priority_score"] == 6
+    metrics = result.metrics
+    assert metrics.get("aircraft_supported") == 10
+    assert metrics.get("coverage_gain") == 4
+    assert metrics.get("redundancy_gain") == 2
+    assert metrics.get("priority_score") == 6
 
-    assert "coverage improved" in result["anomalies"]
-    assert "redundancy improved" in result["anomalies"]
-    assert "high-priority candidate" in result["anomalies"]
+    assert "coverage improved" in result.anomalies
+    assert "redundancy improved" in result.anomalies
+    assert "high-priority candidate" in result.anomalies

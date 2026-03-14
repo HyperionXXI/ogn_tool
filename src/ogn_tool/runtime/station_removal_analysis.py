@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from ogn_tool.analysis.intelligence import simulate_station_removal
+from ogn_tool.models.scenario_result import ScenarioMetrics, ScenarioResult
 
 
 def analyze_station_removal(
     baseline_snapshot: dict[str, object],
     *,
     station_id: str,
-) -> dict[str, object]:
+) -> ScenarioResult:
     if not isinstance(baseline_snapshot, dict):
         raise ValueError("baseline_snapshot must be a dict")
 
@@ -61,13 +62,13 @@ def analyze_station_removal(
     if isinstance(critical, list) and critical:
         anomalies.append("new critical stations detected")
 
-    return {
-        "station_id": station_id,
-        "baseline_run_id": baseline_run_id,
-        "scenario": "station_removal",
-        "scenario_metrics": scenario_metrics,
-        "anomalies": anomalies,
-    }
+    return ScenarioResult(
+        baseline_run_id=baseline_run_id,
+        scenario="station_removal",
+        station_id=station_id,
+        metrics=ScenarioMetrics(scenario_metrics),
+        anomalies=anomalies,
+    )
 
 
 __all__ = ["analyze_station_removal"]
