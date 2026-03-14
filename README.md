@@ -1,111 +1,170 @@
 🇬🇧 English | 🇫🇷 [Version française](README.fr.md)
 
-# ogn_tool — RF Coverage Analyzer
+# ogn_tool — RF Network Intelligence for OGN / FLARM / FANET
 
-RF coverage analysis tool for **OGN / FLARM / FANET ground stations**.
+`ogn_tool` is an RF analysis and network intelligence toolkit for
+**OGN / FLARM / FANET ground-station networks**.
 
-ogn_tool records packets from the Open Glider Network (OGN) into a
-local SQLite database and provides RF diagnostics using a Streamlit
-dashboard.
+It started as a station-centric RF coverage analyzer and has evolved
+into a layered analytical engine that can:
 
-The goal is to analyze the **real-world RF performance of a ground station**.
+- analyze real RF observations
+- diagnose station and network weaknesses
+- simulate network failure scenarios
+- prioritize coverage and redundancy improvements
+- assemble operator-facing network engineering reports
 
----
-
-## Features
-
-- Polar RF coverage analysis
-- RSSI vs distance
-- Altitude vs distance
-- Radio shadow detection
-- Station range estimation
-- Antenna diagnostics
-- Radio horizon analysis
-- Terrain limitation detection
-- Multi-station comparison
-- Global station quality score
-
-Notes:
-- Several RF analyses require a populated coverage_grid (build it with scripts/build_coverage_grid.py).
-- Station comparison requires OGN_COMPARE_STATIONS to be configured.
-- Radio horizon uses a fallback station altitude of 400 m if not provided.
+The current Streamlit dashboard is a consumer UI. It is not the core
+product.
 
 ---
 
-## Why this project exists
+## Why This Project Exists
 
-## Research direction
+Many tools can display aircraft positions.
 
-Beyond RF diagnostics, this project is gradually evolving
-towards a **Network Intelligence tool for the Open Glider Network**.
+Far fewer tools help answer engineering questions about the RF
+observation network itself.
 
-Future work explores:
+`ogn_tool` exists to analyze the real behavior of RF observation
+networks and turn raw reception data into actionable decisions such as:
 
-• RF propagation modelling  
-• probabilistic coverage estimation  
-• station performance analysis  
-• network-level diagnostics  
+- which station is weak
+- which station is critical
+- where coverage is insufficient
+- where redundancy should be added
+- what improvement a new station could bring
 
-These experimental capabilities are documented in the `docs/`
-directory.
-
-Many tools exist to track aircraft positions.
-
-Very few tools analyze the **RF performance of ground stations**.
-
-ogn_tool analyzes OGN logs to study real-world radio coverage.
+The project therefore targets not only visualization, but also
+**diagnosis, reasoning, and planning** for distributed RF networks.
 
 ---
 
-## Radio chain
+## Terminology
 
+In this repository, the following terms have strict meanings:
+
+- `analysis`: computes measurable RF or network facts
+- `intelligence`: derives actionable diagnostics, priorities, and
+  scenarios from analytical outputs
+- `reporting`: assembles operator-facing summaries from typed runtime
+  results
+- `UI`: displays, filters, and formats results without recomputing them
+- `results.*`: official typed runtime API exposed to downstream
+  consumers
+
+### Domain Glossary
+
+- `OGN`: Open Glider Network, a distributed network that collects and
+  shares aircraft tracking and reception data
+- `FLARM`: a collision-warning and tracking system widely used in
+  gliders and light aircraft
+- `FANET`: Flying Ad-hoc Network, a lightweight airborne mesh-oriented
+  radio protocol used notably in free-flight ecosystems
+- `APRS`: Automatic Packet Reporting System, a packet-based reporting
+  network used for position and telemetry exchange
+- `APRS-IS`: the internet-connected APRS server network used to relay
+  APRS traffic
+- `RF`: radio frequency
+- `SPOF`: single point of failure
+- `RSSI`: received signal strength indicator
+- `UI`: user interface
+
+---
+
+## What The Project Does
+
+At a high level, `ogn_tool` helps answer questions such as:
+
+- How well is a station performing in real-world conditions?
+- Which stations are critical to the network?
+- Where are the network coverage gaps?
+- What happens if a station disappears?
+- Where should redundancy be added first?
+- Which candidate location could improve the network?
+
+This makes the project useful both for **RF diagnostics** and for
+**network engineering**.
+
+---
+
+## Architecture In One View
+
+The project is organized as a layered system:
+
+```text
+ingestion
+  -> normalization
+  -> analysis
+  -> intelligence
+  -> reporting
+  -> UI
 ```
-Aircraft
-│
-│ 868 MHz
-│
-FLARM / FANET transmitter
-│
-OGN ground station
-│
-Internet
-│
-APRS-IS servers
-│
-collector.py
-│
-SQLite database
-│
-RF analysis modules
-│
-dashboard.py
-```
 
+Responsibilities:
+
+- `analysis`: computes measurable RF and network metrics
+- `intelligence`: derives actionable diagnostics and scenarios
+- `reporting`: assembles operator-facing summaries
+- `apps/ui`: visualizes results
+
+The official runtime surface is `results.*`, especially
+`results.network_metrics`.
 
 ---
 
-## RF analysis modules
+## Current Capabilities
 
-Located in:
+### RF diagnostics
 
-`src/ogn_tool/analysis`
+- polar coverage analysis
+- RSSI vs distance analysis
+- altitude vs distance analysis
+- radio shadow detection
+- station range estimation
+- antenna diagnostics
+- radio horizon analysis
+- terrain limitation analysis
+- multi-station comparison
 
-Modules:
+### Network intelligence
 
-- signal_distance
-- station_range
-- station_quality
-- polar
-- shadow_map
-- terrain
-- antenna_health
-- station_compare
-- altitude_distance
-- radio_horizon
+- station health diagnostics
+- network summary
+- station dependency analysis
+- single point of failure detection
+- station removal simulation
+- station redundancy planning
+- coverage gap detection
+- coverage gap prioritization
+- empirical station addition simulation
+
+### Reporting
+
+- typed network engineering report builder
+- reporting layer built on typed runtime results
 
 ---
 
-## Quick start
+## Repository Entry Points
+
+If you are new to the repository, start here:
+
+- `README.md`
+- `docs/ARCHITECTURE.md`
+- `docs/architecture/INDEX.md`
+- `docs/architecture/OPERATIONAL_HANDOFF.md`
+
+Useful code locations:
+
+- `src/ogn_tool/analysis/`
+- `src/ogn_tool/analysis/intelligence/`
+- `src/ogn_tool/reporting/`
+- `apps/dashboard.py`
+
+---
+
+## Quick Start
 
 Clone the repository:
 
@@ -114,25 +173,20 @@ git clone https://github.com/HyperionXXI/ogn_tool.git
 cd ogn_tool
 ```
 
-Create environment:
+Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
-```
-
-Activate:
-
-```bash
 .venv\Scripts\activate
 ```
 
-Install:
+Install the project:
 
 ```bash
 pip install -e .
 ```
 
-Run dashboard:
+Run the current dashboard UI:
 
 ```bash
 streamlit run apps/dashboard.py
@@ -140,9 +194,11 @@ streamlit run apps/dashboard.py
 
 Open:
 
+```text
 http://localhost:8501
+```
 
-Optional (collector):
+Optional: run the packet collector:
 
 ```bash
 python .\scripts\collector.py
@@ -152,9 +208,9 @@ python .\scripts\collector.py
 
 ## Configuration
 
-Example .env:
+Example `.env`:
 
-```
+```env
 OGN_USER=CALLSIGN
 OGN_PASS=PASSCODE
 OGN_FILTER=r/LAT/LON/RADIUS_KM
@@ -166,35 +222,30 @@ OGN_NO_PACKET_SECONDS=60
 OGN_ROTATE_MINUTES=20
 ```
 
+Notes:
+
+- several RF analyses require a populated coverage grid
+- station comparison requires the relevant comparison configuration
+- some analyses use fallback defaults when station metadata is missing
+
 ---
 
-## Project structure
+## Project Structure
 
-```
-apps/            Streamlit dashboard
-scripts/         runtime scripts
-tools/           utilities
+```text
+apps/            Streamlit UI and app entry points
+scripts/         runtime and utility scripts
 src/ogn_tool/    Python package
-docs/            documentation
-data/            local runtime data
+docs/            architecture, contracts, and domain documentation
 tests/           unit tests
+data/            local runtime data
 ```
-
----
-
-## Troubleshooting
-
-### Dashboard shows no data
-
-Possible causes:
-
-- collector not running
-- wrong database path
-- filters excluding packets
 
 ---
 
 ## Tests
+
+Run the test suite:
 
 ```bash
 pytest
@@ -202,10 +253,23 @@ pytest
 
 ---
 
-## License
+## Project Status
 
-MIT License
+The project is currently in a **network intelligence and reporting
+foundation** phase.
 
+Recent milestones include:
+
+- `v0.7-spof-detection`
+- `v0.8-coverage-gap-analysis`
+- `v0.9-station-addition-simulation`
+- `v1.0-network-reporting-foundation`
+
+The current priority is to stabilize and expose the analytical kernel,
+not to grow the UI aggressively.
 
 ---
 
+## License
+
+MIT License
