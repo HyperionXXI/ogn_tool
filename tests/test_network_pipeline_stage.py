@@ -46,6 +46,7 @@ def test_network_pipeline_stage_builds_outputs():
         "station_dominance",
         "station_angular_entropy",
         "shadow_risk_scores",
+        "network_redundancy",
         "network_summary",
         "station_dependency",
         "spof",
@@ -65,5 +66,6 @@ def test_network_pipeline_stage_builds_outputs():
 
     assert isinstance(metrics["station_angular_entropy"], dict)
     assert isinstance(metrics["shadow_risk_scores"], dict)
+    assert isinstance(metrics["network_redundancy"], dict)
     assert metrics["station_angular_entropy"]
     assert metrics["shadow_risk_scores"]

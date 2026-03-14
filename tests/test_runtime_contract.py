@@ -13,6 +13,7 @@ EXPECTED_KEYS = {
     "station_health",
     "station_dominance",
     "station_angular_entropy",
+    "network_redundancy",
     "shadow_risk_scores",
     "network_summary",
     "station_dependency",

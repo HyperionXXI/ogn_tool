@@ -4,6 +4,7 @@ from .station_health import compute_station_health
 from .network_summary import compute_network_summary
 from .station_dependency import compute_station_dependency
 from .station_dominance import compute_station_dominance
+from .network_redundancy_score import compute_network_redundancy_score
 from .station_removal_simulation import simulate_station_removal
 from .station_redundancy_planner import plan_redundancy_improvements
 from .network_single_point_of_failure_detector import detect_single_points_of_failure
@@ -20,6 +21,7 @@ __all__ = [
     "compute_network_summary",
     "compute_station_dependency",
     "compute_station_dominance",
+    "compute_network_redundancy_score",
     "simulate_station_removal",
     "plan_redundancy_improvements",
     "detect_single_points_of_failure",

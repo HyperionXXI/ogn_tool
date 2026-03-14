@@ -47,6 +47,11 @@ DICT_METRICS = {
 }
 
 
+OPTIONAL_DICT_METRICS = {
+    "network_redundancy",
+}
+
+
 def validate_network_metrics(metrics: dict) -> None:
     if not isinstance(metrics, dict):
         raise RuntimeError("network_metrics must be a dict")
@@ -64,3 +69,7 @@ def validate_network_metrics(metrics: dict) -> None:
         value = metrics.get(key)
         if not isinstance(value, dict):
             raise RuntimeError(f"{key} must be a dict")
+
+    for key in OPTIONAL_DICT_METRICS:
+        if key in metrics and not isinstance(metrics.get(key), dict):
+            raise RuntimeError(f"{key} must be a dict when present")

@@ -7,6 +7,7 @@ from ogn_tool.analysis.intelligence import (
     compute_station_dependency,
     compute_station_dominance,
     compute_station_health,
+    compute_network_redundancy_score,
     detect_coverage_gaps,
     detect_single_points_of_failure,
     plan_redundancy_improvements,
@@ -204,6 +205,7 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     dominance_observations = _observations_to_dominance_frame(dataset.observations)
     metrics["station_dominance"] = compute_station_dominance(dominance_observations, metrics)
     metrics["station_dependency"] = compute_station_dependency(metrics)
+    metrics["network_redundancy"] = compute_network_redundancy_score(metrics)
     metrics["spof"] = detect_single_points_of_failure(metrics)
     metrics["station_redundancy_planner"] = plan_redundancy_improvements(metrics)
 
