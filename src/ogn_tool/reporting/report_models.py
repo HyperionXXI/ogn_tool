@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+"""Compatibility wrapper for the canonical reporting model."""
 
+from .network_engineering_report import NetworkEngineeringReport
 
-@dataclass
-class NetworkEngineeringReport:
-    network_status: str | None = None
-    station_health: list[dict[str, Any]] = field(default_factory=list)
-    critical_stations: list[dict[str, Any]] = field(default_factory=list)
-    coverage_gaps: list[dict[str, Any]] = field(default_factory=list)
-    recommended_new_stations: list[dict[str, Any]] = field(default_factory=list)
+__all__ = ["NetworkEngineeringReport"]
