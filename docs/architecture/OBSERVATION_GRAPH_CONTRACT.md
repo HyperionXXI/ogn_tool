@@ -176,6 +176,40 @@ one step.
 
 ---
 
+## Future Governance Trigger
+
+The Observation Graph does not need to become a central runtime object
+immediately.
+
+However, the project must treat the following pattern as a trigger for
+canonicalization:
+
+- multiple intelligence modules independently rebuild
+  `station_to_aircraft`
+- multiple intelligence modules independently rebuild
+  `aircraft_to_station`
+- the same observation-network relations appear in competing forms such
+  as dicts, DataFrames, or ad-hoc visibility tables
+
+When this happens, a shared Observation Graph model and builder should
+be introduced as the canonical internal structure rather than allowing
+continued ad-hoc reconstruction.
+
+Likely trigger scenarios include:
+
+- temporal analysis
+- mobility analytics
+- multi-band analysis
+- weather-aware observation context
+
+Likely implementation target:
+
+- `src/ogn_tool/models/observation_graph.py`
+
+This is a future governance rule, not an immediate refactor mandate.
+
+---
+
 ## Dependency Rules
 
 The Observation Graph model and builder must:

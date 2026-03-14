@@ -291,6 +291,41 @@ Any new runtime consumer should prefer:
 
 ---
 
+## Future Namespace Rule
+
+`results.network_metrics` is currently a flat typed surface.
+
+This is acceptable while the number of stable metric families remains
+limited.
+
+If the surface continues to grow, it must evolve toward grouped
+namespaces instead of unbounded flat expansion.
+
+Recommended future families include:
+
+- `health`
+- `topology`
+- `redundancy`
+- `coverage`
+- `simulations`
+
+Examples of future grouped paths:
+
+- `results.network_metrics["health"]["station_health"]`
+- `results.network_metrics["topology"]["station_dependency"]`
+- `results.network_metrics["coverage"]["gaps"]`
+- `results.network_metrics["simulations"]["station_removal"]`
+
+Do not introduce this refactor prematurely.
+
+The grouping should happen only when:
+
+- the flat metric surface becomes too large to document clearly
+- reporting depends on too many flat keys
+- multiple metrics clearly belong to the same family
+
+Until then, new metric keys must remain documented and controlled.
+
 ## Change Policy
 
 The following changes are considered breaking unless explicitly
@@ -302,3 +337,4 @@ announced and reviewed:
 - changing the semantic meaning of a metric field
 
 Any such change must update this document.
+
