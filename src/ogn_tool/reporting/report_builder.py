@@ -6,6 +6,13 @@ from .network_engineering_report import (
 )
 
 
+EXPECTED_REPORT_METRICS = {
+    "network_summary",
+    "station_angular_entropy",
+    "shadow_risk_scores",
+}
+
+
 
 def _interpret_station(entropy: float, risk: float) -> str:
     if entropy < 0.25:
@@ -27,16 +34,39 @@ def _extract_network_metrics(results):
 
 
 
+def _ensure_dict(metrics: dict, key: str, warnings: list[str]) -> dict:
+    value = metrics.get(key)
+
+    if value is None:
+        warnings.append(f"{key} missing from network_metrics")
+        return {}
+
+    if not isinstance(value, dict):
+        warnings.append(f"{key} expected dict but got {type(value).__name__}")
+        return {}
+
+    return value
+
+
 def build_network_engineering_report(results) -> NetworkEngineeringReport:
     metrics = _extract_network_metrics(results)
+    warnings: list[str] = []
 
-    entropy = metrics.get("station_angular_entropy", {})
-    if not isinstance(entropy, dict):
-        entropy = {}
+    pipeline_warnings = metrics.get("_contract_warnings", [])
+    if isinstance(pipeline_warnings, list):
+        warnings.extend(str(warning) for warning in pipeline_warnings)
 
-    risk = metrics.get("shadow_risk_scores", {})
-    if not isinstance(risk, dict):
-        risk = {}
+    coherence_warnings = metrics.get("_coherence_warnings", [])
+    if isinstance(coherence_warnings, list):
+        warnings.extend(str(warning) for warning in coherence_warnings)
+
+    for key in sorted(EXPECTED_REPORT_METRICS):
+        if key not in metrics:
+            warnings.append(f"{key} missing from network_metrics")
+
+    entropy = _ensure_dict(metrics, "station_angular_entropy", warnings)
+    risk = _ensure_dict(metrics, "shadow_risk_scores", warnings)
+    network_summary = _ensure_dict(metrics, "network_summary", warnings)
 
     diagnostics = {}
 
@@ -54,14 +84,11 @@ def build_network_engineering_report(results) -> NetworkEngineeringReport:
             interpretation=_interpret_station(entropy_value, risk_value),
         )
 
-    network_summary = metrics.get("network_summary", {})
-    if not isinstance(network_summary, dict):
-        network_summary = {}
-
     return NetworkEngineeringReport(
         station_diagnostics=diagnostics,
         network_summary=network_summary,
         notes=[],
+        input_warnings=warnings,
     )
 
 

@@ -17,6 +17,7 @@ class NetworkEngineeringReport:
     station_diagnostics: Dict[str, StationRFDiagnostics] = field(default_factory=dict)
     network_summary: Dict[str, Any] = field(default_factory=dict)
     notes: List[str] = field(default_factory=list)
+    input_warnings: List[str] = field(default_factory=list)
 
 
 from .report_builder import build_network_engineering_report
