@@ -17,15 +17,10 @@ from ogn_tool.analysis.intelligence import (
     simulate_station_addition,
 )
 from ogn_tool.analysis.intelligence.station_planner import suggest_station_locations
-from ogn_tool.analysis.network_metrics import (
-    compute_station_influence,
-    compute_station_removal_impact,
-    compute_visibility_metrics,
-    detect_station_anomalies,
-)
 from ogn_tool.analysis.network_metrics.station_placement import (
     compute_optimal_station_locations,
 )
+from ogn_tool.analysis.network_metrics_assembly import assemble_network_metrics
 from ogn_tool.analysis.rf.shadow_coverage import (
     compute_shadow_risk_scores,
     compute_station_angular_entropy,
@@ -92,12 +87,7 @@ def _build_candidate_grid(observations, step_deg: float = 0.05, max_points: int 
 
 def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     graph_result = network_graph_engine.build_graph(dataset.observations)
-    metrics = network_graph_engine.compute_network_metrics(graph_result)
-    metrics = dict(metrics or {})
-    metrics["visibility"] = compute_visibility_metrics(dataset.observations)
-    metrics["station_influence"] = compute_station_influence(metrics)
-    metrics["station_anomalies"] = detect_station_anomalies(metrics)
-    metrics["network_robustness"] = compute_station_removal_impact(metrics)
+    metrics = assemble_network_metrics(graph_result, dataset)
 
     candidate_grid = _build_candidate_grid(dataset.observations)
     if candidate_grid.empty:
