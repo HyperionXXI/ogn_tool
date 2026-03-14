@@ -7,6 +7,7 @@ import pandas as pd
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.models.rf_analysis_results import RFAnalysisResults
 from ogn_tool.models.rf_observation_vector import RFObservationVector
+from ogn_tool.runtime.analysis_run import build_analysis_run
 from ogn_tool.runtime.analysis_snapshot import build_analysis_snapshot, write_analysis_snapshot
 
 
@@ -79,13 +80,49 @@ def test_build_analysis_snapshot_serializes_metrics() -> None:
     assert isinstance(snapshot["network_metrics"]["spof"], list)
     assert snapshot["network_metrics"]["spof"][0]["station_id"] == "S1"
     assert snapshot["network_metrics"]["coverage_gaps"][0]["notes"] is None
+    assert "analysis_run" not in snapshot
+
+
+def test_build_analysis_snapshot_includes_analysis_run_when_provided() -> None:
+    observations = [
+        RFObservationVector(
+            station_id="S1",
+            aircraft_id="A1",
+            lat=47.0,
+            lon=7.0,
+            altitude_m=1000.0,
+            distance_km=10.0,
+            bearing_deg=30.0,
+            radio_horizon_km=120.0,
+            timestamp=1,
+            timestamp_ns=1,
+        )
+    ]
+    dataset = RFAnalysisDataset(observations=observations, results=RFAnalysisResults())
+    network = {"metrics": {"network_summary": {"network_status": "GOOD"}}}
+    run = build_analysis_run(
+        dataset,
+        config_summary={
+            "station_id": "FK50887",
+            "time_window_hours": 12,
+            "dataset_mode": "aprs_packets",
+            "metrics_profile": "default",
+        },
+    )
+
+    snapshot = build_analysis_snapshot(dataset, network, run=run)
+
+    assert "analysis_run" in snapshot
+    assert snapshot["analysis_run"]["run_id"].startswith("run_")
+    assert snapshot["analysis_run"]["config_summary"]["station_id"] == "FK50887"
+    assert snapshot["analysis_run"]["dataset_summary"]["observation_count"] == 1
 
 
 def test_write_analysis_snapshot_persists_json(tmp_path) -> None:
     snapshot = {
         "snapshot_version": "1",
         "engine_version": "1.1",
-        "created_at": "2026-03-14T12:00:00",
+        "created_at": "2026-03-14T12:00:00+00:00",
         "dataset_summary": {"observation_count": 1},
         "network_metrics": {"network_summary": {"network_status": "GOOD"}},
     }

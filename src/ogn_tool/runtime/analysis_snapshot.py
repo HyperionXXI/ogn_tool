@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 
-try:
-    from ogn_tool import __version__ as ENGINE_VERSION
-except Exception:
-    ENGINE_VERSION = "1.1"
+from .analysis_run import resolve_engine_version
+from .dataset_summary import build_dataset_summary
+
+if TYPE_CHECKING:
+    from ogn_tool.models.analysis_run import AnalysisRun
 
 SNAPSHOT_VERSION = "1"
 
@@ -58,6 +60,9 @@ def _serialize_metric(metric: Any) -> Any:
     if isinstance(metric, list):
         return [_serialize_metric(value) for value in metric]
 
+    if isinstance(metric, tuple):
+        return [_serialize_metric(value) for value in metric]
+
     return _serialize_value(metric)
 
 
@@ -74,73 +79,11 @@ def _validate_snapshot_structure(snapshot: dict[str, Any]) -> None:
     if not isinstance(snapshot["network_metrics"], dict):
         raise RuntimeError("network_metrics must be a dict")
 
-
-def _dataset_summary(dataset) -> dict[str, Any]:
-    observations = getattr(dataset, "observations", None)
-
-    observation_count = 0
-    station_count: int | None = None
-    aircraft_count: int | None = None
-    time_min: Any = None
-    time_max: Any = None
-
-    if observations is None:
-        observation_count = 0
-    elif isinstance(observations, pd.DataFrame):
-        frame = observations.copy()
-        observation_count = len(frame)
-
-        if "station_id" in frame.columns:
-            station_count = int(frame["station_id"].dropna().nunique())
-        elif "igate" in frame.columns:
-            station_count = int(frame["igate"].dropna().nunique())
-
-        if "aircraft" in frame.columns:
-            aircraft_count = int(frame["aircraft"].dropna().nunique())
-        elif "src" in frame.columns:
-            aircraft_count = int(frame["src"].dropna().nunique())
-        elif "aircraft_id" in frame.columns:
-            aircraft_count = int(frame["aircraft_id"].dropna().nunique())
-
-        if "ts_epoch" in frame.columns:
-            time_min = frame["ts_epoch"].min()
-            time_max = frame["ts_epoch"].max()
-        elif "timestamp" in frame.columns:
-            time_min = frame["timestamp"].min()
-            time_max = frame["timestamp"].max()
-    elif isinstance(observations, (list, tuple)):
-        observation_count = len(observations)
-        station_ids = {
-            getattr(obs, "station_id", None)
-            for obs in observations
-            if getattr(obs, "station_id", None)
-        }
-        aircraft_ids = {
-            getattr(obs, "aircraft_id", None)
-            for obs in observations
-            if getattr(obs, "aircraft_id", None)
-        }
-        timestamps = [
-            getattr(obs, "timestamp", None)
-            for obs in observations
-            if getattr(obs, "timestamp", None) is not None
-        ]
-        station_count = len(station_ids)
-        aircraft_count = len(aircraft_ids)
-        if timestamps:
-            time_min = min(timestamps)
-            time_max = max(timestamps)
-
-    return {
-        "observation_count": observation_count,
-        "station_count": station_count,
-        "aircraft_count": aircraft_count,
-        "time_min": _serialize_value(time_min),
-        "time_max": _serialize_value(time_max),
-    }
+    if "analysis_run" in snapshot and not isinstance(snapshot["analysis_run"], dict):
+        raise RuntimeError("analysis_run must be a dict when present")
 
 
-def build_analysis_snapshot(dataset, network) -> dict[str, Any]:
+def build_analysis_snapshot(dataset, network, *, run: "AnalysisRun | None" = None) -> dict[str, Any]:
     metrics = dict((network or {}).get("metrics") or {})
 
     serialized_metrics = {
@@ -150,11 +93,14 @@ def build_analysis_snapshot(dataset, network) -> dict[str, Any]:
 
     snapshot = {
         "snapshot_version": SNAPSHOT_VERSION,
-        "engine_version": ENGINE_VERSION,
+        "engine_version": resolve_engine_version(),
         "created_at": datetime.now(UTC).isoformat(),
-        "dataset_summary": _dataset_summary(dataset),
+        "dataset_summary": build_dataset_summary(dataset),
         "network_metrics": serialized_metrics,
     }
+
+    if run is not None:
+        snapshot["analysis_run"] = _serialize_metric(asdict(run))
 
     _validate_snapshot_structure(snapshot)
     return snapshot
@@ -170,7 +116,6 @@ def write_analysis_snapshot(snapshot: dict[str, Any], path: str) -> None:
 
 __all__ = [
     "SNAPSHOT_VERSION",
-    "ENGINE_VERSION",
     "build_analysis_snapshot",
     "write_analysis_snapshot",
 ]
