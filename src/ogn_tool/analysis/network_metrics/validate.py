@@ -10,6 +10,8 @@ REQUIRED_NETWORK_METRICS = {
     "network_robustness",
     "station_placement",
     "station_health",
+    "station_angular_entropy",
+    "shadow_risk_scores",
     "network_summary",
     "station_dependency",
     "spof",
@@ -37,6 +39,8 @@ DATAFRAME_METRICS = {
 
 DICT_METRICS = {
     "visibility",
+    "station_angular_entropy",
+    "shadow_risk_scores",
     "network_summary",
 }
 

@@ -43,6 +43,8 @@ def test_network_pipeline_stage_builds_outputs():
 
     for key in [
         "station_health",
+        "station_angular_entropy",
+        "shadow_risk_scores",
         "network_summary",
         "station_dependency",
         "spof",
@@ -58,3 +60,8 @@ def test_network_pipeline_stage_builds_outputs():
     assert not metrics["coverage_gap_priorities"].empty
     assert not metrics["station_redundancy_planner"].empty
     assert not metrics["station_addition_simulation"].empty
+
+    assert isinstance(metrics["station_angular_entropy"], dict)
+    assert isinstance(metrics["shadow_risk_scores"], dict)
+    assert metrics["station_angular_entropy"]
+    assert metrics["shadow_risk_scores"]

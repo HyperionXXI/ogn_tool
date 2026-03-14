@@ -22,6 +22,10 @@ from ogn_tool.analysis.network_metrics import (
 from ogn_tool.analysis.network_metrics.station_placement import (
     compute_optimal_station_locations,
 )
+from ogn_tool.analysis.rf.shadow_coverage import (
+    compute_shadow_risk_scores,
+    compute_station_angular_entropy,
+)
 from ogn_tool.analysis.network_metrics.validate import validate_network_metrics
 from ogn_tool.analysis.network_graph import network_events, network_timeseries
 from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics
@@ -84,6 +88,41 @@ def _observations_to_frame(observations) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def _observations_to_shadow_frame(observations) -> pd.DataFrame:
+    if observations is None:
+        return pd.DataFrame(columns=["station_id", "bearing_deg"])
+
+    if isinstance(observations, dict):
+        vectors = observations.get("vectors")
+        if vectors is not None and len(vectors) > 0:
+            df = pd.DataFrame(observations_to_rows(vectors))
+        else:
+            distance_df = observations.get("distance_df")
+            df = pd.DataFrame(distance_df).copy() if distance_df is not None else pd.DataFrame()
+    elif isinstance(observations, pd.DataFrame):
+        df = observations.copy()
+    else:
+        df = pd.DataFrame(observations_to_rows(observations))
+
+    if df.empty:
+        return pd.DataFrame(columns=["station_id", "bearing_deg"])
+
+    if "station_id" not in df.columns and "igate" in df.columns:
+        df["station_id"] = df["igate"]
+    if "bearing_deg" not in df.columns and "bearing" in df.columns:
+        df["bearing_deg"] = df["bearing"]
+
+    relevant_columns = [
+        column
+        for column in ["station_id", "bearing_deg", "lat", "lon", "station_lat", "station_lon"]
+        if column in df.columns
+    ]
+    if "station_id" not in relevant_columns:
+        return pd.DataFrame(columns=["station_id", "bearing_deg"])
+
+    return df[relevant_columns].copy()
+
+
 def _build_candidate_grid(observations, step_deg: float = 0.05, max_points: int = 400) -> pd.DataFrame:
     df = _observations_to_frame(observations)
     if df.empty:
@@ -131,6 +170,10 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     metrics["station_dependency"] = compute_station_dependency(metrics)
     metrics["spof"] = detect_single_points_of_failure(metrics)
     metrics["station_redundancy_planner"] = plan_redundancy_improvements(metrics)
+
+    shadow_observations = _observations_to_shadow_frame(dataset.observations)
+    metrics["station_angular_entropy"] = compute_station_angular_entropy(shadow_observations)
+    metrics["shadow_risk_scores"] = compute_shadow_risk_scores(shadow_observations)
 
     observations_df = _observations_to_frame(dataset.observations)
     if observations_df.empty:
