@@ -1,6 +1,10 @@
 🇫🇷 Français | 🇬🇧 [English version](README.md)
 
-# ogn_tool — Intelligence réseau RF pour OGN / FLARM / FANET
+# ogn_tool — Moteur d'intelligence réseau RF
+pour les réseaux OGN / FLARM / FANET
+
+Un moteur open-source pour analyser, diagnostiquer et planifier des
+réseaux distribués d’observation RF.
 
 `ogn_tool` est un moteur d’analyse RF et d’intelligence réseau pour les
 **réseaux de stations sol OGN / FLARM / FANET**.
@@ -39,6 +43,26 @@ décisions exploitables, par exemple :
 Le projet vise donc non seulement la visualisation, mais aussi le
 **diagnostic, le raisonnement et la planification** pour les réseaux RF
 distribués.
+
+Ce n’est pas simplement une autre interface de tracking. C’est la couche
+analytique qui permet de comprendre le réseau RF et de prendre des
+décisions d’ingénierie.
+
+L’architecture est agnostique au protocole et peut, à terme, analyser
+d’autres réseaux d’observation RF au-delà du périmètre actuel OGN /
+FLARM / FANET.
+
+---
+
+## Pour Qui ?
+
+Ce projet s’adresse principalement à :
+
+- opérateurs de stations OGN
+- ingénieurs réseau RF
+- acteurs de l’infrastructure de vol libre
+- groupes de recherche travaillant sur la couverture RF et les réseaux
+  d’observation
 
 ---
 
