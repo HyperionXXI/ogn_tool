@@ -11,6 +11,7 @@ EXPECTED_KEYS = {
     "network_robustness",
     "station_placement",
     "station_health",
+    "station_dominance",
     "station_angular_entropy",
     "shadow_risk_scores",
     "network_summary",

@@ -5,6 +5,7 @@ import pandas as pd
 from ogn_tool.analysis.intelligence import (
     compute_network_summary,
     compute_station_dependency,
+    compute_station_dominance,
     compute_station_health,
     detect_coverage_gaps,
     detect_single_points_of_failure,
@@ -88,6 +89,37 @@ def _observations_to_frame(observations) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def _observations_to_dominance_frame(observations) -> pd.DataFrame:
+    if observations is None:
+        return pd.DataFrame(columns=["src", "igate"])
+
+    if isinstance(observations, dict):
+        vectors = observations.get("vectors")
+        if vectors is not None and len(vectors) > 0:
+            df = pd.DataFrame(observations_to_rows(vectors))
+        else:
+            distance_df = observations.get("distance_df")
+            df = pd.DataFrame(distance_df).copy() if distance_df is not None else pd.DataFrame()
+    elif isinstance(observations, pd.DataFrame):
+        df = observations.copy()
+    else:
+        df = pd.DataFrame(observations_to_rows(observations))
+
+    if df.empty:
+        return pd.DataFrame(columns=["src", "igate"])
+
+    if "src" not in df.columns and "aircraft_id" in df.columns:
+        df["src"] = df["aircraft_id"]
+    if "igate" not in df.columns and "station_id" in df.columns:
+        df["igate"] = df["station_id"]
+
+    for column in ["src", "igate"]:
+        if column not in df.columns:
+            df[column] = pd.NA
+
+    return df[["src", "igate"]].dropna(subset=["src", "igate"]).copy()
+
+
 def _observations_to_shadow_frame(observations) -> pd.DataFrame:
     if observations is None:
         return pd.DataFrame(columns=["station_id", "bearing_deg"])
@@ -167,6 +199,10 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
     metrics["station_placement"] = placement
     metrics["station_health"] = compute_station_health(metrics)
     metrics["network_summary"] = compute_network_summary(metrics)
+
+    observations_df = _observations_to_frame(dataset.observations)
+    dominance_observations = _observations_to_dominance_frame(dataset.observations)
+    metrics["station_dominance"] = compute_station_dominance(dominance_observations, metrics)
     metrics["station_dependency"] = compute_station_dependency(metrics)
     metrics["spof"] = detect_single_points_of_failure(metrics)
     metrics["station_redundancy_planner"] = plan_redundancy_improvements(metrics)
