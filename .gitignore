@@ -47,3 +47,10 @@ scripts/rf_out/
 docs_full_dump.txt
 liste_fichiers.txt
 tmp_*
+
+# local exploration artifacts
+REFACTOR_WORK_LOG.txt
+repo_tree.txt
+tree.txt
+symbols.txt
+ogn_tool.svg
