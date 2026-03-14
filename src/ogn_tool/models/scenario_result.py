@@ -14,6 +14,9 @@ class ScenarioMetrics:
     def __getitem__(self, key: str) -> Any:
         return self.values[key]
 
+    def __setitem__(self, key: str, value: Any) -> None:
+        self.values[key] = value
+
 
 @dataclass
 class ScenarioResult:
