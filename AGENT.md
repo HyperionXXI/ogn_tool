@@ -139,6 +139,33 @@ Rules:
 - reporting modules MUST rely on metric views or analysis outputs
 
 
+Reporting consumption rules
+---------------------------
+
+Consumers of reporting data (UI, CLI, API, notebooks, dashboards) must
+access report data through the stable projection layer:
+
+    report_views
+
+Consumers MUST use functions exposed by:
+
+    ogn_tool.reporting
+
+Examples:
+
+    get_network_status(report)
+    get_station_health_summary(report)
+    get_network_risk_summary(report)
+    get_recommended_actions(report)
+
+Direct access to fields of NetworkEngineeringReport is discouraged.
+
+Rationale:
+The projection layer (report_views) defines a stable consumer surface.
+This allows the internal structure of NetworkEngineeringReport to evolve
+without breaking external consumers.
+
+
 # Code Quality Principles
 
 The project follows a "Swiss engineering" coding discipline.
@@ -152,3 +179,51 @@ Rules:
 
 Refactors whose only purpose is readability should be avoided by writing
 clear and documented code from the beginning.
+
+
+# Report Export Artifacts
+
+The project defines a stable JSON export artifact derived from
+NetworkEngineeringReport.
+
+Export modules:
+
+    reporting/report_export.py
+    reporting/report_export_io.py
+
+Responsibilities:
+
+report_export
+    Converts NetworkEngineeringReport into a stable JSON structure.
+
+report_export_io
+    Persists the JSON artifact to disk.
+
+
+Architectural rules:
+
+- report_export MUST consume report_views only.
+- report_export MUST NOT read internal fields of NetworkEngineeringReport.
+- report_export_io MUST consume export_network_report_json(...).
+- report_export_io MUST NOT read NetworkEngineeringReport directly.
+
+
+Artifact stability rules:
+
+- The exported JSON structure is considered a stable external interface.
+- The structure MUST remain backward compatible across minor versions.
+- Changes to the artifact structure require incrementing REPORT_EXPORT_VERSION.
+
+
+Rationale:
+
+The JSON export artifact is intended for:
+
+- dashboards
+- notebooks
+- API snapshots
+- reproducible analysis archives
+- comparison of network analysis runs
+
+Maintaining a stable artifact prevents external consumers from depending
+on internal report structures.
