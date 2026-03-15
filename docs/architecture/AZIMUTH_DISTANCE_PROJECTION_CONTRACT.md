@@ -62,6 +62,9 @@ The stable reporting projection currently contains:
 - `dominant_cell`
 - `azimuth_bins`
 - `distance_bins_km`
+- `azimuth_profile`
+- `distance_profile`
+- `rf_signature`
 - `matrix`
 
 ## Field Semantics
@@ -113,6 +116,58 @@ Explicit azimuth bin edges copied from the analytical primitive.
 
 Explicit distance bin edges copied from the analytical primitive.
 
+### `azimuth_profile`
+
+A deterministic one-dimensional profile derived by summing the matrix
+along the distance axis.
+
+Each entry must contain:
+
+- `azimuth_start_deg`
+- `azimuth_end_deg`
+- `count`
+- `share`
+
+`share` is defined as `count / packet_count` when `packet_count > 0`,
+otherwise `0.0`.
+
+### `distance_profile`
+
+A deterministic one-dimensional profile derived by summing the matrix
+along the azimuth axis.
+
+Each entry must contain:
+
+- `distance_start_km`
+- `distance_end_km`
+- `count`
+- `share`
+
+`share` is defined as `count / packet_count` when `packet_count > 0`,
+otherwise `0.0`.
+
+### `rf_signature`
+
+A compact deterministic RF summary derived from `azimuth_profile` and
+`distance_profile`.
+
+Current fields:
+
+- `packet_count`
+- `dominant_corridor_start_deg`
+- `dominant_corridor_end_deg`
+- `corridor_width_deg`
+- `dominant_corridor_share`
+- `dominant_distance_band_km`
+- `dominant_distance_band_share`
+- `nonzero_distance_band_count`
+- `distance_spread_index`
+- `anisotropy_index`
+- `interpretation`
+
+All numeric fields must remain machine-readable. Human formatting belongs
+outside this projection.
+
 ### `matrix`
 
 Matrix cell values copied from the analytical primitive without changing
@@ -141,6 +196,26 @@ cell semantics.
 If `max_cell_count == 0`, then `dominant_cell` MUST be `null` / `None`.
 
 ### Invariant 6
+
+`sum(entry['count'] for entry in azimuth_profile) == packet_count`
+
+### Invariant 7
+
+`sum(entry['count'] for entry in distance_profile) == packet_count`
+
+### Invariant 8
+
+If `rf_signature` is present, `rf_signature['packet_count'] == packet_count`.
+
+### Invariant 9
+
+If `rf_signature` is present, `rf_signature['corridor_width_deg'] > 0`.
+
+### Invariant 10
+
+If `rf_signature` is present, `0.0 <= rf_signature['distance_spread_index'] <= 1.0`.
+
+### Invariant 11
 
 The projection MUST remain deterministic for identical input surfaces.
 

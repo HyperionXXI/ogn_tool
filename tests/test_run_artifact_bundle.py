@@ -31,12 +31,20 @@ def test_export_analysis_run_bundle_creates_artifacts(tmp_path: Path) -> None:
             'time_window_duration_s': 3600,
             'config_identity': 'cfg_abc123',
         },
+        additional_artifacts={
+            'azimuth_distance_surface': {
+                'surface_type': 'azimuth_distance',
+                'version': 1,
+                'packet_count': 3,
+            }
+        },
     )
 
     assert result == bundle_dir
     assert result.exists()
     assert (result / 'report.json').exists()
     assert (result / 'run_metadata.json').exists()
+    assert (result / 'azimuth_distance_surface.json').exists()
 
     metadata = json.loads((result / 'run_metadata.json').read_text(encoding='utf-8'))
     assert metadata['bundle_version'] == '1.0'
@@ -56,6 +64,13 @@ def test_export_analysis_run_bundle_creates_artifacts(tmp_path: Path) -> None:
         'time_window_end': '2026-03-14T11:00:00Z',
         'time_window_duration_s': 3600,
         'config_identity': 'cfg_abc123',
+    }
+
+    artifact = json.loads((result / 'azimuth_distance_surface.json').read_text(encoding='utf-8'))
+    assert artifact == {
+        'surface_type': 'azimuth_distance',
+        'version': 1,
+        'packet_count': 3,
     }
 
 

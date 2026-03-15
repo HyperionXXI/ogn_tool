@@ -27,6 +27,7 @@ class NetworkEngineeringReport:
     station_dependency: pd.DataFrame = field(default_factory=pd.DataFrame)
     station_dominance: pd.DataFrame = field(default_factory=pd.DataFrame)
     spatial_observations: pd.DataFrame = field(default_factory=pd.DataFrame)
+    rf_signature: dict[str, Any] = field(default_factory=dict)
     recommended_actions: list[str] = field(default_factory=list)
     input_warnings: list[str] = field(default_factory=list)
 

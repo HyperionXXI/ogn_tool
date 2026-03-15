@@ -71,6 +71,12 @@ def get_network_risk_summary(report: NetworkEngineeringReport) -> dict[str, Any]
 
 
 
+def get_rf_signature(report: NetworkEngineeringReport) -> dict[str, Any]:
+    """Return the stable RF signature projection for external consumers."""
+    report = _as_report(report)
+    return dict(report.rf_signature) if isinstance(report.rf_signature, dict) else {}
+
+
 def get_recommended_actions(report: NetworkEngineeringReport) -> list[str]:
     """Return a stable copy of the recommended actions section."""
     report = _as_report(report)
@@ -81,5 +87,6 @@ __all__ = [
     'get_network_status',
     'get_station_health_summary',
     'get_network_risk_summary',
+    'get_rf_signature',
     'get_recommended_actions',
 ]

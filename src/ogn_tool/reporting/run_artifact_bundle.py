@@ -12,6 +12,14 @@ BUNDLE_EXPORT_VERSION = '1.0'
 
 
 
+def _write_additional_artifact(bundle_dir: Path, artifact_name: str, payload: Any) -> None:
+    """Persist an additional JSON artifact inside the run bundle."""
+    artifact_path = bundle_dir / f'{artifact_name}.json'
+    with artifact_path.open('w', encoding='utf-8') as file_handle:
+        json.dump(payload, file_handle, indent=2, sort_keys=True)
+
+
+
 def export_analysis_run_bundle(
     report: NetworkEngineeringReport,
     output_dir: str | Path,
@@ -19,6 +27,7 @@ def export_analysis_run_bundle(
     run_metadata: dict[str, Any] | None = None,
     dataset_identity: dict[str, Any] | None = None,
     comparability: dict[str, Any] | None = None,
+    additional_artifacts: dict[str, Any] | None = None,
 ) -> Path:
     """Export a reproducible artifact bundle for a single analysis run.
 
@@ -46,6 +55,9 @@ def export_analysis_run_bundle(
         metadata_artifact['comparability'] = dict(comparability)
     with (bundle_dir / 'run_metadata.json').open('w', encoding='utf-8') as file_handle:
         json.dump(metadata_artifact, file_handle, indent=2, sort_keys=True)
+
+    for artifact_name, payload in (additional_artifacts or {}).items():
+        _write_additional_artifact(bundle_dir, artifact_name, payload)
 
     return bundle_dir
 

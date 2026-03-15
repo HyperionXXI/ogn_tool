@@ -7,6 +7,7 @@ from ogn_tool.reporting.report_views import (
     get_network_risk_summary,
     get_network_status,
     get_recommended_actions,
+    get_rf_signature,
     get_station_health_summary,
 )
 
@@ -72,6 +73,24 @@ def test_get_network_risk_summary_returns_report_projection() -> None:
         'redundancy_interpretation': 'fragile network',
         'confidence_score': 0.75,
         'risk_warnings': ['warning-a'],
+    }
+
+
+def test_get_rf_signature_returns_stable_projection() -> None:
+    report = NetworkEngineeringReport(
+        rf_signature={
+            'dominant_corridor_start_deg': 90.0,
+            'dominant_corridor_end_deg': 120.0,
+            'dominant_corridor_share': 0.3,
+        }
+    )
+
+    signature = get_rf_signature(report)
+
+    assert signature == {
+        'dominant_corridor_start_deg': 90.0,
+        'dominant_corridor_end_deg': 120.0,
+        'dominant_corridor_share': 0.3,
     }
 
 

@@ -10,6 +10,7 @@ from .report_views import (
     get_network_risk_summary,
     get_network_status,
     get_recommended_actions,
+    get_rf_signature,
     get_station_health_summary,
 )
 from .report_export import export_network_report_json
@@ -40,6 +41,7 @@ __all__ = [
     'get_network_status',
     'get_station_health_summary',
     'get_network_risk_summary',
+    'get_rf_signature',
     'get_recommended_actions',
     'export_network_report_json',
     'export_network_report_json_file',

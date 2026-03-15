@@ -4,8 +4,11 @@ import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from ogn_tool.analysis import compute_azimuth_distance_matrix
 from ogn_tool.analysis.dataset_identity import build_dataset_identity
+from ogn_tool.analysis.rf_observations import compute_bearing, compute_distance
 from ogn_tool.reporting import (
+    build_azimuth_distance_summary,
     build_network_engineering_report,
     build_run_comparability,
     export_analysis_run_bundle,
@@ -25,6 +28,27 @@ DEFAULT_WINDOW_HOURS = 72
 LIMIT_ROWS = 100000
 ANALYSIS_VERSION = "2026.03"
 CONFIG_IDENTITY = "fk50887_station_v1"
+AZIMUTH_BINS = [float(value) for value in range(0, 361, 10)]
+DISTANCE_BINS_KM = [float(value) for value in range(0, 151, 10)]
+
+
+def _build_azimuth_distance_surface(packets):
+    observations = packets.copy()
+    observations['distance_km'] = compute_distance(observations, STATION_LAT, STATION_LON)
+    observations['bearing_deg'] = compute_bearing(observations, STATION_LAT, STATION_LON)
+
+    surface = compute_azimuth_distance_matrix(
+        observations,
+        AZIMUTH_BINS,
+        DISTANCE_BINS_KM,
+    )
+    summary = build_azimuth_distance_summary(surface)
+    return {
+        'surface_type': 'azimuth_distance',
+        'version': 1,
+        **surface,
+        'summary': summary,
+    }
 
 
 def main() -> None:
@@ -83,6 +107,8 @@ def main() -> None:
         network_analysis.get("network_metrics") if isinstance(network_analysis, dict) else {},
         network_analysis.get("spatial_observations") if isinstance(network_analysis, dict) else None,
     )
+    azimuth_distance_surface = _build_azimuth_distance_surface(packets)
+    report.rf_signature = dict(azimuth_distance_surface.get('summary', {}).get('rf_signature') or {})
 
     time_start = start_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
     time_end = end_dt.isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -119,6 +145,9 @@ def main() -> None:
         },
         dataset_identity=dataset_identity,
         comparability=comparability,
+        additional_artifacts={
+            'azimuth_distance_surface': azimuth_distance_surface,
+        },
     )
     register_run(bundle_dir, registry_dir)
 
@@ -129,6 +158,7 @@ def main() -> None:
     print(f"Freshness lag (h): {lag_hours}")
     print(f"Station analysis keys: {list((station_analysis or {}).keys())}")
     print(f"Network analysis keys: {list((network_analysis or {}).keys())}")
+    print(f"Azimuth-distance packets represented: {azimuth_distance_surface['packet_count']}")
     if isinstance(network_analysis, dict) and isinstance(network_analysis.get("network_metrics"), dict):
         print(f"network_metrics keys: {list(network_analysis['network_metrics'].keys())}")
 

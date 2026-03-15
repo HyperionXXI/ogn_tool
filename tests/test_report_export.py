@@ -14,6 +14,7 @@ def test_export_network_report_json_structure() -> None:
     assert 'network_status' in data
     assert 'station_health' in data
     assert 'network_risk' in data
+    assert 'rf_signature' in data
     assert 'recommended_actions' in data
 
 
@@ -45,3 +46,21 @@ def test_report_contains_schema_version() -> None:
     meta = data['report_metadata']
 
     assert meta['report_schema_version'] == '1.0'
+
+
+def test_report_exports_rf_signature() -> None:
+    report = NetworkEngineeringReport(
+        rf_signature={
+            'dominant_corridor_start_deg': 90.0,
+            'dominant_corridor_end_deg': 120.0,
+            'dominant_corridor_share': 0.3,
+        }
+    )
+
+    data = export_network_report_json(report)
+
+    assert data['rf_signature'] == {
+        'dominant_corridor_start_deg': 90.0,
+        'dominant_corridor_end_deg': 120.0,
+        'dominant_corridor_share': 0.3,
+    }

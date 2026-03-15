@@ -46,7 +46,7 @@ def build_station_reception(packets_df: pd.DataFrame) -> pd.DataFrame:
         df["time_bucket"] = (pd.to_numeric(df["ts_epoch"], errors="coerce") // 2) * 2
     elif "ts_utc" in df.columns:
         ts = pd.to_datetime(df["ts_utc"], errors="coerce")
-        df["time_bucket"] = (ts.view("int64") // 1_000_000_000 // 2) * 2
+        df["time_bucket"] = (ts.astype("int64") // 1_000_000_000 // 2) * 2
     else:
         df["time_bucket"] = pd.NA
     df["lat_round"] = pd.to_numeric(df.get("lat"), errors="coerce").round(3)

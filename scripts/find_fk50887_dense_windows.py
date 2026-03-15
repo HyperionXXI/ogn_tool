@@ -31,7 +31,7 @@ def main() -> None:
         raise SystemExit(f'No packets found for station {args.station_id}.')
 
     frame['ts'] = pd.to_datetime(frame['ts_epoch'], unit='s', utc=True)
-    hourly = frame.set_index('ts').resample('1H').size().rename('packet_count')
+    hourly = frame.set_index('ts').resample('1h').size().rename('packet_count')
     rolling = hourly.rolling(args.window_hours, min_periods=args.window_hours).sum().dropna()
 
     if rolling.empty:
