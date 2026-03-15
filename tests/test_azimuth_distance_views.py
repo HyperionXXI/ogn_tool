@@ -39,6 +39,7 @@ def test_build_azimuth_distance_summary_returns_expected_projection() -> None:
         'packet_count': 6,
         'dominant_corridor_start_deg': 0.0,
         'dominant_corridor_end_deg': 180.0,
+        'corridor_center_deg': 90.0,
         'corridor_width_deg': 180.0,
         'dominant_corridor_share': 1.0,
         'dominant_distance_band_km': [10.0, 20.0],
@@ -46,6 +47,7 @@ def test_build_azimuth_distance_summary_returns_expected_projection() -> None:
         'nonzero_distance_band_count': 2,
         'distance_spread_index': 1.0,
         'anisotropy_index': 1.0,
+        'direction_entropy': 1.0,
         'interpretation': 'directional traffic corridor likely',
     }
 

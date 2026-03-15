@@ -42,6 +42,18 @@ def _distance_profile(distance_bins_km: list[float], matrix: np.ndarray, packet_
     return profile
 
 
+def _compute_direction_entropy(shares: np.ndarray, total_bin_count: int) -> float | None:
+    positive_shares = shares[shares > 0]
+    if positive_shares.size == 0 or total_bin_count <= 1:
+        return None
+
+    entropy = float(-np.sum(positive_shares * np.log(positive_shares)))
+    entropy_max = float(np.log(total_bin_count))
+    if entropy_max <= 0:
+        return None
+    return float(entropy / entropy_max)
+
+
 def _build_rf_signature(
     azimuth_profile: list[dict[str, Any]],
     distance_profile: list[dict[str, Any]],
@@ -67,6 +79,7 @@ def _build_rf_signature(
     dominant_corridor_start = float(azimuth_profile[dominant_idx]['azimuth_start_deg'])
     dominant_corridor_end = float(azimuth_profile[dominant_idx + corridor_width_bins - 1]['azimuth_end_deg'])
     corridor_width_deg = float(dominant_corridor_end - dominant_corridor_start)
+    corridor_center_deg = float(dominant_corridor_start + (corridor_width_deg / 2.0))
 
     dominant_distance = max(distance_profile, key=lambda entry: int(entry.get('count', 0)))
     dominant_distance_band_share = float(dominant_distance.get('share', 0.0))
@@ -78,11 +91,13 @@ def _build_rf_signature(
 
     mean_share = float(shares.mean()) if shares.size else 0.0
     anisotropy_index = float(shares.max() / mean_share) if mean_share > 0 else 0.0
+    direction_entropy = _compute_direction_entropy(shares, len(azimuth_profile))
 
     return {
         'packet_count': int(packet_count),
         'dominant_corridor_start_deg': dominant_corridor_start,
         'dominant_corridor_end_deg': dominant_corridor_end,
+        'corridor_center_deg': corridor_center_deg,
         'corridor_width_deg': corridor_width_deg,
         'dominant_corridor_share': dominant_share,
         'dominant_distance_band_km': [
@@ -93,6 +108,7 @@ def _build_rf_signature(
         'nonzero_distance_band_count': nonzero_distance_band_count,
         'distance_spread_index': distance_spread_index,
         'anisotropy_index': anisotropy_index,
+        'direction_entropy': direction_entropy,
         'interpretation': 'directional traffic corridor likely',
     }
 

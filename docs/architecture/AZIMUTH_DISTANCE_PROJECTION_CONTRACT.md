@@ -156,6 +156,7 @@ Current fields:
 - `packet_count`
 - `dominant_corridor_start_deg`
 - `dominant_corridor_end_deg`
+- `corridor_center_deg`
 - `corridor_width_deg`
 - `dominant_corridor_share`
 - `dominant_distance_band_km`
@@ -163,6 +164,7 @@ Current fields:
 - `nonzero_distance_band_count`
 - `distance_spread_index`
 - `anisotropy_index`
+- `direction_entropy`
 - `interpretation`
 
 All numeric fields must remain machine-readable. Human formatting belongs
@@ -216,6 +218,11 @@ If `rf_signature` is present, `rf_signature['corridor_width_deg'] > 0`.
 If `rf_signature` is present, `0.0 <= rf_signature['distance_spread_index'] <= 1.0`.
 
 ### Invariant 11
+
+If `rf_signature` is present and `direction_entropy` is not null, then
+`0.0 <= rf_signature['direction_entropy'] <= 1.0`.
+
+### Invariant 12
 
 The projection MUST remain deterministic for identical input surfaces.
 
