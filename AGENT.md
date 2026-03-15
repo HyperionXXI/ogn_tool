@@ -227,3 +227,63 @@ The JSON export artifact is intended for:
 
 Maintaining a stable artifact prevents external consumers from depending
 on internal report structures.
+
+
+# CLI Architecture Rule
+
+The CLI layer MUST remain a thin consumer of `ogn_tool.reporting`.
+
+CLI code is NOT allowed to:
+- read report.json directly
+- read run_metadata.json directly
+- read registry files directly
+- rebuild comparisons
+- rebuild evolution timelines
+- access ogn_tool.analysis or pipeline internals
+
+CLI commands MUST:
+- call stable APIs from `ogn_tool.reporting`
+- only parse arguments and format output
+
+Allowed imports:
+
+ogn_tool.reporting
+
+Forbidden imports:
+
+ogn_tool.analysis
+ogn_tool.pipeline
+ogn_tool.runtime
+direct JSON parsing of bundles
+
+
+# Run Registry Rule
+
+The run registry is a directory index only.
+
+The registry MUST NOT become a second data store.
+
+Registry responsibilities:
+- register run bundle locations
+- list known runs
+- expose stable run lookup metadata
+
+The registry MUST NOT store:
+- metrics
+- analysis results
+- comparisons
+- derived reporting views
+
+Analytical metadata must remain inside bundle artifacts:
+
+    report.json
+    run_metadata.json
+
+The registry API must remain minimal:
+- register_run(...)
+- list_runs(...)
+- load_run_metadata(...)
+
+Rationale:
+Keeping the registry as an index prevents drift toward a hidden database
+layer and keeps run history architecture simple, stable and replaceable.
