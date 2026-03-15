@@ -1,3 +1,24 @@
+"""Network-level metrics derived from graph structures.
+
+This package contains computations that derive quantitative metrics
+from the network topology and RF analysis results.
+
+Typical responsibilities
+------------------------
+- station influence metrics
+- network robustness indicators
+- coverage-related statistics
+- dependency metrics
+
+Inputs:
+    graph structures from ogn_tool.analysis.network_graph
+
+Outputs:
+    structured metrics used by reporting and intelligence layers.
+
+This package does not build graphs itself.
+"""
+
 from .station_metrics import (
     build_station_metrics,
     build_station_reception,
@@ -15,6 +36,18 @@ from .coverage_metrics import (
     detect_network_blind_zones,
     enrich_coverage_grid,
 )
+from .visibility import (
+    build_visibility_matrix,
+    compute_station_dependency,
+    compute_visibility_metrics,
+    compute_visibility_overlap,
+    compute_visibility_redundancy,
+    compute_visibility_summary,
+)
+from .station_influence import compute_station_influence
+from .station_anomaly import detect_station_anomalies
+from .network_robustness import compute_station_removal_impact
+from .station_placement import compute_optimal_station_locations, extract_fragile_aircraft
 
 __all__ = [
     "build_network_metrics",
@@ -42,18 +75,3 @@ __all__ = [
     "compute_optimal_station_locations",
     "extract_fragile_aircraft",
 ]
-
-from .visibility import (
-    build_visibility_matrix,
-    compute_station_dependency,
-    compute_visibility_metrics,
-    compute_visibility_overlap,
-    compute_visibility_redundancy,
-    compute_visibility_summary,
-)
-
-from .station_influence import compute_station_influence
-
-from .station_anomaly import detect_station_anomalies
-from .network_robustness import compute_station_removal_impact
-from .station_placement import compute_optimal_station_locations, extract_fragile_aircraft

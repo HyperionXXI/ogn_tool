@@ -1,6 +1,12 @@
-"""
-RF feature module: shadow zones.
-See docs/rf_features/04_shadow_zones.md
+"""Shadow analysis utilities.
+
+Note:
+Parts of this logic overlap with newer implementations in:
+
+    rf_metrics.blind_zone_detection
+    rf_metrics.probability_field
+
+These modules are kept for compatibility with early analysis tools.
 """
 
 from __future__ import annotations
@@ -9,6 +15,7 @@ from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
+
 
 
 def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -52,8 +59,6 @@ def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
     lon = lon[valid]
     df = pd.DataFrame({"lat": lat, "lon": lon})
 
-    # Local RX detection: match igate prefix or raw signature
-    local_mask = pd.Series([False] * len(df), index=df.index)
     local_points_igate = 0
     local_points_raw = 0
     if df_local is not None and not df_local.empty:
@@ -126,7 +131,6 @@ def analyze(context: Dict[str, Any]) -> Dict[str, Any]:
 
     merged["reception_ratio"] = merged["aircraft_local"] / merged["aircraft_global"]
 
-    # Ignore cells with too few global samples
     merged = merged[merged["aircraft_global"] >= 10].copy()
     if merged.empty:
         return {

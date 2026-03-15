@@ -1,4 +1,17 @@
 # src/ogn_tool/rf_analysis.py
+"""Legacy RF helpers.
+
+This module predates the current analysis architecture and is kept only
+for backward compatibility with early utilities.
+
+Canonical implementations now live in:
+
+    ogn_tool.analysis.rf_models
+    ogn_tool.analysis.rf_metrics
+
+New code should NOT import from this module.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

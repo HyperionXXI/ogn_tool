@@ -1,15 +1,20 @@
-"""Legacy entry point for experimental shadow diagnostics.
+"""Shadow analysis utilities.
 
-This module is retained for backwards compatibility with existing imports.
-The actual implementation lives under `ogn_tool.analysis.experimental`.
+Note:
+Parts of this logic overlap with newer implementations in:
+
+    rf_metrics.blind_zone_detection
+    rf_metrics.probability_field
+
+These modules are kept for compatibility with early analysis tools.
 """
 
 from .experimental.shadow import compute_shadow_proxy
 
 
+
 def detect_rf_shadows(df, azimuth_histogram=None, directional_balance=None, station_lat=None, station_lon=None):
-    """
-    Compatibility wrapper used by RFAnalysisEngine.
+    """Compatibility wrapper used by RFAnalysisEngine.
 
     Uses the experimental shadow proxy internally.
     """

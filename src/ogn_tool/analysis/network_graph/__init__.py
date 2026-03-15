@@ -1,3 +1,26 @@
+"""Network graph construction layer.
+
+This package contains the topology layer of the RF network analysis.
+
+Responsibilities
+----------------
+- Build graph representations of the station network
+- Compute connectivity relationships
+- Represent dependencies between stations
+- Provide graph structures used by higher-level metrics
+
+This layer focuses only on topology construction.
+
+It does NOT compute:
+- RF metrics
+- station health scores
+- network summaries
+
+Those belong to:
+    ogn_tool.analysis.network_metrics
+    ogn_tool.analysis.network
+"""
+
 from .coverage_graph import build_coverage_graph
 from .network_events import detect_coverage_regressions, detect_network_anomalies, detect_station_outages
 from .graph_metrics import compute_graph_metrics, compute_network_evolution_metrics

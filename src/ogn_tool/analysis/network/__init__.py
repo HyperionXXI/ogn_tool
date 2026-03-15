@@ -1,3 +1,25 @@
+"""High-level network synthesis and summaries.
+
+This package contains orchestration logic and synthesized views
+of the analyzed RF network.
+
+Responsibilities
+----------------
+- combine graph and metric outputs
+- produce network-level summaries
+- support reporting layers
+
+Typical outputs:
+- network health summaries
+- synthesized network diagnostics
+- aggregated results for reporting
+
+This layer sits above:
+
+    ogn_tool.analysis.network_graph
+    ogn_tool.analysis.network_metrics
+"""
+
 from .network_intelligence import compute_network_topology, compute_station_roles, compute_coverage_redundancy
 from .station_range import analyze as analyze_station_range
 from .station_quality import analyze as analyze_station_quality

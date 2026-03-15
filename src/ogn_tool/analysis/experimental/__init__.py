@@ -1,7 +1,21 @@
-"""Experimental RF diagnostics.
+"""Experimental RF analysis modules.
 
-This subpackage is used to collect analysis functions that are not yet part of
-the production analysis pipeline.
+This namespace contains research prototypes and algorithms that are not
+part of the stable analysis pipeline.
+
+Modules here may:
+
+    - change without notice
+    - move into canonical packages later
+    - be removed if superseded
+
+Canonical layers are:
+
+    rf_models
+    rf_metrics
+    network_graph
+    network_metrics
+    intelligence
 """
 
 from .antenna_health import analyze as analyze_antenna_health
