@@ -82,6 +82,9 @@ def compute_station_aircraft_links(observations) -> pd.DataFrame:
             ]
         )
 
+    for column in ["lat", "lon", "altitude_m"]:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+
     links = (
         df.groupby(["station_id", "aircraft_id"], dropna=False)
         .agg(
