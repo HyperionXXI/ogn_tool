@@ -18,6 +18,7 @@ def export_analysis_run_bundle(
     *,
     run_metadata: dict[str, Any] | None = None,
     dataset_identity: dict[str, Any] | None = None,
+    comparability: dict[str, Any] | None = None,
 ) -> Path:
     """Export a reproducible artifact bundle for a single analysis run.
 
@@ -36,6 +37,8 @@ def export_analysis_run_bundle(
         'metadata': dict(run_metadata or {}),
         'dataset': dict(dataset_identity or {}),
     }
+    if comparability is not None:
+        metadata_artifact['comparability'] = dict(comparability)
     with (bundle_dir / 'run_metadata.json').open('w', encoding='utf-8') as file_handle:
         json.dump(metadata_artifact, file_handle, indent=2, sort_keys=True)
 

@@ -23,6 +23,14 @@ def test_export_analysis_run_bundle_creates_artifacts(tmp_path: Path) -> None:
             'time_end': '2026-03-14T11:00:00Z',
             'source': 'ogn_sqlite',
         },
+        comparability={
+            'schema_version': '1.0',
+            'analysis_version': '2026.03',
+            'time_window_start': '2026-03-14T10:00:00Z',
+            'time_window_end': '2026-03-14T11:00:00Z',
+            'time_window_duration_s': 3600,
+            'config_identity': 'cfg_abc123',
+        },
     )
 
     assert result == bundle_dir
@@ -41,3 +49,20 @@ def test_export_analysis_run_bundle_creates_artifacts(tmp_path: Path) -> None:
         'time_end': '2026-03-14T11:00:00Z',
         'source': 'ogn_sqlite',
     }
+    assert metadata['comparability'] == {
+        'schema_version': '1.0',
+        'analysis_version': '2026.03',
+        'time_window_start': '2026-03-14T10:00:00Z',
+        'time_window_end': '2026-03-14T11:00:00Z',
+        'time_window_duration_s': 3600,
+        'config_identity': 'cfg_abc123',
+    }
+
+
+def test_export_analysis_run_bundle_without_comparability(tmp_path: Path) -> None:
+    bundle_dir = tmp_path / 'run-002'
+    result = export_analysis_run_bundle(NetworkEngineeringReport(), bundle_dir)
+
+    metadata = json.loads((result / 'run_metadata.json').read_text(encoding='utf-8'))
+
+    assert 'comparability' not in metadata
