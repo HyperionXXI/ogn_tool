@@ -14,6 +14,7 @@ from .report_export_io import export_network_report_json_file
 from .run_artifact_bundle import export_analysis_run_bundle
 from .run_comparability import build_run_comparability
 from .run_comparison_views import compare_run_bundles
+from .run_evolution_views import compute_network_evolution
 from .run_registry import (
     list_runs,
     load_run_metadata,
@@ -38,6 +39,7 @@ __all__ = [
     'export_analysis_run_bundle',
     'build_run_comparability',
     'compare_run_bundles',
+    'compute_network_evolution',
     'register_run',
     'list_runs',
     'load_run_metadata',
