@@ -31,9 +31,14 @@ def export_analysis_run_bundle(
 
     export_network_report_json_file(report, bundle_dir / 'report.json')
 
+    generated_at = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec='seconds')
+        .replace('+00:00', 'Z')
+    )
     metadata_artifact = {
         'bundle_version': BUNDLE_EXPORT_VERSION,
-        'generated_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+        'generated_at': generated_at,
         'metadata': dict(run_metadata or {}),
         'dataset': dict(dataset_identity or {}),
     }

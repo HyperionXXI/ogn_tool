@@ -52,3 +52,17 @@ def test_build_run_comparability_is_deterministic() -> None:
     )
 
     assert first == second
+
+
+def test_build_run_comparability_rejects_invalid_window() -> None:
+    try:
+        build_run_comparability(
+            analysis_version='2026.03',
+            time_window_start='2026-03-14T11:00:00Z',
+            time_window_end='2026-03-14T10:00:00Z',
+            config_identity='cfg_abc123',
+        )
+    except ValueError as exc:
+        assert str(exc) == 'time_window_end must be >= time_window_start'
+    else:
+        raise AssertionError('Expected ValueError for invalid time window')

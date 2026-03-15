@@ -31,6 +31,8 @@ def build_run_comparability(
     if normalized_start is not None and normalized_end is not None:
         start = datetime.fromisoformat(normalized_start.replace('Z', '+00:00'))
         end = datetime.fromisoformat(normalized_end.replace('Z', '+00:00'))
+        if end < start:
+            raise ValueError('time_window_end must be >= time_window_start')
         duration = int((end - start).total_seconds())
 
     return {

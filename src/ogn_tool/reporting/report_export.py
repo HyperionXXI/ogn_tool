@@ -25,10 +25,16 @@ def export_network_report_json(report: NetworkEngineeringReport) -> dict[str, An
     if not isinstance(report, NetworkEngineeringReport):
         raise TypeError('Expected NetworkEngineeringReport')
 
+    generated_at = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec='seconds')
+        .replace('+00:00', 'Z')
+    )
+
     return {
         'report_metadata': {
             'report_version': REPORT_EXPORT_VERSION,
-            'generated_at': datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            'generated_at': generated_at,
         },
         'network_status': get_network_status(report),
         'station_health': get_station_health_summary(report),
