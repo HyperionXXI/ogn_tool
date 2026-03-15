@@ -33,6 +33,18 @@ def _haversine_km_vector(
     return r * c
 
 
+
+
+def haversine_km_vector(
+    station_lat: float,
+    station_lon: float,
+    lat: np.ndarray,
+    lon: np.ndarray,
+) -> np.ndarray:
+    """Public vectorized haversine helper used by legacy RF dataset builders."""
+    return _haversine_km_vector(station_lat, station_lon, lat, lon)
+
+
 def analyze(
     df_observations: pd.DataFrame,
     station_lat: float | None = None,

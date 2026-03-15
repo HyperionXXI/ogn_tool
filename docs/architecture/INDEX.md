@@ -26,22 +26,34 @@ Do not use this directory for:
 3. `ENGINE_RULES.md`
    Rules for engine builders, intelligence modules, and UI boundaries.
 
-4. `RF_METRIC_CONTRACT.md`
+4. `CONSUMER_SURFACE_GOVERNANCE.md`
+   Rules for authoritative surfaces, reporting projections, and consumer boundaries.
+
+5. `SPATIAL_PROJECTION_CONTRACT.md`
+   Stable contract for spatial reporting projections consumed by map-first interfaces.
+
+6. `AZIMUTH_DISTANCE_CONTRACT.md`
+   Contract for the azimuth-distance RF matrix primitive and its future projections.
+
+7. `AZIMUTH_DISTANCE_PROJECTION_CONTRACT.md`
+   Stable contract for the azimuth-distance reporting projection consumed by external consumers.
+
+8. `RF_METRIC_CONTRACT.md`
    Runtime contract for typed network metrics.
 
-5. `RUNTIME_API_MIGRATION.md`
+9. `RUNTIME_API_MIGRATION.md`
    Rules for migrating from legacy `ctx[...]` usage to `results.*`.
 
-6. `OBSERVATION_GRAPH_CONTRACT.md`
+10. `OBSERVATION_GRAPH_CONTRACT.md`
    Future canonical network-centric observation model.
 
-7. `NETWORK_ENGINEERING_REPORT.md`
+11. `NETWORK_ENGINEERING_REPORT.md`
    Contract for the reporting layer built on typed results.
 
-8. `EXECUTIVE_ARCHITECTURE_AUDIT.md`
+12. `EXECUTIVE_ARCHITECTURE_AUDIT.md`
    Current executive-level maturity, risk and effort assessment.
 
-9. `CAPABILITY_AUDIT.md`
+13. `CAPABILITY_AUDIT.md`
    Capability inventory and reconnection status.
 
 ## Status Rules

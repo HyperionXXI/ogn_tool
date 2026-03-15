@@ -145,21 +145,36 @@ def run_station_analysis(dataset_mode: str | None = None, station_id: str | None
     )
 
 
+def _extract_canonical_network_surface(results) -> dict:
+    """Normalize network analysis outputs to the canonical reporting surface."""
+    network_metrics = None
+    spatial_observations = None
+
+    if isinstance(results, dict):
+        network_metrics = results.get("network_metrics")
+        spatial_observations = results.get("spatial_observations")
+        if network_metrics is None:
+            network_metrics = results
+    else:
+        network_metrics = getattr(results, "network_metrics", None)
+        spatial_observations = getattr(results, "spatial_observations", None)
+
+    return {
+        "network_metrics": network_metrics,
+        "spatial_observations": spatial_observations,
+    }
+
+
 def run_network_analysis(dataset_mode: str | None = None, station_id: str | None = None) -> dict:
-    """
-    Run network-level analysis using the most recently built engine dataset.
-    """
+    """Run network-level analysis and expose the canonical reporting surface."""
     if _LAST_ENGINE is None:
         return {
             "network_metrics": None,
-            "coverage_redundancy_grid": None,
-            "station_overlap_matrix": None,
-            "network_blind_zones": None,
+            "spatial_observations": None,
         }
-    return _LAST_ENGINE.run_network_analysis(
-        dataset_mode=dataset_mode,
-        station_id=station_id,
-    )
+
+    results = _LAST_ENGINE.run_from_observations()
+    return _extract_canonical_network_surface(results)
 
 
 def table_exists(db_path: str, table_name: str) -> bool:

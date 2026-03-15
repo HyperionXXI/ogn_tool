@@ -37,7 +37,7 @@ def _compute_comparability(left_meta: dict[str, Any], right_meta: dict[str, Any]
         'config_identity_match': bool(left_comp) and bool(right_comp) and left_comp.get('config_identity') == right_comp.get('config_identity'),
         'time_window_duration_match': bool(left_comp) and bool(right_comp) and left_comp.get('time_window_duration_s') == right_comp.get('time_window_duration_s'),
     }
-    result['is_comparable'] = all(result.values())
+    result['is_comparable'] = bool(result['analysis_version_match'] and result['config_identity_match'] and result['time_window_duration_match'])
     return result
 
 

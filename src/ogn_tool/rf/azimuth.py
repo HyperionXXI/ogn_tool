@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import numpy as np
 
-try:
-    from .experimental.azimuth import compute_azimuth_radiation
-except Exception:  # pragma: no cover
-    compute_azimuth_radiation = None
+
+def compute_azimuth_radiation(df, station_lat: float, station_lon: float):
+    """Lazy wrapper around the experimental azimuth implementation."""
+    from ogn_tool.analysis.experimental.azimuth import compute_azimuth_radiation as _impl
+
+    return _impl(df, station_lat, station_lon)
 
 
 __all__ = [

@@ -88,7 +88,7 @@ def test_compare_run_bundles_detects_topology_change(tmp_path: Path) -> None:
 
 
 
-def test_compare_run_bundles_detects_dataset_incompatibility(tmp_path: Path) -> None:
+def test_compare_run_bundles_allows_temporal_comparison_with_different_dataset_identity(tmp_path: Path) -> None:
     report = _build_report(critical_station_ids=[], station_count=1, redundancy_score=0.6, confidence_score=0.8)
     left_bundle = tmp_path / 'left'
     right_bundle = tmp_path / 'right'
@@ -115,5 +115,5 @@ def test_compare_run_bundles_detects_dataset_incompatibility(tmp_path: Path) -> 
     comparison = compare_run_bundles(left_bundle, right_bundle)
 
     assert comparison['comparability']['dataset_identity_match'] is False
-    assert comparison['comparability']['is_comparable'] is False
-    assert comparison['interpretation']['network_trend'] == 'not_comparable'
+    assert comparison['comparability']['is_comparable'] is True
+    assert comparison['interpretation']['network_trend'] == 'stable'
