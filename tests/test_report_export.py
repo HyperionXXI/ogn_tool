@@ -36,3 +36,12 @@ def test_export_network_report_type_validation() -> None:
         assert str(exc) == 'Expected NetworkEngineeringReport'
     else:
         raise AssertionError('Expected TypeError when report is invalid')
+
+
+def test_report_contains_schema_version() -> None:
+    report = NetworkEngineeringReport()
+
+    data = export_network_report_json(report)
+    meta = data['report_metadata']
+
+    assert meta['report_schema_version'] == '1.0'

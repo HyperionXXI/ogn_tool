@@ -12,6 +12,7 @@ from .report_views import (
 )
 
 REPORT_EXPORT_VERSION = '1.0'
+REPORT_SCHEMA_VERSION = '1.0'
 
 
 
@@ -34,6 +35,7 @@ def export_network_report_json(report: NetworkEngineeringReport) -> dict[str, An
     return {
         'report_metadata': {
             'report_version': REPORT_EXPORT_VERSION,
+            'report_schema_version': REPORT_SCHEMA_VERSION,
             'generated_at': generated_at,
         },
         'network_status': get_network_status(report),
@@ -43,4 +45,4 @@ def export_network_report_json(report: NetworkEngineeringReport) -> dict[str, An
     }
 
 
-__all__ = ['REPORT_EXPORT_VERSION', 'export_network_report_json']
+__all__ = ['REPORT_EXPORT_VERSION', 'REPORT_SCHEMA_VERSION', 'export_network_report_json']
