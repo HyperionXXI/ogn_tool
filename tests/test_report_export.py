@@ -14,6 +14,7 @@ def test_export_network_report_json_structure() -> None:
     assert 'network_status' in data
     assert 'station_health' in data
     assert 'network_risk' in data
+    assert 'rf_signature_version' in data
     assert 'rf_signature' in data
     assert 'recommended_actions' in data
 
@@ -46,6 +47,14 @@ def test_report_contains_schema_version() -> None:
     meta = data['report_metadata']
 
     assert meta['report_schema_version'] == '1.0'
+
+
+def test_report_exports_rf_signature_version() -> None:
+    report = NetworkEngineeringReport()
+
+    data = export_network_report_json(report)
+
+    assert data['rf_signature_version'] == 2
 
 
 def test_report_exports_rf_signature() -> None:

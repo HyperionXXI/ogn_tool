@@ -14,6 +14,7 @@ from .report_views import (
 
 REPORT_EXPORT_VERSION = '1.0'
 REPORT_SCHEMA_VERSION = '1.0'
+RF_SIGNATURE_VERSION = 2
 
 
 
@@ -42,9 +43,10 @@ def export_network_report_json(report: NetworkEngineeringReport) -> dict[str, An
         'network_status': get_network_status(report),
         'station_health': get_station_health_summary(report),
         'network_risk': get_network_risk_summary(report),
+        'rf_signature_version': RF_SIGNATURE_VERSION,
         'rf_signature': get_rf_signature(report),
         'recommended_actions': get_recommended_actions(report),
     }
 
 
-__all__ = ['REPORT_EXPORT_VERSION', 'REPORT_SCHEMA_VERSION', 'export_network_report_json']
+__all__ = ['REPORT_EXPORT_VERSION', 'REPORT_SCHEMA_VERSION', 'RF_SIGNATURE_VERSION', 'export_network_report_json']
