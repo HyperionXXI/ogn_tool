@@ -80,6 +80,7 @@ def main() -> None:
     packets = rf_analysis_service.load_rf_receptions(
         db_path=DB_PATH,
         since_epoch=int(start_dt.timestamp()),
+        end_epoch=int(end_dt.timestamp()),
         limit_rows=LIMIT_ROWS,
         station_id=STATION_ID,
     )

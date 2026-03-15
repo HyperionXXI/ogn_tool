@@ -115,6 +115,7 @@ def load_packets_window(
 def load_rf_receptions(
     db_path: str,
     since_epoch: int,
+    end_epoch: int | None,
     limit_rows: int,
     station_id: str | None = None,
     query_log=None,
@@ -122,6 +123,7 @@ def load_rf_receptions(
     return data_service.load_rf_receptions(
         db_path=db_path,
         since_epoch=since_epoch,
+        end_epoch=end_epoch,
         limit_rows=limit_rows,
         station_id=station_id,
         query_log=query_log,
