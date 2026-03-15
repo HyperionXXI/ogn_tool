@@ -24,6 +24,7 @@ EXPECTED_DATAFRAME_METRICS = {
 }
 
 
+
 def _ensure_dict(metrics: dict[str, Any], key: str, warnings: list[str]) -> dict[str, Any]:
     value = metrics.get(key)
     if value is None:
@@ -69,7 +70,20 @@ def _collect_pipeline_warnings(metrics: dict[str, Any]) -> list[str]:
 
 
 
-def _build_recommended_actions(metrics: dict[str, Any], station_health: pd.DataFrame) -> list[str]:
+def _collect_station_dependency_levels(metrics: dict[str, Any], station_dependency: pd.DataFrame) -> list[str]:
+    if station_dependency.empty or 'station_id' not in station_dependency.columns:
+        return []
+
+    levels: list[str] = []
+    for station_id in station_dependency['station_id'].dropna().astype(str).tolist():
+        level = station_dependency_level(metrics, station_id)
+        if level is not None:
+            levels.append(level)
+    return levels
+
+
+
+def _build_recommended_actions(metrics: dict[str, Any], station_health: pd.DataFrame, station_dependency: pd.DataFrame) -> list[str]:
     actions: list[str] = []
 
     confidence_level = network_confidence_level(metrics)
@@ -85,14 +99,11 @@ def _build_recommended_actions(metrics: dict[str, Any], station_health: pd.DataF
         if not critical.empty:
             actions.append('Review CRITICAL stations first; they are currently the highest operational risk.')
 
-    dependency = metrics.get('station_dependency')
-    if isinstance(dependency, pd.DataFrame) and not dependency.empty and 'station_id' in dependency.columns:
-        has_critical_dependency = any(
-            station_dependency_level(metrics, str(station_id)) == 'critical'
-            for station_id in dependency['station_id'].dropna().astype(str).tolist()
-        )
-        if has_critical_dependency:
-            actions.append('Inspect critical station dependencies and validate overlap resilience.')
+    dependency_levels = _collect_station_dependency_levels(metrics, station_dependency)
+    if 'critical' in dependency_levels:
+        actions.append('Inspect critical station dependencies and validate overlap resilience.')
+    elif 'elevated' in dependency_levels:
+        actions.append('Review elevated station dependencies before changing network topology.')
 
     dominance = metrics.get('station_dominance')
     if isinstance(dominance, pd.DataFrame) and not dominance.empty and 'dominance_ratio' in dominance.columns:
@@ -114,8 +125,9 @@ def build_network_engineering_report(
 ) -> NetworkEngineeringReport:
     """Build the canonical network engineering report from existing analysis outputs.
 
-    This builder only projects and interprets current metric surfaces. It does
-    not compute or modify analysis metrics.
+    This builder only projects current metric surfaces and delegates
+    qualitative interpretation to the canonical metric view layer.
+    It does not compute or modify analysis metrics.
     """
     metrics = metrics if isinstance(metrics, dict) else {}
     warnings = _collect_pipeline_warnings(metrics)
@@ -136,7 +148,7 @@ def build_network_engineering_report(
         station_dependency=station_dependency,
         station_dominance=station_dominance,
         spatial_observations=spatial_frame,
-        recommended_actions=_build_recommended_actions(metrics, station_health),
+        recommended_actions=_build_recommended_actions(metrics, station_health, station_dependency),
         input_warnings=warnings,
     )
     return report

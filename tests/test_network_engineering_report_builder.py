@@ -56,3 +56,23 @@ def test_network_engineering_report_builder_propagates_metric_tables() -> None:
     assert report.station_dependency.equals(station_dependency)
     assert report.station_dominance.equals(station_dominance)
     assert report.spatial_observations.equals(spatial_observations)
+
+
+
+def test_network_engineering_report_builder_uses_metric_views_for_recommended_actions() -> None:
+    metrics = {
+        'station_health': pd.DataFrame([{'station_id': 'S1', 'health_status': 'GOOD'}]),
+        'network_summary': {'network_status': 'WARNING'},
+        'station_dependency': pd.DataFrame([
+            {'station_id': 'S1', 'depends_on_station': 'S2', 'dependency_strength': 0.5, 'dependency_type': 'shared_coverage_bias', 'notes': 'x'},
+        ]),
+        'network_redundancy': {'redundancy_score': 0.35},
+        'network_confidence': {'confidence_score': 0.75},
+        'station_dominance': pd.DataFrame(),
+    }
+
+    report = build_network_engineering_report(metrics, pd.DataFrame())
+
+    assert 'Collect more observations before making structural network decisions.' not in report.recommended_actions
+    assert 'Prioritize redundancy improvements around single-station or weak-overlap areas.' in report.recommended_actions
+    assert 'Review elevated station dependencies before changing network topology.' in report.recommended_actions
