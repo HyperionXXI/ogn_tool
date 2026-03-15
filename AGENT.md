@@ -91,3 +91,64 @@ Refactors must:
 - preserve behaviour
 - not modify database schema unless explicitly requested
 - not modify collector without approval
+
+
+# Network Analysis Architecture (v2)
+
+The current RF/network analysis architecture is organized in layers:
+
+analysis/network_metrics
+    Computes raw network metrics from rf observations.
+
+analysis/network_metric_views
+    Converts raw metrics into qualitative engineering levels
+    (confidence, redundancy, dependency, etc.).
+
+analysis/network_intelligence
+    Produces higher-level network diagnostics and derived insights.
+
+Rules:
+- network_metrics computes metrics only.
+- network_metric_views interprets metrics into qualitative levels.
+- network_intelligence may combine multiple metrics to derive insights.
+
+
+# Pipeline Layer
+
+The pipeline layer orchestrates the analysis workflow.
+
+pipeline modules:
+- load datasets
+- execute analysis modules
+- assemble metric surfaces
+
+Pipeline modules must NOT contain RF analysis logic.
+
+
+# Reporting Layer
+
+The reporting layer projects analysis results into structured reports.
+
+reporting modules:
+- build NetworkEngineeringReport
+- interpret qualitative levels from network_metric_views
+- present analysis outputs in engineering form
+
+Rules:
+- reporting modules MUST NOT compute metrics
+- reporting modules MUST rely on metric views or analysis outputs
+
+
+# Code Quality Principles
+
+The project follows a "Swiss engineering" coding discipline.
+
+Rules:
+- Every module must contain a top-level docstring describing its purpose.
+- Public functions must include docstrings explaining parameters and design intent.
+- Algorithmic thresholds must be documented with comments.
+- Avoid ambiguous variable names (df, tmp, data, res).
+- Code readability is preferred over compactness.
+
+Refactors whose only purpose is readability should be avoided by writing
+clear and documented code from the beginning.
