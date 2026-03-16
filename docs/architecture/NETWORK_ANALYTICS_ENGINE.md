@@ -57,6 +57,24 @@ Minimal structure:
 
 ---
 
+
+## Analytics Engines Diagram
+
+```
+            report.json
+                │
+   ┌────────────┼─────────────┐
+   │            │             │
+Network     Spatial       Temporal
+Intelligence Intelligence Intelligence
+   │            │             │
+Diagnostics  Coverage      Stability
+Risk flags   gaps          availability
+Actions      placement     evolution
+```
+
+---
+
 ## Analytical Layers and Modules
 
 
@@ -106,7 +124,50 @@ Minimal structure:
 
 ---
 
-## Module Boundaries and Migration Rule
+- analysis/ = primitives analytiques (calculs, métriques, transformations)
+- analytics engines = orchestration, diagnostics, intelligence, outputs
+- Ne jamais mélanger les responsabilités.
+- Chaque module expose une API stable et des outputs documentés.
+
+---
+
+## Dependency Rule
+
+Allowed dependencies:
+
+- analysis → (no internal dependency to analytics engines)
+- network_intelligence → analysis
+- spatial_intelligence → analysis
+- temporal_intelligence → analysis
+- reporting → analytics engines
+- apps / UI → reporting
+
+Forbidden dependencies:
+
+- analysis → reporting
+- analysis → apps
+- analytics engines → UI
+- reporting → analysis primitives directly
+
+---
+
+## Canonical Analytics Engine APIs
+
+### Network Intelligence
+- analyze_network_health(report)
+- detect_spof(report)
+- compute_network_redundancy(report)
+- generate_recommended_actions(report)
+
+### Spatial Intelligence
+- detect_coverage_gaps(report)
+- build_rf_corridors(report)
+- suggest_station_placements(report)
+
+### Temporal Intelligence
+- compute_station_availability(runs)
+- detect_temporal_gaps(runs)
+- analyze_network_stability(runs)
 - analysis/ = primitives analytiques (calculs, métriques, transformations)
 - analytics engines = orchestration, diagnostics, intelligence, outputs
 - Ne jamais mélanger les responsabilités.
