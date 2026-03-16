@@ -22,14 +22,16 @@ def main():
     engine = RFAnalysisEngine(packets, args.station_lat, args.station_lon)
     result = engine.run(RFAnalysisDataset(observations=[]))
 
+    from ogn_tool.reporting.rf_analysis_report import build_rf_analysis_report, export_rf_analysis_report
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-
+    report = build_rf_analysis_report(result)
+    export_rf_analysis_report(report, str(out_dir))
+    # Optionally keep legacy outputs for compatibility
     coverage_df = result.coverage if isinstance(result.coverage, pd.DataFrame) else pd.DataFrame()
     propagation_df = (result.metrics or {}).get("distance_df")
     if not isinstance(propagation_df, pd.DataFrame):
         propagation_df = pd.DataFrame()
-
     coverage_df.to_csv(out_dir / "coverage.csv", index=False)
     propagation_df.to_csv(out_dir / "propagation.csv", index=False)
     with open(out_dir / "metrics.json", "w", encoding="utf-8") as f:

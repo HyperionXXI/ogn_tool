@@ -10,7 +10,10 @@ from ogn_tool.analysis.network_metric_views import (
     station_dependency_level,
 )
 
+
 from .network_engineering_report import NetworkEngineeringReport
+from ogn_tool.reporting.report_views import temporal_observability_view
+from ogn_tool.analysis.temporal_observability import compute_temporal_observability
 
 EXPECTED_DICT_METRICS = {
     'network_summary',
@@ -140,6 +143,17 @@ def build_network_engineering_report(
     station_dominance = _ensure_dataframe(metrics, 'station_dominance', warnings)
     spatial_frame = _ensure_spatial_observations(spatial_observations, warnings)
 
+
+    # Calcul de l'observabilité temporelle
+    if spatial_frame is not None and not spatial_frame.empty and 'ts_epoch' in spatial_frame.columns:
+        ts = spatial_frame['ts_epoch']
+        window_hours = int((ts.max() - ts.min()) // 3600) + 1 if len(ts) > 0 else 0
+        temporal = compute_temporal_observability(ts, window_hours)
+        temporal_observability = temporal_observability_view(temporal)
+    else:
+        temporal_observability = {}
+
+    analysis_stats = metrics.get('analysis_stats', {})
     report = NetworkEngineeringReport(
         network_summary=network_summary,
         station_health_table=station_health,
@@ -150,6 +164,8 @@ def build_network_engineering_report(
         spatial_observations=spatial_frame,
         recommended_actions=_build_recommended_actions(metrics, station_health, station_dependency),
         input_warnings=warnings,
+        temporal_observability=temporal_observability,
+        analysis_stats=analysis_stats,
     )
     return report
 

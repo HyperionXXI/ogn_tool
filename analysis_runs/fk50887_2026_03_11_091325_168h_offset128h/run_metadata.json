@@ -1,0 +1,27 @@
+{
+  "bundle_version": "1.0",
+  "comparability": {
+    "analysis_version": "2026.03",
+    "config_identity": "fk50887_station_v1",
+    "schema_version": "1.0",
+    "time_window_duration_s": 604800,
+    "time_window_end": "2026-03-11T09:13:25Z",
+    "time_window_start": "2026-03-04T09:13:25Z"
+  },
+  "dataset": {
+    "dataset_id": "7364faa10c4754ac",
+    "packet_count": 1770,
+    "source": "ogn_sqlite",
+    "time_end": "2026-03-11T09:13:25Z",
+    "time_start": "2026-03-04T09:13:25Z"
+  },
+  "generated_at": "2026-03-16T17:13:40Z",
+  "metadata": {
+    "analysis_scope": "station_signature",
+    "data_freshness_lag_hours": 128,
+    "db_path": "F:\\Data\\ogn\\ogn_log.sqlite3",
+    "end_offset_hours": 128,
+    "station_id": "FK50887",
+    "window_hours": 168
+  }
+}

@@ -58,6 +58,8 @@ class RFAnalysisResults:
     station_suggestions: Optional[Any] = None
     # Summary/compatibility container only. Must not become a second results object.
     metrics: Optional[dict] = None
+    # Canonical spatial observation frame for geospatial analysis
+    spatial_observations: Optional[Any] = None
 
     def validate(self) -> None:
         if self.metrics is not None:

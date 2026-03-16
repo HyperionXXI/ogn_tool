@@ -152,6 +152,7 @@ def run_network_graph_stage(dataset, previous_graph=None) -> dict:
         },
         "evolution": network_evolution,
         "station_suggestions": station_suggestions,
+        "spatial_observations": spatial_observations,
     }
 
 

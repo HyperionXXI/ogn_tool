@@ -16,6 +16,8 @@ class StationRFDiagnostics:
     interpretation: str
 
 
+
+
 @dataclass
 class NetworkEngineeringReport:
     """Canonical typed report projection for the network analysis engine."""
@@ -30,6 +32,8 @@ class NetworkEngineeringReport:
     rf_signature: dict[str, Any] = field(default_factory=dict)
     recommended_actions: list[str] = field(default_factory=list)
     input_warnings: list[str] = field(default_factory=list)
+    temporal_observability: dict[str, Any] = field(default_factory=dict)
+    analysis_stats: dict[str, Any] = field(default_factory=dict)
 
 
 from .network_engineering_report_builder import build_network_engineering_report

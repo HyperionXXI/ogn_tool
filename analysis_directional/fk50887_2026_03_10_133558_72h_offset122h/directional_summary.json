@@ -1,0 +1,59 @@
+{
+  "coverage": "broad",
+  "directional_balance": 0.8805233100501332,
+  "dominant_arc": {
+    "count": 508,
+    "end_deg": 120.0,
+    "label": "90\u00b0-120\u00b0",
+    "share": 0.2888,
+    "start_bin": 9,
+    "start_deg": 90.0,
+    "width_bins": 3
+  },
+  "dominant_arc_share": 0.2888,
+  "interpretation": {
+    "anisotropy": "broad",
+    "confidence": "high",
+    "dominant_sector_strength": "clear dominant sector",
+    "hard_shadow_detected": false,
+    "notes": [
+      "Station angular entropy is unavailable.",
+      "Shadow risk scores are unavailable."
+    ],
+    "summary_sentence": "Broad coverage with a clear reinforcement toward east / east-southeast (28.9% of usable packets)."
+  },
+  "packet_count": 1759,
+  "run_id": "fk50887_2026_03_10_133558_72h_offset122h",
+  "shadow_risk_scores": {},
+  "station_angular_entropy": {},
+  "top_bin": {
+    "count": 213,
+    "end_deg": 100.0,
+    "label": "90\u00b0-100\u00b0",
+    "share": 0.1211,
+    "start_deg": 90.0
+  },
+  "top_sectors": [
+    {
+      "count": 213,
+      "end_deg": 100.0,
+      "label": "90\u00b0-100\u00b0",
+      "share": 0.1211,
+      "start_deg": 90.0
+    },
+    {
+      "count": 161,
+      "end_deg": 120.0,
+      "label": "110\u00b0-120\u00b0",
+      "share": 0.0915,
+      "start_deg": 110.0
+    },
+    {
+      "count": 134,
+      "end_deg": 110.0,
+      "label": "100\u00b0-110\u00b0",
+      "share": 0.0762,
+      "start_deg": 100.0
+    }
+  ]
+}

@@ -153,6 +153,17 @@ class RFAnalysisEngine:
         dataset.results.network_evolution = network["evolution"]
         dataset.results.station_suggestions = network["station_suggestions"]
 
+        # Attach spatial_observations to results if present in network stage output
+        if "spatial_observations" in network:
+            dataset.results.spatial_observations = network["spatial_observations"]
+        else:
+            # Try to build from observations as fallback
+            try:
+                from ogn_tool.analysis.observation_views import build_spatial_observation_frame
+                dataset.results.spatial_observations = build_spatial_observation_frame(dataset.observations)
+            except Exception:
+                dataset.results.spatial_observations = None
+
         return dataset.results
 
     def run_from_observations(self, observations: Optional[List[RFObservationVector]] = None) -> RFAnalysisResults:

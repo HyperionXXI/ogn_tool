@@ -1,0 +1,63 @@
+{
+  "network_risk": {
+    "confidence_score": 0.4,
+    "redundancy_interpretation": "critical network",
+    "redundancy_score": 0.2875,
+    "risk_warnings": [
+      "Too few stations to infer network structure reliably.",
+      "Observed redundancy is too sparse for robust network inference.",
+      "spatial_observations missing from reporting inputs"
+    ]
+  },
+  "network_status": {
+    "critical_station_count": 1,
+    "input_warnings": [
+      "Too few stations to infer network structure reliably.",
+      "Observed redundancy is too sparse for robust network inference.",
+      "spatial_observations missing from reporting inputs"
+    ],
+    "network_status": "DEGRADED",
+    "notes": "network contains at least one critical station",
+    "top_critical_station": "FK50887",
+    "warning_station_count": 0
+  },
+  "recommended_actions": [
+    "Collect more observations before making structural network decisions.",
+    "Prioritize redundancy improvements around single-station or weak-overlap areas.",
+    "Review CRITICAL stations first; they are currently the highest operational risk.",
+    "Investigate stations with highly concentrated unique coverage."
+  ],
+  "report_metadata": {
+    "generated_at": "2026-03-15T22:56:54Z",
+    "report_schema_version": "1.0",
+    "report_version": "1.0"
+  },
+  "rf_signature": {
+    "anisotropy_index": 4.589296452194829,
+    "corridor_center_deg": 105.0,
+    "corridor_width_deg": 30.0,
+    "direction_entropy": 0.9139265359781147,
+    "distance_spread_index": 0.6666666666666666,
+    "dominant_corridor_end_deg": 120.0,
+    "dominant_corridor_share": 0.29825616355983164,
+    "dominant_corridor_start_deg": 90.0,
+    "dominant_distance_band_km": [
+      0.0,
+      10.0
+    ],
+    "dominant_distance_band_share": 0.5598316295850871,
+    "interpretation": "directional traffic corridor likely",
+    "nonzero_distance_band_count": 10,
+    "packet_count": 1663
+  },
+  "rf_signature_version": 2,
+  "station_health": {
+    "critical_count": 1,
+    "critical_stations": [
+      "FK50887"
+    ],
+    "good_count": 0,
+    "station_count": 1,
+    "warning_count": 0
+  }
+}

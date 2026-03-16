@@ -1,4 +1,20 @@
+
 from __future__ import annotations
+
+def test_get_network_status_with_minimal_dict():
+    from ogn_tool.reporting.report_views import get_network_status
+    report = {
+        "metadata": {},
+        "summary_metrics": {},
+        "rf_metrics": {},
+        "coverage_metrics": {},
+        "network_metrics": {},
+        "diagnostics": {}
+    }
+    result = get_network_status(report)
+    print(result)
+    assert result["network_status"] == "unknown"
+    assert result["critical_station_count"] == 0
 
 import pandas as pd
 
