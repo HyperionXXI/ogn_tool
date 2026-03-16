@@ -1,16 +1,9 @@
 
 # Network Analytics Engine Architecture
+Status: Canonical Architecture Specification
 
 ## Position in the Global Architecture
 
-```
-APRS / OGN data
-   ↓
-Data repositories
-   ↓
-RF Engine
-   ↓
-Analysis primitives (src/ogn_tool/analysis/)
    ↓
 Analytics Engines (network_intelligence, spatial_intelligence, temporal_intelligence)
    ↓
