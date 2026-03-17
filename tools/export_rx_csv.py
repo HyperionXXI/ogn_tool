@@ -1,5 +1,9 @@
 # tools/export_rx_csv.py
-import sqlite3, re, csv, datetime, argparse
+import sqlite3
+import re
+import csv
+import datetime
+import argparse
 
 re_db = re.compile(r'([+-]?\d+(?:\.\d+)?)dB\b')
 
@@ -32,7 +36,8 @@ def main():
         for ts,src,dst,qas,igate,lat,lon,raw in rows:
             m = re_db.search(raw or "")
             dbval = float(m.group(1)) if m else ""
-            if m: n_db += 1
+            if m:
+                n_db += 1
             w.writerow([ts,src,dst,qas,igate,lat,lon,dbval,raw])
 
     db.close()

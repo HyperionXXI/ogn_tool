@@ -16,7 +16,6 @@ def detect_station_anomalies(network_metrics: dict | None) -> pd.DataFrame:
         return pd.DataFrame(columns=["station_id", "anomaly_type", "severity", "description", "metric_value"])
 
     summary = visibility.get("summary") if isinstance(visibility, dict) else {}
-    dependency = visibility.get("dependency") if isinstance(visibility, dict) else None
 
     mean_stations = float((summary or {}).get("mean_stations_per_aircraft", 0.0) or 0.0)
     aircraft_seen_series = pd.to_numeric(influence.get("aircraft_seen"), errors="coerce") if "aircraft_seen" in influence.columns else pd.Series(dtype=float)

@@ -1,3 +1,5 @@
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.
+
 # Analysis Snapshot Contract
 
 ## Purpose

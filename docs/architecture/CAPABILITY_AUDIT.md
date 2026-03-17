@@ -1,3 +1,5 @@
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.
+
 # RF Analysis Capability Audit
 
 This document tracks analytical capabilities implemented in the project
@@ -35,6 +37,10 @@ are part of the active network intelligence surface.
 
 These capabilities remain part of the RF analysis kernel and are already
 connected to the typed RF results path.
+
+See also:
+  - [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)
+  - [INDEX.md](INDEX.md)
 
 ## Previously Implemented Or Transitional Capabilities
 

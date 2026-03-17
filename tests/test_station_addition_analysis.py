@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from ogn_tool.models.scenario_result import ScenarioResult
 from ogn_tool.models.station_addition_evaluation import StationAdditionEvaluation

@@ -105,7 +105,6 @@ def analyze(
     p95_min = float(valid_sectors["p95_distance_km"].min())
     anisotropy_ratio = float(p95_max / max(p95_min, 1e-6))
 
-    traffic_ratio = float(valid_sectors["packet_count"].max() / max(valid_sectors["packet_count"].min(), 1e-6))
 
     # Thresholds (simple, documented):
     # anisotropy < 1.5 -> GOOD; < 2.5 -> FAIR; >= 2.5 -> POOR

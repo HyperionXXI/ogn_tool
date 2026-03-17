@@ -1,5 +1,9 @@
 # tools/top_rx_distances.py
-import sqlite3, math, re, datetime, argparse
+import sqlite3
+import math
+import re
+import datetime
+import argparse
 
 re_db = re.compile(r'([+-]?\d+(?:\.\d+)?)dB\b')
 
@@ -34,7 +38,8 @@ def main():
 
     best = {}  # src -> (dist, ts, db, lat, lon)
     for src, lat, lon, ts, raw in rows:
-        lat = float(lat); lon = float(lon)
+        lat = float(lat)
+        lon = float(lon)
         dist = hav_km(args.home_lat, args.home_lon, lat, lon)
         m = re_db.search(raw or "")
         dbval = float(m.group(1)) if m else None

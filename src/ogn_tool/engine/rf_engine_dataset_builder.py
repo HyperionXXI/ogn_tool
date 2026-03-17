@@ -29,7 +29,7 @@ typed runtime fully replaces the legacy dataset path.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict
 
 import pandas as pd
 
@@ -50,7 +50,6 @@ from ogn_tool.engine.rf_dataset_builder import build_observations
 from ogn_tool.analysis.rf_metrics.directional_analysis import build_directional_diagnostics
 from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
 from ogn_tool.analysis.rf_metrics.rf_statistics import summarize_signal_quality
-from ogn_tool.analysis.normalization.observation_builder import build_observations as build_observation_payload
 from ogn_tool.engine.rf_model_runner import run
 from ogn_tool.engine.rf_models_registry import MODELS
 from ogn_tool.analysis.normalization.observation_rows import observations_to_rows

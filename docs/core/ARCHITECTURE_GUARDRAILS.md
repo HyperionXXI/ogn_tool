@@ -1,5 +1,7 @@
 # Architecture Guardrails
 
+Source of truth: docs/core/SYSTEM_ARCHITECTURE.md
+
 This document defines the architectural invariants of the project.
 
 These guardrails must be respected by:

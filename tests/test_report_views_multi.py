@@ -1,5 +1,4 @@
 import json
-import pytest
 from ogn_tool.reporting.report_views import get_network_status
 
 def test_report_views_on_multiple_artifacts():

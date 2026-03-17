@@ -54,3 +54,5 @@ analysis -> DataFrame -> runtime
 ## Status
 
 Typed boundary introduced first for station addition evaluations.
+
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.

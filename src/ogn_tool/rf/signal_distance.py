@@ -7,12 +7,10 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-import re
 import numpy as np
 import pandas as pd
 
 
-RSSI_RE = re.compile(r"([0-9]+(?:\.[0-9]+)?)dB")
 
 
 def _haversine_km_vector(

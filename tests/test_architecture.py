@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-
+import shutil
+import subprocess
 
 APPS_ROOT = Path(__file__).resolve().parents[1] / "apps"
 
@@ -41,8 +42,6 @@ def test_ui_layer_has_no_sql_or_services():
     assert not violations, "\n".join([f"{p}: {reason}" for p, reason in violations])
 
 
-import shutil
-import subprocess
 
 
 def test_architecture():

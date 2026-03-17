@@ -263,3 +263,5 @@ Future additions are allowed only when they remain:
 
 UI-specific concepts such as palettes, interpolation, and hover labels
 must remain outside this projection.
+
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.

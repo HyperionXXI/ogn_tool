@@ -1,5 +1,7 @@
 # tools/rx_stats.py
-import sqlite3, re, datetime
+import sqlite3
+import re
+import datetime
 
 DB = "ogn_log.sqlite3"
 IGATE = "FK50887"

@@ -96,7 +96,6 @@ def render_diagnostics(diagnostics: dict) -> None:
 
 @st.cache_data
 def cached_rf_analysis(df):
-    from ogn_tool.pipeline.rf_analysis_pipeline import run_rf_analysis
     return run_rf_analysis(df)
 
 def render_station_intelligence_page(ctx: dict) -> None:

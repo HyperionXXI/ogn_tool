@@ -1,5 +1,5 @@
-STATUS: canonical
-SOURCE_OF_TRUTH: docs/core/RF_ARCHITECTURE.md
+
+Source of truth: docs/core/SYSTEM_ARCHITECTURE.md
 
 This document describes the current RF and network analysis
 architecture.

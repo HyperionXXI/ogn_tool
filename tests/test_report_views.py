@@ -1,6 +1,16 @@
 
 from __future__ import annotations
 
+import pandas as pd
+from ogn_tool.reporting.network_engineering_report import NetworkEngineeringReport
+from ogn_tool.reporting.report_views import (
+    get_network_risk_summary,
+    get_network_status,
+    get_recommended_actions,
+    get_rf_signature,
+    get_station_health_summary,
+)
+
 def test_get_network_status_with_minimal_dict():
     from ogn_tool.reporting.report_views import get_network_status
     report = {
@@ -15,17 +25,6 @@ def test_get_network_status_with_minimal_dict():
     print(result)
     assert result["network_status"] == "unknown"
     assert result["critical_station_count"] == 0
-
-import pandas as pd
-
-from ogn_tool.reporting.network_engineering_report import NetworkEngineeringReport
-from ogn_tool.reporting.report_views import (
-    get_network_risk_summary,
-    get_network_status,
-    get_recommended_actions,
-    get_rf_signature,
-    get_station_health_summary,
-)
 
 
 

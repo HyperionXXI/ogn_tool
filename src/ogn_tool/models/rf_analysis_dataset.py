@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from .rf_analysis_results import RFAnalysisResults
-from .rf_observation_vector import RFObservationVector
 
 
 @dataclass

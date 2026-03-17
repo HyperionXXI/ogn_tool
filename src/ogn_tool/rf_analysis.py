@@ -22,9 +22,7 @@ import numpy as np
 
 @dataclass(frozen=True)
 class AzimuthStats:
-    angles_rad: np.ndarray
     max_distance_km: np.ndarray
-    p90_distance_km: np.ndarray
     best_rssi_db: np.ndarray
     packet_count: np.ndarray
 

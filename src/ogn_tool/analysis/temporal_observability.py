@@ -14,7 +14,6 @@ Mesure l'activité temporelle du flux, pas la performance RF réelle.
 
 from dataclasses import dataclass
 import pandas as pd
-import numpy as np
 
 @dataclass
 class TemporalObservability:

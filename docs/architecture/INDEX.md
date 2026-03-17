@@ -1,3 +1,4 @@
+
 # Architecture Documentation
 
 This directory contains the canonical architecture-level documents for the
@@ -6,60 +7,110 @@ project.
 Use this directory for:
 - architectural decisions
 - contract documents
-- repository governance
-- migration rules
-- reporting and runtime surface definitions
 
-Do not use this directory for:
-- implementation notes tied to one refactor
-- temporary audits
-- developer scratch notes
+# Architecture Documentation
 
-## Recommended Reading Order
+This directory contains the canonical architecture documentation for the project.
 
-1. `ADR-001-project-vision.md`
-   Project vision and long-term architectural direction.
+The architecture documentation is organized into the following categories.
 
-2. `REPOSITORY_CLASSIFICATION.md`
-   Canonical vs transitional vs legacy repository structure.
+---
 
-3. `ENGINE_RULES.md`
-   Rules for engine builders, intelligence modules, and UI boundaries.
+# Vision / Architectural Decisions
 
-4. `CONSUMER_SURFACE_GOVERNANCE.md`
-   Rules for authoritative surfaces, reporting projections, and consumer boundaries.
+- ADR-001-project-vision.md
 
-5. `SPATIAL_PROJECTION_CONTRACT.md`
-   Stable contract for spatial reporting projections consumed by map-first interfaces.
+---
 
-6. `AZIMUTH_DISTANCE_CONTRACT.md`
-   Contract for the azimuth-distance RF matrix primitive and its future projections.
+# Core Architecture
 
-7. `AZIMUTH_DISTANCE_PROJECTION_CONTRACT.md`
-   Stable contract for the azimuth-distance reporting projection consumed by external consumers.
+Documents defining the global architecture of the system.
 
-8. `RF_METRIC_CONTRACT.md`
-   Runtime contract for typed network metrics.
+- SYSTEM_ARCHITECTURE.md (canonical architecture pivot)
+- NETWORK_ANALYTICS_ENGINE.md (analytics engines architecture)
+- ENGINE_RULES.md (rules for engine builders and module boundaries)
+- DATA_CONTRACT.md (canonical data artifacts and schemas)
 
-9. `RUNTIME_API_MIGRATION.md`
-   Rules for migrating from legacy `ctx[...]` usage to `results.*`.
+---
 
-10. `OBSERVATION_GRAPH_CONTRACT.md`
-   Future canonical network-centric observation model.
+# Contracts
 
-11. `NETWORK_ENGINEERING_REPORT.md`
-   Contract for the reporting layer built on typed results.
+Stable contracts between system components and external consumers.
 
-12. `EXECUTIVE_ARCHITECTURE_AUDIT.md`
-   Current executive-level maturity, risk and effort assessment.
+- AZIMUTH_DISTANCE_CONTRACT.md
+- AZIMUTH_DISTANCE_PROJECTION_CONTRACT.md
+- RF_METRIC_CONTRACT.md
+- SPATIAL_PROJECTION_CONTRACT.md
+- ANALYSIS_DIFF_CONTRACT.md
+- ANALYSIS_RUNTIME_TYPED_BOUNDARY.md
+- ANALYSIS_SNAPSHOT_CONTRACT.md
+- OPERATIONAL_HANDOFF.md
+- KERNEL_RUNTIME_CONTRACT.md
+- OBSERVATION_GRAPH_CONTRACT.md
 
-13. `CAPABILITY_AUDIT.md`
-   Capability inventory and reconnection status.
+---
 
-## Status Rules
+# Governance
 
-- `docs/architecture/` = canonical architectural governance
-- `docs/core/` = explanatory system/domain documentation
-- `docs/internal/` = working notes, audits, and non-canonical snapshots
+Documents defining repository structure, architectural governance and
+consumer boundaries.
 
-When an architectural rule changes, update this directory first.
+- CONSUMER_SURFACE_GOVERNANCE.md
+- REPOSITORY_CLASSIFICATION.md
+- RUNTIME_API_MIGRATION.md
+
+---
+
+# Concepts
+
+Documents explaining analytical concepts and models used by the system.
+
+- NETWORK_ENGINEERING_REPORT.md
+- REPORT_MODEL.md
+- STATION_DOMINANCE.md
+- NETWORK_REDUNDANCY_SCORE.md
+- SHADOW_COVERAGE_ILLUSION.md
+- OBSERVATIONAL_COVERAGE_BIAS.md
+- KERNEL_RISK_NOTE.md
+- METRIC_DEPENDENCY_MAP.md
+
+---
+
+# Audits
+
+Internal architecture assessments and capability reviews.
+
+- EXECUTIVE_ARCHITECTURE_AUDIT.md
+- CAPABILITY_AUDIT.md
+
+---
+
+# Status Rules
+
+- docs/architecture/ = canonical architecture governance
+- docs/core/ = explanatory domain and system documentation
+- docs/internal/ = working notes and non-canonical documents
+---
+
+# Audits
+
+Internal architecture assessments and capability reviews.
+
+- EXECUTIVE_ARCHITECTURE_AUDIT.md
+- CAPABILITY_AUDIT.md
+
+---
+
+# Vision
+
+Long-term architectural direction and product intent.
+
+- ADR-001-project-vision.md
+
+---
+
+# Status Rules
+
+- docs/architecture/ = canonical architecture governance
+- docs/core/ = explanatory domain and system documentation
+- docs/internal/ = working notes and non-canonical documents

@@ -1,5 +1,9 @@
 # Executive Architecture Audit
 
+See also:
+  - [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)
+  - [INDEX.md](INDEX.md)
+
 Date: 2026-03-14
 Scope: repository-wide architectural audit
 Status: canonical executive audit
@@ -223,3 +227,5 @@ The most accurate present reading is:
 - production readiness: distant
 
 This is a strong analytical foundation, not yet a finished engineering product.
+
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.

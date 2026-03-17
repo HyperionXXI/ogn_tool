@@ -1,6 +1,12 @@
 Network Engineering Report
 =========================
 
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.
+
+See also:
+	- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)
+	- [INDEX.md](INDEX.md)
+
 Purpose
 -------
 

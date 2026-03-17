@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
 
 
 def detect_analysis_anomalies(diff: dict[str, object]) -> list[str]:

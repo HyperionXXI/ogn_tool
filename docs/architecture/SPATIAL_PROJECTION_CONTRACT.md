@@ -1,3 +1,5 @@
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.
+
 # Spatial Projection Contract
 
 Status: ACTIVE

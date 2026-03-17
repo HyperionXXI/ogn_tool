@@ -1,3 +1,5 @@
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.
+
 # RF Metric Contract
 
 This document defines the current contract between the analytical engine
@@ -5,20 +7,13 @@ and its runtime consumers for typed network metrics.
 
 The goal is to prevent contract drift between:
 
-- the analytical engine
-- runtime adapters
-- UI pages
-- scripts and developer tooling
 
 The canonical typed surface is:
 
-- `RFAnalysisResults`
-- `RFAnalysisResults.network_metrics`
 
 The legacy runtime context (`ctx[...]`) is compatibility-only and must
 not be treated as the source of truth.
 
----
 
 ## Canonical Rule
 
@@ -29,13 +24,15 @@ not be treated as the source of truth.
 Any change to keys, types, DataFrame columns, or semantic meaning in
 `results.network_metrics` must be treated as an architectural change.
 
----
 
 ## Network Metrics Container
 
 Typed network metrics are exposed through:
 
-- `results.network_metrics`
+
+See also:
+  - [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)
+  - [INDEX.md](INDEX.md)
 
 Current canonical keys:
 

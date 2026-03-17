@@ -1,3 +1,5 @@
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.
+
 # Observation Graph Contract
 
 This document defines the minimal canonical multi-station observation

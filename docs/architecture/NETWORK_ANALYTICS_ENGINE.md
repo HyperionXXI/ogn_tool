@@ -1,6 +1,10 @@
-
 # Network Analytics Engine Architecture
+See also:
+   - [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md)
+   - [INDEX.md](INDEX.md)
 Status: Canonical Architecture Specification
+
+> **Reference:** See SYSTEM_ARCHITECTURE.md for the global architecture context.
 
 ## Position in the Global Architecture
 
@@ -51,22 +55,30 @@ Minimal structure:
 ---
 
 
+
 ## Analytics Engines Diagram
 
 ```
             report.json
                 │
-   ┌────────────┼─────────────┐
-   │            │             │
-Network     Spatial       Temporal
-Intelligence Intelligence Intelligence
-   │            │             │
-Diagnostics  Coverage      Stability
-Risk flags   gaps          availability
-Actions      placement     evolution
+   ┌────────────┬─────────────┬──────────────┬───────────────┐
+   │            │             │              │
+Network      Spatial        Temporal       Scenario
+Intelligence Intelligence  Intelligence   Intelligence
+   │            │             │              │
+Diagnostics  Coverage      Stability     Network
+Risk flags   gaps          activity      planning
+Actions      placement     availability  optimization
+                                         scenario ranking
+---
+
+> **Note:**
+> The actual logic for the analytics engines (network, spatial, temporal, scenario) currently resides in `analysis/` and `src/ogn_tool/`.
+> The `*_intelligence` directories are not used for real logic at this time and may be empty or removed. Refer to `analysis/` for the canonical implementations.
 ```
 
 ---
+
 
 ## Analytical Layers and Modules
 
@@ -100,6 +112,21 @@ Actions      placement     evolution
 
 
 ### 3. Temporal Intelligence Engine
+
+### 4. Scenario Intelligence Engine
+**Responsibility:** Network planning, scenario simulation, optimization, station addition/removal, scenario ranking.
+
+**Sous-modules :**
+- station_addition_simulation
+- station_removal_simulation
+- multi_station_planner
+- scenario_ranking
+- network_priority_scoring
+- redundancy_planner
+
+**Contrat :**
+- Input : report.json, scenario definitions, network state
+- Output : scenario evaluations, planning recommendations, optimization results
 **Responsibility:** Analyse temporelle du réseau, stabilité, activité, gaps.
 
 **Sous-modules :**
@@ -144,6 +171,7 @@ Forbidden dependencies:
 
 ---
 
+
 ## Canonical Analytics Engine APIs
 
 ### Network Intelligence
@@ -157,10 +185,18 @@ Forbidden dependencies:
 - build_rf_corridors(report)
 - suggest_station_placements(report)
 
+
 ### Temporal Intelligence
 - compute_station_availability(runs)
 - detect_temporal_gaps(runs)
 - analyze_network_stability(runs)
+
+### Scenario Intelligence
+- simulate_station_addition(report, scenario)
+- simulate_station_removal(report, scenario)
+- plan_multi_station_optimization(report, scenario)
+- rank_scenarios(report, scenarios)
+- compute_network_priority(report, scenario)
 - analysis/ = primitives analytiques (calculs, métriques, transformations)
 - analytics engines = orchestration, diagnostics, intelligence, outputs
 - Ne jamais mélanger les responsabilités.

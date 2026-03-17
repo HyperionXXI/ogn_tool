@@ -1,28 +1,21 @@
-STATUS: canonical
-SOURCE_OF_TRUTH: docs/core/ARCHITECTURE_OVERVIEW.md
 
-This document is subordinate to docs/core/ROADMAP_MASTER.md.
-If contradictions exist, docs/core/ROADMAP_MASTER.md is the canonical source.
 
-# Architecture Overview
+# Architecture Navigation Overview
 
-This document provides a compact architecture view for the RF observatory stack.
+Source of truth: docs/core/SYSTEM_ARCHITECTURE.md
 
-## Diagram
+Ce document sert de point d’entrée pour la navigation documentaire du système ogn_tool.
+Il oriente vers les vues d’architecture, la description système, les invariants et la feuille de route.
 
-```
-DATA SOURCES
-  -> raw_packets
-  -> rf_receptions
-  -> RF engine
-  -> network analysis
-  -> UI
-```
+## Navigation rapide
 
-## Layer intent
+- [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) — Description système pivot
+- [RF_ARCHITECTURE.md](RF_ARCHITECTURE.md) — Vue architecture RF et analyse réseau
+- [ARCHITECTURE_GUARDRAILS.md](ARCHITECTURE_GUARDRAILS.md) — Invariants et règles d’architecture
+- [ROADMAP_MASTER.md](ROADMAP_MASTER.md) — Feuille de route stratégique
+- [DOC_MAP.md](DOC_MAP.md) — Cartographie documentaire
 
-- DATA SOURCES: packet and reception inputs from collectors/databases
-- RF engine: orchestration and analytical dataset construction
-- network analysis: station/network metrics and topology outputs
-- UI: map-centric visualization and inspection
+---
+
+Pour la structure détaillée, diagrammes et couches, voir SYSTEM_ARCHITECTURE.md.
 

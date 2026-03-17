@@ -24,7 +24,6 @@ def compute_station_removal_impact(network_metrics: dict | None) -> pd.DataFrame
 
     aircraft_station_counts = matrix.groupby("src")["igate"].nunique()
     total_aircraft = int(aircraft_station_counts.shape[0])
-    total_links = int(matrix[["src", "igate"]].drop_duplicates().shape[0])
 
     rows: list[dict] = []
     for station_id in sorted(matrix["igate"].dropna().astype(str).unique()):

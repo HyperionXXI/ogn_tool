@@ -23,7 +23,6 @@ import json
 import math
 import os
 import re
-import time
 import pstats
 from dataclasses import dataclass, replace
 from typing import Any, Dict, List, Optional, Tuple
@@ -1004,7 +1003,6 @@ ui_ctx = {
     "fanet_local": fanet_local,
     "rf_grid": rf_grid,
     "packets_window": packets_window,
-    "rf_packets": rf_packets,
     "aircraft_packets": aircraft_packets,
     "network_packets": network_packets,
     "internet_packets": internet_packets,

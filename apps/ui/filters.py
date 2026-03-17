@@ -35,10 +35,9 @@ def render_sidebar_filters(default_filters: Dict[str, Any], now_utc_fn, has_rf: 
             )
 
             st.markdown("## Aircraft types")
-            dst_types = st.multiselect(
+            st.multiselect(
                 "Aircraft types",
                 AIRCRAFT_TYPES,
-                default=AIRCRAFT_TYPES,
                 disabled=True,
             )
 

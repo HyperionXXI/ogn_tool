@@ -1,7 +1,6 @@
 """
 Validation sémantique des artefacts report.json pour ogn_tool.
 """
-import json
 
 def validate_report(report):
     warnings = []

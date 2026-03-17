@@ -1,4 +1,6 @@
+
 from __future__ import annotations
+import pandas as pd
 
 def temporal_observability_view(obs) -> dict:
     """Vue structurée pour exposer toutes les métriques d'observabilité temporelle."""
@@ -14,10 +16,6 @@ def temporal_observability_view(obs) -> dict:
         "data_gaps_detected": obs.data_gaps_detected,
         "activity_score": obs.activity_score,
     }
-
-from typing import Any
-
-import pandas as pd
 
 
 
@@ -63,7 +61,6 @@ def get_station_health_summary(report) -> dict:
     health = d.get('network_metrics', {}).get('station_health_table')
     if health is None:
         health = d.get('station_health_table')
-    import pandas as pd
     table = health if isinstance(health, pd.DataFrame) else pd.DataFrame()
     if table.empty or 'health_status' not in table.columns:
         return {

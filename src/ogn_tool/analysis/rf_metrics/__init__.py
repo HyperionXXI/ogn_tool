@@ -18,6 +18,4 @@ __all__ = [
     "summarize_signal_quality",
 ]
 
-from .directional_analysis import build_directional_diagnostics
-
-__all__ = list(dict.fromkeys(__all__ + ["build_directional_diagnostics"]))
+__all__ = __all__
