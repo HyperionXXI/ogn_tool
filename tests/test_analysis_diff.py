@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.runtime.analysis_diff import diff_snapshots
+from ogn_tool.intelligence.temporal.analysis_diff import diff_snapshots
 
 
 def test_diff_snapshots_handles_empty_inputs() -> None:
