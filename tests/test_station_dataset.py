@@ -2,7 +2,7 @@ import sqlite3
 
 import pandas as pd
 
-from ogn_tool.services import rf_analysis_service
+from ogn_tool.pipeline import rf_analysis_service
 
 
 def test_station_dataset_not_empty(tmp_path):

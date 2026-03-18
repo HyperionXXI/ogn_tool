@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.services import rf_analysis_service
+from ogn_tool.pipeline import rf_analysis_service
 
 DB_PATH = r"F:\Data\ogn\ogn_log.sqlite3"
 STATION_ID = "FK50887"

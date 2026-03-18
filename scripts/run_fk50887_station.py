@@ -14,7 +14,7 @@ from ogn_tool.reporting import (
     export_analysis_run_bundle,
 )
 from ogn_tool.reporting.run_registry import register_run
-from ogn_tool.services import rf_analysis_service
+from ogn_tool.pipeline import rf_analysis_service
 
 DB_PATH = r"F:\Data\ogn\ogn_log.sqlite3"
 STATION_ID = "FK50887"
