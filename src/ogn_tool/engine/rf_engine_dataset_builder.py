@@ -33,33 +33,36 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from ogn_tool.analysis.rf_dataset_builder import build_rf_dataset
-from ogn_tool.rf import azimuth as analysis_azimuth
-from ogn_tool.analysis.network import station_range as analysis_station_range
-from ogn_tool.analysis.network import station_quality as analysis_station_quality
-from ogn_tool.analysis.geo import compute_distance_bearing
-from ogn_tool.analysis.network_metrics import (
+from ogn_tool.engine.rf_observation_kernel import (
+    build_rf_dataset,
+    compute_distance_bearing,
+    compute_packet_bearing_deg,
+    compute_packet_distance_km,
+    observations_to_rows,
+)
+from ogn_tool.rf import azimuth as azimuth_model
+from ogn_tool.engine.network_metrics_kernel import (
     build_network_metrics,
+    build_radio_events,
     build_station_metrics,
-    detect_network_blind_zones,
+    build_station_reception,
+    compute_blind_zones,
+    compute_coverage_redundancy,
+    compute_network_blind_zones,
+    compute_station_overlap,
     enrich_coverage_grid,
 )
-from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis
-from ogn_tool.analysis.rf_observations import compute_distance, compute_bearing
+from ogn_tool.engine.rf_analysis_facade import (
+    aggregate_signal_quality,
+    build_rf_probability_grid,
+    compute_station_quality,
+    compute_station_range,
+    evaluate_rf_diagnosis,
+)
 from ogn_tool.engine.rf_dataset_builder import build_observations
 from ogn_tool.analytics.spatial.directional_analysis import build_directional_diagnostics
-from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
-from ogn_tool.analysis.rf_metrics.rf_statistics import summarize_signal_quality
 from ogn_tool.engine.rf_model_runner import run
 from ogn_tool.engine.rf_models_registry import MODELS
-from ogn_tool.analysis.normalization.observation_rows import observations_to_rows
-from ogn_tool.engine.rf_engine_network import (
-    build_radio_events,
-    build_station_reception,
-    compute_coverage_redundancy,
-    compute_blind_zones,
-    compute_station_overlap,
-)
 
 
 def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", station_id: str | None = None) -> dict:
@@ -117,8 +120,8 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
         packets_filtered = packets_rf
 
     if "receiver" in packets_rf.columns:
-        packets_rf["distance_km"] = compute_distance(packets_rf, engine.station_lat, engine.station_lon)
-        packets_rf["bearing_deg"] = compute_bearing(packets_rf, engine.station_lat, engine.station_lon)
+        packets_rf["distance_km"] = compute_packet_distance_km(packets_rf, engine.station_lat, engine.station_lon)
+        packets_rf["bearing_deg"] = compute_packet_bearing_deg(packets_rf, engine.station_lat, engine.station_lon)
     elif "lat" in packets_rf.columns and "lon" in packets_rf.columns:
         lat = packets_rf["lat"].to_numpy()
         lon = packets_rf["lon"].to_numpy()
@@ -156,7 +159,7 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
         stations = sorted(packets_filtered["igate"].astype(str).dropna().unique().tolist())
 
     distance_df, _grid = build_rf_dataset(packets_filtered, engine.station_lat, engine.station_lon)
-    coverage_grid = build_rf_probability_field(distance_df)
+    coverage_grid = build_rf_probability_grid(distance_df)
     shadow_map = directional.get("shadow_map")
 
     coverage_grid = enrich_coverage_grid(distance_df, coverage_grid)
@@ -167,7 +170,7 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
     blind_cells = compute_blind_zones(coverage_redundancy_grid)
     station_overlap_matrix = compute_station_overlap(station_reception)
 
-    network_blind_zones = detect_network_blind_zones(coverage_redundancy_grid)
+    network_blind_zones = compute_network_blind_zones(coverage_redundancy_grid)
 
     station_metrics = build_station_metrics(distance_df, coverage_grid)
     network_metrics = build_network_metrics(
@@ -185,7 +188,7 @@ def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", stat
         "network_resilience_score": network_metrics.get("network_resilience_score"),
     }
 
-    metrics.update(summarize_signal_quality(packets_filtered))
+    metrics.update(aggregate_signal_quality(packets_filtered))
 
     rf_diagnosis = evaluate_rf_diagnosis(metrics, directional_balance)
     rf_issues = rf_diagnosis.get("issues", [])
@@ -245,8 +248,8 @@ def compute_metrics_impl(
     distance_df: pd.DataFrame,
     grid_for_analysis: pd.DataFrame,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    range_stats = analysis_station_range.analyze(grid_for_analysis)
-    quality_stats = analysis_station_quality.analyze(grid_for_analysis)
+    range_stats = compute_station_range(grid_for_analysis)
+    quality_stats = compute_station_quality(grid_for_analysis)
     signal_stats = run(MODELS["signal_distance"], df_observations=distance_df, station_lat=engine.station_lat, station_lon=engine.station_lon)
     altitude_stats = run(MODELS["altitude_distance"], df_observations=distance_df, station_lat=engine.station_lat, station_lon=engine.station_lon)
     horizon_stats = run(MODELS["radio_horizon"], df_observations=distance_df, station_lat=engine.station_lat, station_lon=engine.station_lon)
@@ -278,8 +281,8 @@ def compute_metrics_impl(
 
 
 def run_rf_models_impl(engine: Any, distance_df: pd.DataFrame) -> Dict[str, Any]:
-    azimuth_df = analysis_azimuth.compute_azimuth_radiation(distance_df, engine.station_lat, engine.station_lon)
-    coverage_grid = build_rf_probability_field(distance_df)
+    azimuth_df = azimuth_model.compute_azimuth_radiation(distance_df, engine.station_lat, engine.station_lon)
+    coverage_grid = build_rf_probability_grid(distance_df)
     return {
         "azimuth_df": azimuth_df,
         "coverage_grid": coverage_grid,

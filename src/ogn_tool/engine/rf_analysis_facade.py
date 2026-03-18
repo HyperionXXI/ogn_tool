@@ -1,16 +1,72 @@
-from ogn_tool.analysis.network import station_quality as analysis_station_quality
-from ogn_tool.analysis.network import station_range as analysis_station_range
-from ogn_tool.analysis.network_metrics import detect_network_blind_zones
-from ogn_tool.analysis.rf_metrics.antenna_pattern import detect_shadow_sectors, estimate_antenna_pattern
-from ogn_tool.analysis.rf_metrics.feature_matrix import build_feature_matrix
-from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
+from ogn_tool.analysis.network import station_quality as _station_quality_module
+from ogn_tool.analysis.network import station_range as _station_range_module
+from ogn_tool.analysis.network_metrics import detect_network_blind_zones as _detect_network_blind_zones
+from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis as _evaluate_rf_diagnosis
+from ogn_tool.analysis.rf_metrics.antenna_pattern import (
+    detect_shadow_sectors as _detect_shadow_sectors,
+    estimate_antenna_pattern as _estimate_antenna_pattern,
+)
+from ogn_tool.analysis.rf_metrics.feature_matrix import build_feature_matrix as _build_feature_matrix
+from ogn_tool.analysis.rf_metrics.probability_field import (
+    build_rf_probability_field as _build_rf_probability_field,
+)
+from ogn_tool.analysis.rf_metrics.rf_statistics import summarize_signal_quality as _summarize_signal_quality
+
+
+def build_feature_matrix(observations):
+    return _build_feature_matrix(observations)
+
+
+def build_rf_probability_grid(df_packets):
+    return _build_rf_probability_field(df_packets)
+
+
+def compute_network_blind_zones(df, grid_size_km: float = 5):
+    return _detect_network_blind_zones(df, grid_size_km=grid_size_km)
+
+
+def compute_station_range(df):
+    return _station_range_module.analyze(df)
+
+
+def compute_station_quality(df):
+    return _station_quality_module.analyze(df)
+
+
+def estimate_antenna_pattern(feature_matrix, bins: int = 36):
+    return _estimate_antenna_pattern(feature_matrix, bins=bins)
+
+
+def detect_shadow_sectors(pattern, threshold: float = 0.4):
+    return _detect_shadow_sectors(pattern, threshold=threshold)
+
+
+def evaluate_rf_diagnosis(metrics, directional_balance):
+    return _evaluate_rf_diagnosis(metrics, directional_balance)
+
+
+def aggregate_signal_quality(df):
+    return _summarize_signal_quality(df)
+
+
+# Backward-compatible aliases used by existing callers outside engine.
+analysis_station_quality = _station_quality_module
+analysis_station_range = _station_range_module
+build_rf_probability_field = _build_rf_probability_field
+detect_network_blind_zones = _detect_network_blind_zones
 
 __all__ = [
+    "aggregate_signal_quality",
     "analysis_station_quality",
     "analysis_station_range",
     "build_feature_matrix",
     "build_rf_probability_field",
+    "build_rf_probability_grid",
+    "compute_network_blind_zones",
+    "compute_station_quality",
+    "compute_station_range",
     "detect_network_blind_zones",
     "detect_shadow_sectors",
+    "evaluate_rf_diagnosis",
     "estimate_antenna_pattern",
 ]

@@ -7,6 +7,7 @@ from ogn_tool.analysis.intelligence import (
     simulate_station_addition,
 )
 from ogn_tool.analysis.intelligence.station_planner import suggest_station_locations
+from ogn_tool.analysis.network_graph import build_rf_graph, compute_graph_metrics
 from ogn_tool.analysis.network_graph import network_events, network_timeseries
 from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics
 from ogn_tool.analysis.network_intelligence_assembly import assemble_network_intelligence
@@ -31,11 +32,13 @@ from ogn_tool.analysis.temporal_observability import compute_temporal_observabil
 
 __all__ = [
     "assemble_network_intelligence",
+    "build_rf_graph",
     "assemble_network_metrics",
     "build_shadow_observation_frame",
     "build_spatial_observation_frame",
     "check_intelligence_coherence",
     "collect_network_metric_warnings",
+    "compute_graph_metrics",
     "compute_network_evolution_metrics",
     "compute_optimal_station_locations",
     "compute_shadow_risk_scores",

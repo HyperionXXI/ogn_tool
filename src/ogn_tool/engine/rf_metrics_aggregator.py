@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis
+from ogn_tool.engine.rf_analysis_facade import evaluate_rf_diagnosis
 
 
 def build_metrics_summary(dataset) -> Dict[str, Any]:

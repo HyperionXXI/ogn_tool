@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ogn_tool.analysis.network_graph import build_rf_graph, compute_graph_metrics
+from ogn_tool.engine.network_graph_analysis_facade import build_rf_graph, compute_graph_metrics
 from ogn_tool.models.network_graph_model import NetworkGraph
 
 
