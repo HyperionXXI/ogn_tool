@@ -11,6 +11,16 @@ from .report_export_io import export_network_report_json_file
 BUNDLE_EXPORT_VERSION = '1.0'
 
 
+def _try_write_ui_artifact(bundle_dir: Path) -> None:
+    """Best-effort UI projection write; never fail bundle export."""
+    try:
+        from .ui_loader import write_ui_artifact
+
+        write_ui_artifact(bundle_dir)
+    except Exception:
+        pass
+
+
 
 def _write_additional_artifact(bundle_dir: Path, artifact_name: str, payload: Any) -> None:
     """Persist an additional JSON artifact inside the run bundle."""
@@ -55,6 +65,9 @@ def export_analysis_run_bundle(
         metadata_artifact['comparability'] = dict(comparability)
     with (bundle_dir / 'run_metadata.json').open('w', encoding='utf-8') as file_handle:
         json.dump(metadata_artifact, file_handle, indent=2, sort_keys=True)
+
+    # Product-layer artifact: stable UI projection of report + metadata.
+    _try_write_ui_artifact(bundle_dir)
 
     for artifact_name, payload in (additional_artifacts or {}).items():
         _write_additional_artifact(bundle_dir, artifact_name, payload)
