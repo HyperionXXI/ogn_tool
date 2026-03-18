@@ -1,6 +1,6 @@
 """RF metrics analysis package."""
 
-from .rf_statistics import (
+from ogn_tool.kernel.rf_statistics import (
     compute_altitude_delta,
     compute_bearing,
     compute_distance,

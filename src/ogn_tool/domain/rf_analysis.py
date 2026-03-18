@@ -8,7 +8,7 @@ from ogn_tool.analysis.rf_metrics.antenna_pattern import (
 )
 from ogn_tool.analysis.rf_metrics.feature_matrix import build_feature_matrix
 from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
-from ogn_tool.analysis.rf_metrics.rf_statistics import summarize_signal_quality
+from ogn_tool.kernel.rf_statistics import summarize_signal_quality
 
 __all__ = [
     "build_feature_matrix",
