@@ -1,5 +1,5 @@
 from ogn_tool.analysis.streaming.rf_state_engine import RFStateEngine
-from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 
 
 def test_rf_state_engine_snapshot_returns_dataset():

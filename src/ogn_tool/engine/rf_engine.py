@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import importlib
 import pandas as pd
 
-from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.models.rf_analysis_results import RFAnalysisResults
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 

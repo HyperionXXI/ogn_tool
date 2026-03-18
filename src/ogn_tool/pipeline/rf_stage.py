@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 
 
 class RFAnalysisStage:

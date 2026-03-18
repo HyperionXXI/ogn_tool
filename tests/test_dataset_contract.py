@@ -1,4 +1,4 @@
-from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 
 
 def test_dataset_contract_fields():

@@ -4,7 +4,7 @@ import pandas as pd
 
 from ogn_tool.analysis.network_metrics import detect_network_blind_zones
 from ogn_tool.engine.rf_model_runner import run
-from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.analysis.network import station_quality as analysis_station_quality
 from ogn_tool.analysis.network import station_range as analysis_station_range
 from ogn_tool.rf import azimuth as analysis_azimuth
