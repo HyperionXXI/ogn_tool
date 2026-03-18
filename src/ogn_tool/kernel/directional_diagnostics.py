@@ -4,8 +4,18 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.analysis.shadow import detect_rf_shadows
 from ogn_tool.rf.azimuth import analyze_directional_balance, compute_azimuth_histogram
+
+
+def _compute_shadow_proxy(grid: pd.DataFrame, packets_threshold: int = 3) -> pd.DataFrame:
+    if grid is None or grid.empty:
+        return grid
+
+    grid = grid.copy()
+    grid["coverage"] = grid["packets"] > packets_threshold
+    grid["shadow"] = ~grid["coverage"]
+    return grid
+
 
 
 def build_directional_diagnostics(
@@ -29,13 +39,13 @@ def build_directional_diagnostics(
         and azimuth_histogram is not None
         and directional_balance is not None
     ):
-        shadow_map = detect_rf_shadows(
-            packets_filtered,
-            azimuth_histogram,
-            directional_balance,
-            station_lat=station_lat,
-            station_lon=station_lon,
-        )
+        if packets_filtered is None or len(packets_filtered) == 0:
+            shadow_map = {"shadow_sectors": []}
+        else:
+            try:
+                shadow_map = _compute_shadow_proxy(packets_filtered)
+            except Exception:
+                shadow_map = {"shadow_sectors": []}
 
     return {
         "azimuth_histogram": azimuth_histogram,
