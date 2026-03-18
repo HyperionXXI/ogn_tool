@@ -3,7 +3,7 @@ import pydeck as pdk
 import pandas as pd
 
 from ogn_tool.analysis.network.network_intelligence import compute_coverage_redundancy
-from ogn_tool.analysis.network_graph.rf_graph_builder import build_rf_graph
+from ogn_tool.kernel.rf_graph_builder import build_rf_graph
 from ogn_tool.kernel.graph_metrics import compute_network_evolution_metrics
 from ogn_tool.analysis.network_graph.network_timeseries import (
     compute_coverage_timeseries,
