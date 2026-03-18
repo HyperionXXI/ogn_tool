@@ -8,8 +8,9 @@ from ogn_tool.intelligence import (
 )
 from ogn_tool.intelligence.station_planner import suggest_station_locations
 from ogn_tool.analysis.network_graph import build_rf_graph, compute_graph_metrics
-from ogn_tool.analysis.network_graph import network_events, network_timeseries
-from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics
+from ogn_tool.analysis.network_graph import network_events
+import ogn_tool.kernel.network_timeseries as network_timeseries
+from ogn_tool.kernel.graph_metrics import compute_network_evolution_metrics
 from ogn_tool.analysis.network_intelligence_assembly import assemble_network_intelligence
 from ogn_tool.analysis.network_metric_views import (
     network_confidence_level,
