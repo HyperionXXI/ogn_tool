@@ -4,7 +4,7 @@ from ogn_tool.engine.rf_pipeline_executor import execute_rf_pipeline
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.models.rf_feature_matrix import RFFeatureMatrix
 from ogn_tool.pipeline.rf_stages import FeatureMatrixStage
-from ogn_tool.reporting.rf_analysis_report import build_rf_analysis_report
+from ogn_tool.analytics.rf.rf_analysis_report import build_rf_analysis_report
 from ogn_tool.reporting.report_views import build_spatial_view
 
 

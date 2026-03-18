@@ -37,7 +37,7 @@ def main():
     results.station_suggestions = None
     results.diagnostics = {}
 
-    from ogn_tool.reporting.rf_analysis_report import build_rf_analysis_report, export_rf_analysis_report
+    from ogn_tool.analytics.rf.rf_analysis_report import build_rf_analysis_report, export_rf_analysis_report
     report = build_rf_analysis_report(results)
     export_rf_analysis_report(report, str(out_dir))
 
