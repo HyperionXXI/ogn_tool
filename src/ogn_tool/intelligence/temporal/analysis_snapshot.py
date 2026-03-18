@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 
 from ogn_tool.pipeline.analysis_run import resolve_engine_version
-from .dataset_summary import build_dataset_summary
+from ogn_tool.runtime.dataset_summary import build_dataset_summary
 
 if TYPE_CHECKING:
     from ogn_tool.models.analysis_run import AnalysisRun

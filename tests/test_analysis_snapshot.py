@@ -8,7 +8,7 @@ from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.domain.rf_analysis_results import RFAnalysisResults
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.pipeline.analysis_run import build_analysis_run
-from ogn_tool.runtime.analysis_snapshot import build_analysis_snapshot, write_analysis_snapshot
+from ogn_tool.intelligence.temporal.analysis_snapshot import build_analysis_snapshot, write_analysis_snapshot
 
 
 def test_build_analysis_snapshot_serializes_metrics() -> None:
