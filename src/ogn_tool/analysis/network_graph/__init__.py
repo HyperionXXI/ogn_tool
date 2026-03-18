@@ -21,7 +21,7 @@ Those belong to:
     ogn_tool.analysis.network
 """
 
-from .coverage_graph import build_coverage_graph
+from ogn_tool.kernel.coverage_graph import build_coverage_graph
 from .network_events import detect_coverage_regressions, detect_network_anomalies, detect_station_outages
 from .graph_metrics import compute_graph_metrics, compute_network_evolution_metrics
 from .network_optimization import estimate_station_gain, optimize_station_locations, suggest_station_locations
