@@ -8,7 +8,7 @@ from ogn_tool.models.network_graph_model import NetworkEdge, NetworkGraph, Netwo
 
 from ogn_tool.kernel.coverage_graph import build_coverage_graph
 from .graph_metrics import compute_graph_metrics
-from .station_graph import compute_station_aircraft_links
+from ogn_tool.kernel.station_graph import compute_station_aircraft_links
 
 
 def _observations_to_frame(observations) -> pd.DataFrame:

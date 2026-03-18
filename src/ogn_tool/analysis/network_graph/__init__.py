@@ -27,7 +27,7 @@ from .graph_metrics import compute_graph_metrics, compute_network_evolution_metr
 from .network_optimization import estimate_station_gain, optimize_station_locations, suggest_station_locations
 from .network_timeseries import compute_coverage_timeseries, compute_network_load_timeseries, compute_station_activity_timeseries
 from .rf_graph_builder import build_rf_graph
-from .station_graph import compute_station_aircraft_links
+from ogn_tool.kernel.station_graph import compute_station_aircraft_links
 
 __all__ = [
     "build_rf_graph",
