@@ -1,4 +1,4 @@
-from ogn_tool.analysis.intelligence import (
+from ogn_tool.intelligence import (
     check_intelligence_coherence,
     detect_coverage_gaps,
     detect_single_points_of_failure,
@@ -6,7 +6,7 @@ from ogn_tool.analysis.intelligence import (
     prioritize_coverage_gaps,
     simulate_station_addition,
 )
-from ogn_tool.analysis.intelligence.station_planner import suggest_station_locations
+from ogn_tool.intelligence.station_planner import suggest_station_locations
 from ogn_tool.analysis.network_graph import build_rf_graph, compute_graph_metrics
 from ogn_tool.analysis.network_graph import network_events, network_timeseries
 from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics

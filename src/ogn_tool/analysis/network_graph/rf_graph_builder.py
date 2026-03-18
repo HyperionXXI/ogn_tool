@@ -7,7 +7,7 @@ import pandas as pd
 from ogn_tool.models.network_graph_model import NetworkEdge, NetworkGraph, NetworkNode
 
 from ogn_tool.kernel.coverage_graph import build_coverage_graph
-from .graph_metrics import compute_graph_metrics
+from ogn_tool.kernel.graph_metrics import compute_graph_metrics
 from ogn_tool.kernel.station_graph import compute_station_aircraft_links
 
 

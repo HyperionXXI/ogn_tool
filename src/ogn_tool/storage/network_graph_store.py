@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from ogn_tool.analysis.network_graph.graph_metrics import compute_graph_metrics
+from ogn_tool.kernel.graph_metrics import compute_graph_metrics
 from ogn_tool.analysis.network_graph.rf_graph_builder import build_rf_graph as build_graph
 from ogn_tool.models.network_graph_model import NetworkGraph
 
