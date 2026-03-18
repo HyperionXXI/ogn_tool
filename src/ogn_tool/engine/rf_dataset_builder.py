@@ -31,14 +31,15 @@ from typing import Any, Dict, Iterable, List
 
 import pandas as pd
 
-from ogn_tool.analysis.normalization import rf_normalization
-from ogn_tool.analysis.normalization.aircraft_states import extract_aircraft_states
+from ogn_tool.core.rf_normalization_api import (
+    build_observation_payload,
+    extract_aircraft_states,
+    radio_horizon,
+    rf_normalization,
+)
 from ogn_tool.rf import signal_distance, azimuth
-from ogn_tool.analysis.rf_models import radio_horizon
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event, state_to_rf_event
-
-from ogn_tool.analysis.normalization.observation_builder import build_observations as build_observation_payload
 
 
 def build_dataset(engine: Any, dataset_mode: str = "NETWORK", station_id: str | None = None) -> dict:

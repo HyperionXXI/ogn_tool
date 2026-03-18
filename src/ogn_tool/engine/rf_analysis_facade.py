@@ -1,16 +1,14 @@
-from ogn_tool.analysis.network import station_quality as _station_quality_module
-from ogn_tool.analysis.network import station_range as _station_range_module
-from ogn_tool.analysis.network_metrics import detect_network_blind_zones as _detect_network_blind_zones
-from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis as _evaluate_rf_diagnosis
-from ogn_tool.analysis.rf_metrics.antenna_pattern import (
+from ogn_tool.core.rf_analysis_api import (
+    build_feature_matrix as _build_feature_matrix,
+    build_rf_probability_field as _build_rf_probability_field,
+    detect_network_blind_zones as _detect_network_blind_zones,
     detect_shadow_sectors as _detect_shadow_sectors,
     estimate_antenna_pattern as _estimate_antenna_pattern,
+    evaluate_rf_diagnosis as _evaluate_rf_diagnosis,
+    station_quality_module as _station_quality_module,
+    station_range_module as _station_range_module,
+    summarize_signal_quality as _summarize_signal_quality,
 )
-from ogn_tool.analysis.rf_metrics.feature_matrix import build_feature_matrix as _build_feature_matrix
-from ogn_tool.analysis.rf_metrics.probability_field import (
-    build_rf_probability_field as _build_rf_probability_field,
-)
-from ogn_tool.analysis.rf_metrics.rf_statistics import summarize_signal_quality as _summarize_signal_quality
 
 
 def build_feature_matrix(observations):
