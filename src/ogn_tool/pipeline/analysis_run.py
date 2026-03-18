@@ -8,7 +8,7 @@ from typing import Any
 
 from ogn_tool.models.analysis_run import AnalysisRun
 
-from .dataset_summary import build_dataset_summary
+from ogn_tool.runtime.dataset_summary import build_dataset_summary
 
 
 @lru_cache(maxsize=1)

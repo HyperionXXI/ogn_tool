@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
-from .analysis_run import resolve_engine_version
+from ogn_tool.pipeline.analysis_run import resolve_engine_version
 from .dataset_summary import build_dataset_summary
 
 if TYPE_CHECKING:
