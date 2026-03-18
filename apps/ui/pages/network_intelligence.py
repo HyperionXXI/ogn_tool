@@ -9,7 +9,7 @@ from ogn_tool.kernel.network_timeseries import (
     compute_coverage_timeseries,
     compute_network_load_timeseries,
 )
-from ogn_tool.analysis.network_graph.network_events import (
+from ogn_tool.intelligence.network_events import (
     detect_coverage_regressions,
     detect_network_anomalies,
 )
