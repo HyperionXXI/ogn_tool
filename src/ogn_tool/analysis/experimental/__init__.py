@@ -18,10 +18,8 @@ Canonical layers are:
     intelligence
 """
 
-from ogn_tool.analysis.experimental.azimuth import compute_azimuth_radiation as compute_azimuth_radiation
 from ogn_tool.analysis.experimental.shadow import compute_shadow_proxy as compute_shadow_proxy
 
 __all__ = [
-    "compute_azimuth_radiation",
     "compute_shadow_proxy",
 ]
