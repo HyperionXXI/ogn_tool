@@ -1,119 +1,86 @@
-from __future__ import annotations
-
-from pathlib import Path
-
-import pandas as pd
-
-from ogn_tool.reporting.network_engineering_report import NetworkEngineeringReport
-from ogn_tool.reporting.run_artifact_bundle import export_analysis_run_bundle
-from ogn_tool.reporting.run_comparability import build_run_comparability
-from ogn_tool.reporting.run_comparison_views import compare_run_bundles
+from ogn_tool.reporting.run_comparison_views import build_run_comparison_view
 
 
+def _has_diag_code(view: dict, code: str) -> bool:
+    diags = view.get("diagnostics") or []
+    return any(isinstance(d, dict) and d.get("code") == code for d in diags)
 
-def _build_report(*, critical_station_ids: list[str], station_count: int, redundancy_score: float, confidence_score: float) -> NetworkEngineeringReport:
-    rows = []
-    for index in range(station_count):
-        station_id = f'S{index + 1}'
-        rows.append({
-            'station_id': station_id,
-            'health_status': 'CRITICAL' if station_id in critical_station_ids else 'GOOD',
-        })
 
-    return NetworkEngineeringReport(
-        network_summary={
-            'network_status': 'WARNING' if critical_station_ids else 'GOOD',
-            'critical_station_count': len(critical_station_ids),
-            'warning_station_count': 0,
+def test_identical_reports_zero_delta():
+    report = {
+        "network_metrics": {
+            "network_summary": {"network_status": "OK", "critical_station_count": 0, "warning_station_count": 0},
+            "network_graph": {
+                "nodes": [
+                    {"id": "S1", "type": "station", "lat": 47.0, "lon": 7.0},
+                    {"id": "S2", "type": "station", "lat": 48.0, "lon": 8.0},
+                ],
+                "edges": [{"source": "S1", "target": "A1"}],
+            },
         },
-        station_health_table=pd.DataFrame(rows),
-        network_redundancy={'redundancy_score': redundancy_score, 'interpretation': 'x'},
-        network_confidence={'confidence_score': confidence_score},
-    )
+        "coverage": [
+            {"lat": 47.0, "lon": 7.0, "intensity": 0.9},
+            {"lat": 47.1, "lon": 7.1, "intensity": 0.2},
+        ],
+        "summary_metrics": {},
+    }
+
+    view = build_run_comparison_view(report, report)
+
+    assert view["spatial_delta"]["station_count"]["delta"] == 0
+    assert view["spatial_delta"]["link_count"]["delta"] == 0
+    assert view["spatial_delta"]["coverage_point_count"]["delta"] == 0
+    assert view["topology_delta"]["station_count"]["delta"] == 0
+    assert view["topology_delta"]["link_count"]["delta"] == 0
+    assert view["summary_delta"]["critical_station_count"]["delta"] == 0
+    assert view["summary_delta"]["warning_station_count"]["delta"] == 0
+    assert view["summary_delta"]["network_status"]["changed"] is False
+    assert isinstance(view["diagnostics"], list)
 
 
+def test_missing_sections_sets_comparability_flags():
+    report_a = {}
+    report_b = {"coverage": [{"lat": 47.0, "lon": 7.0, "intensity": 1.0}]}
 
-def _build_bundle(base_dir: Path, name: str, report: NetworkEngineeringReport) -> Path:
-    bundle_path = base_dir / name
-    comparability = build_run_comparability(
-        analysis_version='2026.03',
-        time_window_start='2026-03-14T10:00:00Z',
-        time_window_end='2026-03-14T11:00:00Z',
-        config_identity='cfg_abc123',
-    )
-    export_analysis_run_bundle(
-        report,
-        bundle_path,
-        dataset_identity={
-            'dataset_id': 'dataset-001',
-            'packet_count': 123,
-            'time_start': '2026-03-14T10:00:00Z',
-            'time_end': '2026-03-14T11:00:00Z',
-            'source': 'ogn_sqlite',
+    view = build_run_comparison_view(report_a, report_b)
+
+    assert view["comparability"]["spatial"]["has_network_graph_a"] is False
+    assert view["comparability"]["spatial"]["has_network_graph_b"] is False
+    assert view["comparability"]["spatial"]["has_coverage_a"] is False
+    assert view["comparability"]["spatial"]["has_coverage_b"] is True
+    assert view["comparability"]["spatial"]["comparable"] is False
+    assert isinstance(view["diagnostics"], list)
+
+
+def test_different_spatial_detects_delta():
+    report_a = {
+        "network_metrics": {
+            "network_graph": {
+                "nodes": [{"id": "S1", "type": "station", "lat": 47.0, "lon": 7.0}],
+                "edges": [],
+            }
         },
-        comparability=comparability,
-    )
-    return bundle_path
+        "coverage": [{"lat": 47.0, "lon": 7.0, "intensity": 0.5}],
+    }
+    report_b = {
+        "network_metrics": {
+            "network_graph": {
+                "nodes": [
+                    {"id": "S1", "type": "station", "lat": 47.0, "lon": 7.0},
+                    {"id": "S2", "type": "station", "lat": 48.0, "lon": 8.0},
+                ],
+                "edges": [{"source": "S1", "target": "A1"}],
+            }
+        },
+        "coverage": [
+            {"lat": 47.0, "lon": 7.0, "intensity": 0.5},
+            {"lat": 47.1, "lon": 7.1, "intensity": 0.2},
+        ],
+    }
 
+    view = build_run_comparison_view(report_a, report_b)
 
-
-def test_compare_run_bundles_marks_identical_runs_comparable(tmp_path: Path) -> None:
-    report = _build_report(critical_station_ids=['S1'], station_count=2, redundancy_score=0.5, confidence_score=0.8)
-    left_bundle = _build_bundle(tmp_path, 'left', report)
-    right_bundle = _build_bundle(tmp_path, 'right', report)
-
-    comparison = compare_run_bundles(left_bundle, right_bundle)
-
-    assert comparison['comparability']['is_comparable'] is True
-    assert comparison['summary_delta']['redundancy_score']['delta'] == 0.0
-
-
-
-def test_compare_run_bundles_detects_topology_change(tmp_path: Path) -> None:
-    left_bundle = _build_bundle(
-        tmp_path,
-        'left',
-        _build_report(critical_station_ids=['S1'], station_count=2, redundancy_score=0.5, confidence_score=0.8),
-    )
-    right_bundle = _build_bundle(
-        tmp_path,
-        'right',
-        _build_report(critical_station_ids=['S1', 'S2'], station_count=3, redundancy_score=0.4, confidence_score=0.8),
-    )
-
-    comparison = compare_run_bundles(left_bundle, right_bundle)
-
-    assert comparison['topology_delta']['new_critical_stations'] == ['S2']
-    assert comparison['summary_delta']['station_count']['delta'] == 1.0
-
-
-
-def test_compare_run_bundles_allows_temporal_comparison_with_different_dataset_identity(tmp_path: Path) -> None:
-    report = _build_report(critical_station_ids=[], station_count=1, redundancy_score=0.6, confidence_score=0.8)
-    left_bundle = tmp_path / 'left'
-    right_bundle = tmp_path / 'right'
-
-    comparability = build_run_comparability(
-        analysis_version='2026.03',
-        time_window_start='2026-03-14T10:00:00Z',
-        time_window_end='2026-03-14T11:00:00Z',
-        config_identity='cfg_abc123',
-    )
-    export_analysis_run_bundle(
-        report,
-        left_bundle,
-        dataset_identity={'dataset_id': 'dataset-001', 'packet_count': 1, 'time_start': None, 'time_end': None, 'source': 'ogn_sqlite'},
-        comparability=comparability,
-    )
-    export_analysis_run_bundle(
-        report,
-        right_bundle,
-        dataset_identity={'dataset_id': 'dataset-002', 'packet_count': 1, 'time_start': None, 'time_end': None, 'source': 'ogn_sqlite'},
-        comparability=comparability,
-    )
-
-    comparison = compare_run_bundles(left_bundle, right_bundle)
-
-    assert comparison['comparability']['dataset_identity_match'] is False
-    assert comparison['comparability']['is_comparable'] is True
-    assert comparison['interpretation']['network_trend'] == 'stable'
+    assert view["spatial_delta"]["station_count"]["delta"] == 1
+    assert view["spatial_delta"]["link_count"]["delta"] == 1
+    assert view["spatial_delta"]["coverage_point_count"]["delta"] == 1
+    assert isinstance(view["diagnostics"], list)

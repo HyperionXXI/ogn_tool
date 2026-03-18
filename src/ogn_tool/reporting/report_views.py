@@ -2,6 +2,9 @@
 from __future__ import annotations
 import pandas as pd
 
+from ogn_tool.models.spatial_view_model import SpatialView
+from ogn_tool.reporting.spatial_views import build_spatial_view as _build_spatial_view
+
 def temporal_observability_view(obs) -> dict:
     """Vue structurée pour exposer toutes les métriques d'observabilité temporelle."""
     return {
@@ -113,10 +116,34 @@ def get_recommended_actions(report) -> list:
     return list(actions) if isinstance(actions, (list, tuple)) else []
 
 
+def build_spatial_view(report_dict: dict) -> SpatialView:
+    """Spatial sub-view for report consumption.
+
+    Delegates to the reporting adapter layer (`spatial_views`) and does not
+    duplicate extraction logic.
+    """
+
+    return _build_spatial_view(report_dict)
+
+
+def build_report_view(report_dict: dict) -> dict:
+    """Global report view that embeds the spatial projection.
+
+    This is a lightweight adapter that preserves the incoming report surface
+    while adding a stable `spatial` sub-component.
+    """
+
+    if not isinstance(report_dict, dict):
+        return {"spatial": build_spatial_view(report_dict)}  # type: ignore[arg-type]
+    return {**report_dict, "spatial": build_spatial_view(report_dict)}
+
+
 __all__ = [
     'get_network_status',
     'get_station_health_summary',
     'get_network_risk_summary',
     'get_rf_signature',
     'get_recommended_actions',
+    'build_spatial_view',
+    'build_report_view',
 ]

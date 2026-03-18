@@ -4,6 +4,8 @@ from ogn_tool.engine.rf_pipeline_executor import execute_rf_pipeline
 from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.models.rf_feature_matrix import RFFeatureMatrix
 from ogn_tool.pipeline.rf_stages import FeatureMatrixStage
+from ogn_tool.reporting.rf_analysis_report import build_rf_analysis_report
+from ogn_tool.reporting.report_views import build_spatial_view
 
 
 @pytest.fixture
@@ -63,3 +65,9 @@ def test_rf_pipeline_feature_matrix_only(sample_rf_observations):
 
     # Pipeline bookkeeping should record execution of the feature_matrix stage
     assert "feature_matrix" in pipeline.metrics
+
+    # Reporting compatibility: results can be projected into a report dict and consumed by report views.
+    report = build_rf_analysis_report(result.results)
+    spatial = build_spatial_view(report.__dict__)
+    assert set(spatial.keys()) == {"stations", "links", "coverage", "diagnostics"}
+    assert isinstance(spatial["diagnostics"], list)
