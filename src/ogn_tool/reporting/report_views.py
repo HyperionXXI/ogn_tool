@@ -20,6 +20,8 @@ def temporal_observability_view(obs) -> dict:
 
 
 def _as_dict(report):
+    if report is None:
+        raise TypeError('Expected NetworkEngineeringReport')
     if hasattr(report, '__dict__'):
         return dict(report.__dict__)
     return dict(report)

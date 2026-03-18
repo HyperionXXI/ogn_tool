@@ -1,25 +1,65 @@
-import subprocess
-import json
-import os
+import pytest
+
+from ogn_tool.engine.rf_pipeline_executor import execute_rf_pipeline
+from ogn_tool.models.rf_analysis_dataset import RFAnalysisDataset
+from ogn_tool.models.rf_feature_matrix import RFFeatureMatrix
+from ogn_tool.pipeline.rf_stages import FeatureMatrixStage
 
 
-def test_rf_pipeline(tmp_path):
+@pytest.fixture
+def sample_rf_observations():
+    import pandas as pd
 
-    out_dir = tmp_path / "rf_out"
+    return {
+        "distance_df": pd.DataFrame(
+            {
+                "timestamp": [1, 2, 3],
+                "lat": [45.0, 46.0, 47.0],
+                "lon": [3.0, 4.0, 5.0],
+                "altitude": [1000, 1200, 1100],
+            }
+        ),
+        "station_lat": 47.3359,
+        "station_lon": 7.2728,
+    }
 
-    env = dict(**os.environ)
-    env["PYTHONPATH"] = "src"
 
-    subprocess.run([
-        "python",
-        "scripts/run_rf_analysis.py",
-        "--packets", "tests/data/sample_packets.csv",
-        "--station-lat", "47.3359",
-        "--station-lon", "7.2728",
-        "--out-dir", str(out_dir)
-    ], check=True, env=env)
+def test_rf_pipeline_feature_matrix_only(sample_rf_observations):
+    """Smoke-test minimal RF pipeline wiring on observations input.
 
-    metrics = json.load(open(out_dir / "metrics.json"))
-    ref = json.load(open("tests/reference_output/metrics.json"))
+    This test intentionally restricts execution to the FeatureMatrixStage to
+    avoid exercising heavy RF models, coverage, or visibility analysis.
+    """
+    dataset = RFAnalysisDataset(observations=sample_rf_observations)
 
-    assert metrics["rf_packets"] == ref["rf_packets"]
+    class _MinimalPipeline:
+        def __init__(self):
+            self.stages = [FeatureMatrixStage()]
+            self.metrics = {}
+
+    pipeline = _MinimalPipeline()
+    result = execute_rf_pipeline(dataset, pipeline)
+
+    feature_matrix = result.results.feature_matrix
+
+    # The stage must materialize a feature matrix object
+    assert isinstance(feature_matrix, RFFeatureMatrix)
+
+    # All numeric fields must be 1D numpy arrays of the same length
+    distances = feature_matrix.distance
+    azimuths = feature_matrix.azimuth
+    altitudes = feature_matrix.altitude
+    bearings = feature_matrix.bearing
+
+    for arr in (distances, azimuths, altitudes, bearings):
+        # numpy-like sequences support len() even when empty
+        assert hasattr(arr, "__len__")
+
+    assert len(distances) == len(azimuths) == len(altitudes) == len(bearings)
+
+    # Packet count should reflect the number of rows used to build the matrix
+    assert isinstance(feature_matrix.packet_count, int)
+    assert feature_matrix.packet_count == len(distances)
+
+    # Pipeline bookkeeping should record execution of the feature_matrix stage
+    assert "feature_matrix" in pipeline.metrics

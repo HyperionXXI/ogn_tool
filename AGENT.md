@@ -1,289 +1,285 @@
 # AGENT.md
 
-Project: ogn_tool
-
-Purpose:
-RF network analysis platform for OGN and future RF networks.
+Project: ogn_tool  
+Purpose: RF network analysis platform for OGN and future RF networks.
 
 ---
 
-# Architecture
+# Global Architecture
 
-collector  database  repositories  services  UI/API
+collector → database → repositories → analysis → pipeline → reporting → spatial → services → UI/API
 
-Layers:
+Dependencies must strictly follow this direction.
 
-collector
-database
-repositories
-analysis
-services
-API
-UI
-
-Dependencies must follow this direction only.
+No layer may bypass another.
 
 ---
 
-# Database model
+# Core Principles
 
-tables:
+- Deterministic outputs
+- Explicit behavior (no hidden logic)
+- Stable external interfaces
+- Strict separation of concerns
+- Reproducibility of analysis runs
 
-packets
-rf_receptions
-coverage_grid
-meta
+---
+
+# Database Model
+
+Tables:
+
+- packets
+- rf_receptions
+- coverage_grid
+- meta
 
 Concepts:
 
-packet = decoded protocol message
-rf_reception = RF observation event
+packet = decoded protocol message  
+rf_reception = RF observation event  
 
 Relationship:
 
-rf_receptions.packet_id  packets.id
+rf_receptions.packet_id → packets.id
 
 ---
 
-# RF analysis rules
+# RF Analysis Rules
 
 RF analysis modules MUST operate on:
 
-rf_receptions
+- rf_receptions
 
 RF analysis modules MUST NOT operate on:
 
-packets
+- packets
 
-packets are protocol data, not RF observations.
+Rationale:
+packets represent protocol data, not RF signal behavior.
 
 ---
 
-# SQL rules
+# SQL Rules
 
 SQL queries are allowed ONLY in:
 
-repositories
+- repositories
 
 Forbidden in:
 
-analysis
-services
-UI
-API
+- analysis
+- pipeline
+- reporting
+- spatial
+- services
+- UI/API
 
 ---
-
-# UI rules
-
-apps/dashboard.py must never query the database.
-
-UI must call:
-
-services layer only.
-
----
-
-# Refactor policy
-
-Refactors must:
-
-- preserve behaviour
-- not modify database schema unless explicitly requested
-- not modify collector without approval
-
-
-# Network Analysis Architecture (v2)
-
-The current RF/network analysis architecture is organized in layers:
-
-analysis/network_metrics
-    Computes raw network metrics from rf observations.
-
-analysis/network_metric_views
-    Converts raw metrics into qualitative engineering levels
-    (confidence, redundancy, dependency, etc.).
-
-analysis/network_intelligence
-    Produces higher-level network diagnostics and derived insights.
-
-Rules:
-- network_metrics computes metrics only.
-- network_metric_views interprets metrics into qualitative levels.
-- network_intelligence may combine multiple metrics to derive insights.
-
 
 # Pipeline Layer
 
-The pipeline layer orchestrates the analysis workflow.
+Responsibilities:
 
-pipeline modules:
-- load datasets
-- execute analysis modules
-- assemble metric surfaces
-
-Pipeline modules must NOT contain RF analysis logic.
-
-
-# Reporting Layer
-
-The reporting layer projects analysis results into structured reports.
-
-reporting modules:
-- build NetworkEngineeringReport
-- interpret qualitative levels from network_metric_views
-- present analysis outputs in engineering form
+- orchestrate analysis stages
+- manage dataset lifecycle
+- assemble intermediate artifacts
 
 Rules:
-- reporting modules MUST NOT compute metrics
-- reporting modules MUST rely on metric views or analysis outputs
 
+- MUST NOT contain RF logic
+- MUST NOT compute RF metrics
+- MUST only coordinate execution
 
-Reporting consumption rules
----------------------------
+---
 
-Consumers of reporting data (UI, CLI, API, notebooks, dashboards) must
-access report data through the stable projection layer:
-
-    report_views
-
-Consumers MUST use functions exposed by:
-
-    ogn_tool.reporting
-
-Examples:
-
-    get_network_status(report)
-    get_station_health_summary(report)
-    get_network_risk_summary(report)
-    get_recommended_actions(report)
-
-Direct access to fields of NetworkEngineeringReport is discouraged.
-
-Rationale:
-The projection layer (report_views) defines a stable consumer surface.
-This allows the internal structure of NetworkEngineeringReport to evolve
-without breaking external consumers.
-
-
-# Code Quality Principles
-
-The project follows a "Swiss engineering" coding discipline.
-
-Rules:
-- Every module must contain a top-level docstring describing its purpose.
-- Public functions must include docstrings explaining parameters and design intent.
-- Algorithmic thresholds must be documented with comments.
-- Avoid ambiguous variable names (df, tmp, data, res).
-- Code readability is preferred over compactness.
-
-Refactors whose only purpose is readability should be avoided by writing
-clear and documented code from the beginning.
-
-
-# Report Export Artifacts
-
-The project defines a stable JSON export artifact derived from
-NetworkEngineeringReport.
-
-Export modules:
-
-    reporting/report_export.py
-    reporting/report_export_io.py
+# Analysis Layer
 
 Responsibilities:
 
-report_export
-    Converts NetworkEngineeringReport into a stable JSON structure.
+- compute RF metrics
+- produce raw quantitative outputs
 
-report_export_io
-    Persists the JSON artifact to disk.
+Examples:
 
+- coverage
+- visibility
+- antenna_pattern
+- feature_matrix
 
-Architectural rules:
+Rules:
 
-- report_export MUST consume report_views only.
-- report_export MUST NOT read internal fields of NetworkEngineeringReport.
-- report_export_io MUST consume export_network_report_json(...).
-- report_export_io MUST NOT read NetworkEngineeringReport directly.
+- pure computation only
+- no UI logic
+- no formatting
+- no interpretation
 
+---
 
-Artifact stability rules:
+# Network Analysis Architecture (v2)
 
-- The exported JSON structure is considered a stable external interface.
-- The structure MUST remain backward compatible across minor versions.
-- Changes to the artifact structure require incrementing REPORT_EXPORT_VERSION.
+analysis/network_metrics  
+→ raw metric computation
 
+analysis/network_metric_views  
+→ qualitative interpretation
 
-Rationale:
+analysis/network_intelligence  
+→ high-level insights
 
-The JSON export artifact is intended for:
+Rules:
 
-- dashboards
-- notebooks
-- API snapshots
-- reproducible analysis archives
-- comparison of network analysis runs
+- metrics compute only
+- views interpret only
+- intelligence combines multiple metrics
 
-Maintaining a stable artifact prevents external consumers from depending
-on internal report structures.
+---
 
+# Reporting Layer
 
-# CLI Architecture Rule
+Responsibilities:
 
-The CLI layer MUST remain a thin consumer of `ogn_tool.reporting`.
+- build NetworkEngineeringReport
+- expose stable projection layer
 
-CLI code is NOT allowed to:
-- read report.json directly
-- read run_metadata.json directly
-- read registry files directly
-- rebuild comparisons
-- rebuild evolution timelines
-- access ogn_tool.analysis or pipeline internals
+Modules:
 
-CLI commands MUST:
-- call stable APIs from `ogn_tool.reporting`
-- only parse arguments and format output
+- reporting/report_builder.py
+- reporting/report_views.py
 
-Allowed imports:
+Rules:
 
-ogn_tool.reporting
+- MUST NOT compute metrics
+- MUST consume analysis outputs only
+- MUST expose stable interfaces
 
-Forbidden imports:
+---
 
-ogn_tool.analysis
-ogn_tool.pipeline
-ogn_tool.runtime
-direct JSON parsing of bundles
+# Reporting Consumption Rules
 
+Consumers MUST access data via:
 
-# Run Registry Rule
+    ogn_tool.reporting
 
-The run registry is a directory index only.
+Direct access to report internals is discouraged.
 
-The registry MUST NOT become a second data store.
+---
 
-Registry responsibilities:
-- register run bundle locations
-- list known runs
-- expose stable run lookup metadata
+# Report Export Artifact
 
-The registry MUST NOT store:
-- metrics
-- analysis results
-- comparisons
-- derived reporting views
+Stable external interface:
 
-Analytical metadata must remain inside bundle artifacts:
+- report.json
+- run_metadata.json
 
-    report.json
-    run_metadata.json
+Rules:
 
-The registry API must remain minimal:
-- register_run(...)
-- list_runs(...)
-- load_run_metadata(...)
+- backward compatibility REQUIRED
+- versioning REQUIRED (REPORT_EXPORT_VERSION)
 
-Rationale:
-Keeping the registry as an index prevents drift toward a hidden database
-layer and keeps run history architecture simple, stable and replaceable.
+---
+
+# Spatial Projection Layer
+
+Purpose:
+
+Transform analysis or reporting data into geographic entities usable by UI systems.
+
+Modules:
+
+- reporting/spatial_builder.py
+
+Rules:
+
+- MUST NOT compute RF metrics
+- MUST NOT access database
+- MUST consume analysis or reporting inputs only
+- MUST produce explicit diagnostics when data is missing
+- MUST be deterministic and side-effect free
+
+---
+
+# Services Layer
+
+Responsibilities:
+
+- orchestrate reporting + spatial for UI/API
+
+Rules:
+
+- MUST NOT compute RF metrics
+- MUST NOT access database directly
+
+---
+
+# UI Layer
+
+Responsibilities:
+
+- visualization only
+- user interaction
+
+Rules:
+
+- MUST NOT access database directly
+- MUST NOT compute RF metrics
+
+---
+
+# CLI Layer
+
+CLI MUST remain a thin wrapper over reporting.
+
+Allowed:
+
+- ogn_tool.reporting
+
+Forbidden:
+
+- analysis
+- pipeline
+- runtime
+
+---
+
+# Run Registry
+
+Role:
+
+index of analysis runs only
+
+Artifacts remain source of truth:
+
+- report.json
+- run_metadata.json
+
+---
+
+# Refactor Policy
+
+Refactors MUST:
+
+- preserve behavior
+- not break exported artifacts
+- not modify database schema without approval
+- not modify collector without approval
+
+---
+
+# Swiss Engineering Quality Standard
+
+- Deterministic behavior
+- Explicit diagnostics
+- No silent fallback
+- Stable outputs
+- Reproducibility
+- Clear contracts
+- Readability over cleverness
+
+---
+
+# Product Direction
+
+ogn_tool is evolving into:
+
+→ RF Network Intelligence Platform

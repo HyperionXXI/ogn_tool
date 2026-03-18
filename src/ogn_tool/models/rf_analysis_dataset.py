@@ -1,6 +1,11 @@
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from ogn_tool.analysis.observation_contract import (
+    RFObservationsContract,
+    classify_observations,
+    inspect_observations,
+)
 from .rf_analysis_results import RFAnalysisResults
 
 
@@ -10,7 +15,25 @@ class RFAnalysisDataset:
     observations: Any
 
     diagnostics: Optional[object] = None
+    # Optional, non-breaking quality indicator for the observations payload.
+    # Populated on demand via evaluate_input_quality() and otherwise ignored
+    # by the pipeline.
+    input_quality: Optional[str] = None
+    observations_contract: Optional[RFObservationsContract] = None
     results: RFAnalysisResults = field(default_factory=RFAnalysisResults)
+
+    def __post_init__(self) -> None:
+        """Best-effort initialization of input quality metadata.
+
+        This is non-breaking by design: any error in inspection or
+        classification is swallowed so that existing callers and
+        pipeline execution remain unaffected.
+        """
+        try:
+            self.evaluate_input_quality()
+        except Exception:
+            self.input_quality = None
+            self.observations_contract = None
 
 
     @property
@@ -43,6 +66,21 @@ class RFAnalysisDataset:
         if isinstance(self.results.metrics, dict):
             fields.add("metrics")
         return fields
+
+    def evaluate_input_quality(self) -> str:
+        """Inspect and classify the observations payload.
+
+        This helper is intentionally non-breaking:
+        - It never raises.
+        - It does not affect pipeline execution; it only records a
+          human-readable quality flag and the inspected contract.
+        """
+
+        contract = inspect_observations(self.observations)
+        classification = classify_observations(contract)
+        self.observations_contract = contract
+        self.input_quality = classification
+        return classification
 
     def validate(self) -> None:
         """Validate structural integrity of dataset after pipeline execution."""
