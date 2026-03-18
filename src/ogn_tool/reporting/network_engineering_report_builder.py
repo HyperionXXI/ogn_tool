@@ -4,16 +4,15 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.analysis.network_metric_views import (
+from ogn_tool.engine.network_graph_analysis_facade import (
+    compute_temporal_observability,
     network_confidence_level,
     network_redundancy_level,
     station_dependency_level,
 )
 
-
 from .network_engineering_report import NetworkEngineeringReport
 from ogn_tool.reporting.report_views import temporal_observability_view
-from ogn_tool.analysis.temporal_observability import compute_temporal_observability
 
 EXPECTED_DICT_METRICS = {
     'network_summary',
