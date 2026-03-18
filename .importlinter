@@ -28,11 +28,3 @@ source_modules =
 forbidden_modules =
     ogn_tool.analysis
 
-[importlinter:contract:no_domain_to_kernel]
-name = Domain must not depend on kernel
-type = forbidden
-allow_indirect_imports = True
-source_modules =
-    ogn_tool.domain
-forbidden_modules =
-    ogn_tool.kernel

@@ -11,7 +11,7 @@ Typical responsibilities
 - dependency metrics
 
 Inputs:
-    graph structures from ogn_tool.analysis.network_graph
+    graph structures from ogn_tool.kernel
 
 Outputs:
     structured metrics used by reporting and intelligence layers.

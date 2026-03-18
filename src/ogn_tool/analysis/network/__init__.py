@@ -16,7 +16,7 @@ Typical outputs:
 
 This layer sits above:
 
-    ogn_tool.analysis.network_graph
+    ogn_tool.kernel
     ogn_tool.analysis.network_metrics
 """
 
