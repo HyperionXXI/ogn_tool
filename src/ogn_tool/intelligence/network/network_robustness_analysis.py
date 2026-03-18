@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ogn_tool.models.scenario_result import ScenarioResult
-from ogn_tool.runtime.station_removal_analysis import analyze_station_removal
+from ogn_tool.intelligence.scenario.station_removal_analysis import analyze_station_removal
 
 
 def analyze_network_robustness(
