@@ -20,7 +20,7 @@ Canonical layers are:
 
 from .antenna_health import analyze as analyze_antenna_health
 from .azimuth import compute_azimuth_radiation as compute_azimuth_radiation
-from .shadow import compute_shadow_proxy as compute_shadow_proxy
+from ogn_tool._legacy.analysis.experimental.shadow import compute_shadow_proxy as compute_shadow_proxy
 
 __all__ = [
     "analyze_antenna_health",
