@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.runtime.analysis_anomaly_detection import detect_analysis_anomalies
+from ogn_tool.intelligence.spatial.analysis_anomaly_detection import detect_analysis_anomalies
 
 
 def test_detect_analysis_anomalies_empty_diff() -> None:
