@@ -4,7 +4,7 @@ import pandas as pd
 
 from ogn_tool.models.scenario_result import ScenarioResult
 from ogn_tool.models.station_addition_evaluation import StationAdditionEvaluation
-from ogn_tool.runtime.station_addition_analysis import analyze_station_addition
+from ogn_tool.intelligence.scenario.station_addition_analysis import analyze_station_addition
 
 
 
@@ -38,7 +38,7 @@ def test_station_addition_analysis(monkeypatch) -> None:
         ]
 
     monkeypatch.setattr(
-        "ogn_tool.runtime.station_addition_analysis.build_station_addition_evaluations",
+        "ogn_tool.intelligence.scenario.station_addition_analysis.build_station_addition_evaluations",
         fake_build_station_addition_evaluations,
     )
 
@@ -68,7 +68,7 @@ def test_station_addition_analysis(monkeypatch) -> None:
 
 def test_station_addition_analysis_defaults_when_no_evaluations(monkeypatch) -> None:
     monkeypatch.setattr(
-        "ogn_tool.runtime.station_addition_analysis.build_station_addition_evaluations",
+        "ogn_tool.intelligence.scenario.station_addition_analysis.build_station_addition_evaluations",
         lambda candidates, observations: [],
     )
 

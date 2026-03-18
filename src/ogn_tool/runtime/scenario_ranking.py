@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ogn_tool.models.scenario_result import ScenarioResult
-from ogn_tool.runtime.station_addition_analysis import analyze_station_addition
+from ogn_tool.intelligence.scenario.station_addition_analysis import analyze_station_addition
 
 
 def rank_station_addition_candidates(
