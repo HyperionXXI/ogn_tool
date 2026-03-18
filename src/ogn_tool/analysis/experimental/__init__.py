@@ -18,7 +18,7 @@ Canonical layers are:
     intelligence
 """
 
-from .antenna_health import analyze as analyze_antenna_health
+from ogn_tool._legacy.analysis.experimental.antenna_health import analyze as analyze_antenna_health
 from ogn_tool._legacy.analysis.experimental.azimuth import compute_azimuth_radiation as compute_azimuth_radiation
 from ogn_tool._legacy.analysis.experimental.shadow import compute_shadow_proxy as compute_shadow_proxy
 
