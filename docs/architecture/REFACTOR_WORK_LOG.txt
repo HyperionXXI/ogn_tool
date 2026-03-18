@@ -1,0 +1,672 @@
+OGN Tool - Detailed Refactor Work Log
+Date: 2026-03-13
+Branch context: feature/rf-intelligence
+
+Purpose
+-------
+This file documents in detail the architectural and structural refactor work
+that was carried out on the RF analysis engine, analysis packages, network
+intelligence modules, UI compatibility layer, and supporting documentation.
+
+The goal of this work was not to change functional behavior, but to:
+
+- reduce coupling
+- remove architectural ambiguity
+- consolidate canonical module paths
+- separate analysis logic from engine orchestration
+- stabilize typed contracts
+- prepare the project for both batch/snapshot analysis and future streaming
+
+
+1. High-level refactor strategy
+-------------------------------
+The refactor followed these principles:
+
+1. Keep behavior stable.
+2. Move logic before deleting compatibility paths.
+3. Validate after each small batch:
+   - python -m compileall src apps
+   - pytest -q
+   - lint-imports
+4. Preserve public API stability where possible.
+5. Prefer canonical domain-based module placement:
+   - models = contracts
+   - analysis = analytical/domain logic
+   - engine = orchestration
+   - storage = persistence
+   - apps/ui = UI runtime
+
+
+2. Documentation architecture work
+----------------------------------
+Several architecture documents were created or stabilized in order to make the
+project navigable and prevent architectural drift.
+
+Created or updated:
+
+- docs/ARCHITECTURE.md
+  Entry point for architecture documentation.
+
+- docs/core/DOC_MAP.md
+  Defined the role of each architecture document and what each one must not
+  contain. This was added specifically to prevent overlap between concept docs,
+  system docs, detailed engine docs, and dataset docs.
+
+- docs/RF_ANALYSIS_ARCHITECTURE.md
+  Updated to reflect the current RF engine, pipeline, graph layer, and typed
+  graph contract.
+
+- docs/core/RF_DATASET_SCHEMA.md
+  Updated to document the actual RF datasets and later the typed NetworkGraph
+  model and related result structures.
+
+- docs/internal/IMPORT_GRAPH_AUDIT.md
+  Added to record import graph observations, wrapper patterns, and structural
+  simplification opportunities.
+
+- docs/internal/ARCHITECTURE_CLEANUP_PLAN.md
+  Added as the phased cleanup plan for UI consolidation, wrapper removal, and
+  architecture simplification.
+
+- docs/core/ARCHITECTURE_DECISION_PROCESSING_MODE.md
+  Added as an ADR documenting the processing mode decision:
+  canonical mode = batch/snapshot
+  streaming = adapter layer
+
+This documentation work established a clear hierarchy:
+
+- architecture entrypoint
+- conceptual architecture
+- system architecture
+- RF engine architecture
+- dataset schema
+- internal audits and cleanup plans
+
+
+3. Processing mode decision
+---------------------------
+An explicit architectural decision was formalized:
+
+Canonical mode:
+- batch / snapshot
+
+Future extension:
+- streaming / incremental
+
+This has direct consequences on the kernel:
+
+Canonical kernel contracts:
+- RFObservationVector
+- RFAnalysisDataset
+- RFAnalysisResults
+- NetworkGraph
+
+Adapter layer:
+- analysis/streaming/rf_state_engine.py
+- storage/network_graph_store.py
+
+This means the main engine remains deterministic, finite-dataset oriented, and
+UI-friendly, while streaming remains an integration layer that can later feed
+snapshot datasets into the canonical engine.
+
+
+4. Typed graph model introduction
+---------------------------------
+A canonical typed graph model was introduced:
+
+- src/ogn_tool/models/network_graph_model.py
+
+It now defines:
+
+- NetworkNode
+- NetworkEdge
+- NetworkGraph
+
+This replaced or formalized previous dict-like graph handling.
+
+Integration work:
+
+- analysis/network_graph/rf_graph_builder.py now builds and returns NetworkGraph
+- analysis/network_graph/graph_metrics.py holds graph metric logic
+- engine/network_graph_engine.py was updated to type its graph result
+- storage/network_graph_store.py now loads/saves/updates typed NetworkGraph
+
+Compatibility consideration:
+
+The graph model was kept mapping-friendly so existing callers relying on dict-
+like access patterns would not break immediately.
+
+
+5. Validation methods added to contracts
+----------------------------------------
+Contract-level validation was added to key typed objects.
+
+Updated:
+
+- src/ogn_tool/models/network_graph_model.py
+  Added validate()
+
+- src/ogn_tool/models/rf_analysis_results.py
+  Added validate()
+
+- src/ogn_tool/models/rf_analysis_dataset.py
+  Validation now delegates down to results validation as part of structural
+  consistency checks.
+
+These validations enforce that:
+
+- observations exist when required
+- results structures are shape-consistent
+- antenna/network-related result structures are typed correctly
+- graph nodes and edges are structurally valid
+- edges refer to known nodes
+
+This work strengthened the typed kernel and reduced hidden structural drift.
+
+
+6. Streaming adapter boundary
+-----------------------------
+The streaming adapter was made explicit.
+
+Key work:
+
+- src/ogn_tool/analysis/rf_state_engine.py originally contained the streaming
+  implementation.
+
+Later it was moved to:
+
+- src/ogn_tool/analysis/streaming/rf_state_engine.py
+
+And the old location was first kept as a compatibility wrapper, then removed.
+
+Important addition:
+
+- RFStateEngine.snapshot() -> RFAnalysisDataset
+
+This established the streaming-to-batch boundary cleanly:
+
+events
+-> RFStateEngine
+-> snapshot()
+-> RFAnalysisDataset
+-> RFAnalysisEngine.run(dataset)
+
+This was the critical step that aligned future streaming support with the
+canonical snapshot kernel.
+
+
+7. UI architecture cleanup
+--------------------------
+The project originally had two overlapping UI trees:
+
+- apps/ui/*
+- src/ogn_tool/ui/*
+
+This created namespace ambiguity and duplicated ownership.
+
+Refactor performed:
+
+1. Declared apps/ui as the canonical UI namespace.
+2. Converted src/ogn_tool/ui modules into compatibility wrappers.
+3. Migrated imports in runtime code to apps.ui.*.
+4. Removed the old compatibility wrappers progressively, one file at a time,
+   validating after each deletion.
+
+Removed over time:
+
+- src/ogn_tool/ui/dashboard.py
+- src/ogn_tool/ui/layout.py
+- src/ogn_tool/ui/filters.py
+- src/ogn_tool/ui/charts.py
+- src/ogn_tool/ui/sections.py
+- src/ogn_tool/ui/layers.py
+- src/ogn_tool/ui/overview.py
+- src/ogn_tool/ui/coverage_explorer.py
+- src/ogn_tool/ui/view_models/station_view.py
+- src/ogn_tool/ui/view_models/__init__.py
+- src/ogn_tool/ui/__init__.py
+
+Also:
+
+- .importlinter was updated to remove the obsolete ogn_tool.ui layer.
+
+Result:
+
+- apps/ui is now the only active UI namespace
+- ogn_tool.ui no longer exists as runtime surface
+
+
+8. Wrapper inventory and compatibility cleanup
+----------------------------------------------
+A structured wrapper-removal campaign was executed.
+
+Method:
+
+1. inventory wrappers
+2. replace imports
+3. validate
+4. remove wrapper
+
+This was done to eliminate duplicate import paths and prevent Python from
+loading equivalent logic under multiple module names.
+
+Removed wrappers included:
+
+- src/ogn_tool/rf_probability_field.py
+- src/ogn_tool/intelligence/__init__.py
+- src/ogn_tool/analysis/grid_loader.py
+- src/ogn_tool/analysis/grid.py
+- src/ogn_tool/analysis/terrain.py
+- src/ogn_tool/analysis/terrain_visibility.py
+- src/ogn_tool/analysis/radio_horizon.py
+- src/ogn_tool/analysis/altitude_distance.py
+- src/ogn_tool/analysis/rf_visibility_model.py
+- src/ogn_tool/analysis/network_analysis.py
+
+Later, after package restructuring, more wrappers were removed:
+
+- src/ogn_tool/analysis/rf_feature_matrix.py
+- src/ogn_tool/analysis/rf_antenna_pattern.py
+- src/ogn_tool/analysis/rf_blind_zone_detection.py
+- src/ogn_tool/analysis/rf_probability_field.py
+- src/ogn_tool/analysis/rf_normalization.py
+- src/ogn_tool/analysis/aircraft_states.py
+- src/ogn_tool/analysis/observation_builder.py
+- src/ogn_tool/analysis/rf_state_engine.py
+- src/ogn_tool/analysis/network_graph/network_metrics.py
+- src/ogn_tool/analysis/rf_metrics.py
+
+This cleanup materially reduced namespace ambiguity across analysis and engine.
+
+
+9. Analysis package restructuring
+---------------------------------
+The analysis layer was reorganized into clearer domain-oriented subpackages.
+
+Created / stabilized:
+
+- analysis/normalization/
+- analysis/rf_metrics/
+- analysis/streaming/
+- analysis/network_metrics/
+- analysis/network_graph/
+- analysis/intelligence/
+
+9.1 normalization/
+Moved or established canonical locations for:
+
+- rf_normalization.py
+- aircraft_states.py
+- observation_builder.py
+- observation_rows.py
+
+Purpose:
+- raw packets to normalized receptions
+- aircraft state extraction
+- observation payload shaping
+- observation row conversion
+
+9.2 rf_metrics/
+Canonicalized RF metric and derived analysis modules:
+
+- feature_matrix.py
+- probability_field.py
+- antenna_pattern.py
+- blind_zone_detection.py
+- directional_analysis.py
+- rf_statistics.py
+
+This package now owns:
+- feature matrix building
+- probability field creation
+- antenna pattern analysis
+- blind zone analysis
+- directional diagnostics
+- scalar RF summary statistics
+
+9.3 streaming/
+Canonicalized:
+
+- rf_state_engine.py
+
+Purpose:
+- real-time ingestion adapter
+- streaming cache
+- snapshot conversion into RFAnalysisDataset
+
+9.4 network_metrics/
+Established as the canonical tabular/statistical network analysis package.
+
+Contains:
+
+- station_metrics.py
+- coverage_metrics.py
+
+Functions moved or added here include:
+
+- station_aircraft_matrix
+- station_overlap
+- station_metrics
+- aircraft_redundancy
+- detect_network_blind_zones
+- build_reception_events
+- build_station_reception
+- compute_coverage_redundancy
+- compute_blind_zones
+- compute_station_overlap
+- build_station_metrics
+- build_network_metrics
+- enrich_coverage_grid
+
+9.5 network_graph/
+Graph-oriented network intelligence package retained and clarified.
+
+Important cleanup:
+
+- network_graph/network_metrics.py was renamed conceptually by creating:
+  graph_metrics.py
+
+This avoids confusion with the network_metrics package.
+
+
+10. Network intelligence layer
+n------------------------------
+The graph/network intelligence architecture was extended and structured.
+
+Created or stabilized:
+
+- src/ogn_tool/analysis/network_graph/rf_graph_builder.py
+- src/ogn_tool/analysis/network_graph/station_graph.py
+- src/ogn_tool/analysis/network_graph/coverage_graph.py
+- src/ogn_tool/analysis/network_graph/graph_metrics.py
+- src/ogn_tool/analysis/network_graph/network_events.py
+- src/ogn_tool/analysis/network_graph/network_timeseries.py
+- src/ogn_tool/analysis/network_graph/network_optimization.py
+- src/ogn_tool/engine/network_graph_engine.py
+- src/ogn_tool/pipeline/network_graph_stage.py
+- src/ogn_tool/storage/network_graph_store.py
+- src/ogn_tool/analysis/intelligence/station_planner.py
+
+Capabilities introduced or stabilized:
+
+- RF graph construction
+- graph metrics
+- time series over network activity
+- anomaly/event detection
+- optimization/station suggestion support
+- persistent graph storage and incremental updates
+
+
+11. RF engine split and orchestration cleanup
+---------------------------------------------
+The monolithic rf_engine was split earlier into:
+
+- src/ogn_tool/engine/rf_dataset_builder.py
+- src/ogn_tool/engine/rf_metrics_aggregator.py
+- src/ogn_tool/engine/rf_pipeline_executor.py
+- src/ogn_tool/engine/rf_engine.py
+
+Goal:
+- separate orchestration responsibilities
+- reduce monolithic engine size
+- isolate data shaping / aggregation / execution
+
+The public engine remained stable:
+
+- RFAnalysisEngine.run(...)
+- RFAnalysisEngine.run_from_observations(...)
+- build_analysis_dataset(...)
+
+The public fa?ade was intentionally left for later cleanup, while deeper
+analysis leakage was removed from transitional helpers first.
+
+
+12. Engine purification work
+----------------------------
+This was the last major architectural cleanup phase.
+
+12.1 rf_engine_network.py
+Originally contained network-domain logic:
+
+- build_radio_events
+- build_station_reception
+- compute_coverage_redundancy
+- compute_blind_zones
+- compute_station_overlap
+
+These functions were moved into canonical analysis/network_metrics modules.
+
+rf_engine_network.py was reduced to:
+
+- compatibility re-exports
+- inspect_zone_impl (still engine-state dependent)
+
+This removed a clear domain-logic leak from engine/.
+
+12.2 rf_engine_dataset_builder.py
+Originally contained substantial analytical logic mixed with legacy dataset
+assembly.
+
+Progressive extraction removed:
+
+- directional diagnostics
+- shadow map preparation
+- station metrics dataframe logic
+- network metrics summary logic
+- coverage grid enrichment
+- signal-quality summary logic
+- direct RFDiagnosis orchestration
+
+These pieces were moved into analysis-level helpers:
+
+- build_directional_diagnostics
+- build_station_metrics
+- build_network_metrics
+- enrich_coverage_grid
+- summarize_signal_quality
+- evaluate_rf_diagnosis
+
+What remains in rf_engine_dataset_builder.py now is mostly:
+
+- legacy dataset assembly
+- compatibility dataset dict shaping
+- orchestration of analysis helpers
+
+That makes it a transitional assembler rather than a hidden analysis module.
+
+12.3 rf_engine_observations.py
+Originally contained:
+
+- observations_to_rows(...)
+
+This helper was moved to:
+
+- analysis/normalization/observation_rows.py
+
+Then the engine shim was removed entirely after import migration.
+
+12.4 rf_engine.py
+This file was intentionally left mostly untouched during the last phase.
+Reason:
+
+- it is the public fa?ade
+- touching it earlier would create higher-risk API churn
+
+Current status:
+
+- acceptable as orchestrator
+- still legacy-friendly
+- to be considered only after dict-dataset compatibility is intentionally
+  reduced
+
+
+13. RF diagnosis cleanup
+------------------------
+The last obvious analysis-specific block remaining inside engine was the direct
+usage of RFDiagnosis.
+
+What was done:
+
+- src/ogn_tool/analysis/rf_diagnosis.py
+  Added:
+  - evaluate_rf_diagnosis(metrics, directional_balance)
+
+Updated:
+
+- src/ogn_tool/engine/rf_engine_dataset_builder.py
+- src/ogn_tool/engine/rf_metrics_aggregator.py
+
+Result:
+
+- engine code no longer constructs RFDiagnosis directly
+- diagnosis evaluation is now routed through an analysis helper
+
+This was the final low-risk purification step before stopping structural
+refactoring.
+
+
+14. Import and architecture validation
+--------------------------------------
+Throughout the refactor, repeated validation was run.
+
+Tools used systematically:
+
+- python -m compileall src apps
+- pytest -q
+- lint-imports
+
+Stable result at end of this work:
+
+- compileall passes
+- pytest passes with 25 tests
+- importlinter reports: Architecture KEPT
+
+Additional import/cycle work performed earlier:
+
+- pydeps checks were used to look for cycles
+- wrapper inventories were used to detect ambiguous import surfaces
+- UI/runtime duplicate namespaces were removed
+
+
+15. Git history and commit structure
+------------------------------------
+The work was committed in coherent batches.
+
+Notable recent commits from this phase include:
+
+- refactor(engine): move network and rf metric analysis out of transitional engine helpers
+- docs(architecture): add processing mode ADR
+- refactor(engine): route RF diagnosis through analysis helper
+
+This followed the rule:
+
+- keep refactor commits coherent and reviewable
+- separate code architecture changes from documentation changes
+
+
+16. What the architecture looks like now
+----------------------------------------
+The project is now much closer to the intended modular architecture:
+
+models/
+    typed contracts
+
+analysis/
+    normalization/
+    rf_models/
+    rf_metrics/
+    network_metrics/
+    network_graph/
+    intelligence/
+    streaming/
+
+engine/
+    orchestration and legacy compatibility layer
+
+storage/
+    persistence
+
+apps/ui/
+    canonical UI runtime
+
+This is materially cleaner than the previous state, where:
+
+- analysis logic leaked into engine helpers
+- wrappers duplicated old/new import paths
+- ogn_tool.ui and apps/ui coexisted
+- network metrics and graph metrics were ambiguously named
+
+
+17. Current stop point and remaining work
+-----------------------------------------
+The refactor was intentionally stopped at a stable point.
+
+Why stop here:
+
+- the core architectural leakage has been addressed
+- further changes would start impacting legacy dict-dataset compatibility
+- the remaining cleanup is no longer purely structural
+
+What remains as deliberate technical debt:
+
+1. rf_engine_dataset_builder.py
+   Still a transitional assembler for the legacy dataset dict path.
+
+2. rf_engine.py
+   Still the public compatibility fa?ade.
+
+3. Legacy dict dataset API
+   Still present because UI/services/compat flows still depend on it.
+
+4. Local untracked analysis artifacts
+   Not part of the code refactor:
+   - ogn_tool.svg
+   - repo_tree.txt
+   - symbols.txt
+   - tree.txt
+
+
+18. Recommended next directions
+-------------------------------
+After this work, the project is at a decision point.
+
+The next steps should no longer be blind structural cleanup.
+
+Three sensible directions remain:
+
+Option A - Reduce legacy dataset dict API
+- gradually replace dict dataset consumers
+- stabilize typed-only engine outputs
+
+Option B - Freeze and document
+- consolidate docs further
+- document remaining transitional engine pieces
+- declare compatibility boundaries explicitly
+
+Option C - Resume feature work
+- network intelligence
+- coverage planning
+- streaming adapters
+- UI feature integration
+
+The architectural refactor itself is now in a stable and defensible state.
+
+
+19. Final summary
+-----------------
+In practical terms, the work achieved the following:
+
+- established canonical architecture documentation
+- formalized the processing-mode ADR
+- introduced and integrated a typed NetworkGraph model
+- added validation to core contracts
+- made streaming an explicit adapter layer
+- removed the obsolete ogn_tool.ui runtime namespace
+- cleaned a large number of compatibility wrappers
+- canonicalized analysis into clear subpackages
+- moved graph/tabular network logic into analysis
+- reduced engine leakage substantially
+- turned transitional engine helpers into orchestration/compat layers
+- preserved functional behavior and kept the validation suite green
+
+End of log.

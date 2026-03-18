@@ -55,3 +55,8 @@ tree.txt
 symbols.txt
 ogn_tool.svg
 report 1.txt
+.pytest_cache/
+.import_linter_cache/
+*.tmp
+report*.txt
+!docs/architecture/REFACTOR_WORK_LOG.txt
