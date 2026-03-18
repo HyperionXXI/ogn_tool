@@ -1,4 +1,4 @@
-from ogn_tool.core.rf_analysis_api import (
+from ogn_tool.domain.rf_analysis import (
     build_feature_matrix as _build_feature_matrix,
     build_rf_probability_field as _build_rf_probability_field,
     detect_network_blind_zones as _detect_network_blind_zones,

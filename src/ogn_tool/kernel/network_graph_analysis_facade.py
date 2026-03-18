@@ -1,4 +1,4 @@
-from ogn_tool.core.network_graph_analysis_api import (
+from ogn_tool.domain.network_graph_analysis import (
     assemble_network_intelligence,
     assemble_network_metrics,
     build_rf_graph,

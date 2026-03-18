@@ -1,4 +1,4 @@
-from ogn_tool.core.rf_observation_api import (
+from ogn_tool.domain.rf_observation_analysis import (
     build_rf_dataset,
     compute_distance_bearing,
     compute_packet_bearing_deg,

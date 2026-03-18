@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from ogn_tool.engine.network_metrics_kernel import (
+from ogn_tool.kernel.network_metrics_kernel import (
     build_radio_events,
     build_station_reception,
     compute_blind_zones,

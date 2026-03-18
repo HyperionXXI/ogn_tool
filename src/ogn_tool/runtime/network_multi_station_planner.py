@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.engine.multi_station_intelligence_facade import (
+from ogn_tool.kernel.multi_station_intelligence_facade import (
     build_candidate_station_aircraft_sets,
     select_stations_lazy_greedy,
 )

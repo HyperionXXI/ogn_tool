@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ogn_tool.domain.rf_event import RFEvent
 from ogn_tool.domain.rf_observation import RFObservation
-from ogn_tool.engine.station_registry import StationRegistry
+from ogn_tool.kernel.station_registry import StationRegistry
 
 
 class ObservationBuilder:

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.engine.rf_model_runner import run
+from ogn_tool.kernel.rf_model_runner import run
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
-from ogn_tool.engine.rf_analysis_facade import (
+from ogn_tool.kernel.rf_analysis_facade import (
     analysis_station_quality,
     analysis_station_range,
     build_feature_matrix,
@@ -14,7 +14,7 @@ from ogn_tool.engine.rf_analysis_facade import (
     estimate_antenna_pattern,
 )
 from ogn_tool.rf import azimuth as analysis_azimuth
-from ogn_tool.engine.rf_models_registry import MODELS
+from ogn_tool.kernel.rf_models_registry import MODELS
 
 from .rf_stage import RFAnalysisStage
 

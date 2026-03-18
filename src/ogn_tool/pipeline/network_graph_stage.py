@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.engine.network_graph_analysis_facade import (
+from ogn_tool.kernel.network_graph_analysis_facade import (
     assemble_network_intelligence,
     assemble_network_metrics,
     build_shadow_observation_frame,
@@ -23,7 +23,7 @@ from ogn_tool.engine.network_graph_analysis_facade import (
     suggest_station_locations,
     validate_network_metrics,
 )
-from ogn_tool.engine import network_graph_engine
+from ogn_tool.kernel import network_graph_engine
 
 
 EMPTY_GAP_COLUMNS = ["lat", "lon", "station_count", "gap_level", "notes"]

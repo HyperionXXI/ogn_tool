@@ -1,4 +1,4 @@
-from ogn_tool.core.network_metrics_api import (
+from ogn_tool.domain.network_metrics import (
     build_network_metrics,
     build_reception_events,
     build_station_metrics,

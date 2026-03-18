@@ -1,17 +1,17 @@
 import pandas as pd
 
-from ogn_tool.engine.multi_station_intelligence_facade import (
+from ogn_tool.kernel.multi_station_intelligence_facade import (
     build_candidate_station_aircraft_sets,
     build_station_addition_evaluations,
     evaluate_multi_station_coverage,
     select_stations_lazy_greedy,
 )
-from ogn_tool.engine.network_graph_analysis_facade import (
+from ogn_tool.kernel.network_graph_analysis_facade import (
     compute_temporal_observability,
     network_confidence_level,
     network_redundancy_level,
 )
-from ogn_tool.engine.rf_analysis_facade import (
+from ogn_tool.kernel.rf_analysis_facade import (
     build_feature_matrix,
     build_rf_probability_grid,
     compute_network_blind_zones,

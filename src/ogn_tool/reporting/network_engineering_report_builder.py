@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.engine.network_graph_analysis_facade import (
+from ogn_tool.kernel.network_graph_analysis_facade import (
     compute_temporal_observability,
     network_confidence_level,
     network_redundancy_level,

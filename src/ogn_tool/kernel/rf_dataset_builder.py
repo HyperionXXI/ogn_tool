@@ -31,7 +31,7 @@ from typing import Any, Dict, Iterable, List
 
 import pandas as pd
 
-from ogn_tool.core.rf_normalization_api import (
+from ogn_tool.domain.rf_normalization import (
     build_observation_payload,
     extract_aircraft_states,
     radio_horizon,

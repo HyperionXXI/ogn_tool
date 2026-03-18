@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ogn_tool.rf import signal_distance as signal_distance_model
-from ogn_tool.core.rf_models_api import (
+from ogn_tool.domain.rf_models import (
     altitude_distance_model,
     radio_horizon_model,
     terrain_model,

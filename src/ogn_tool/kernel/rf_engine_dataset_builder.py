@@ -33,7 +33,7 @@ from typing import Any, Dict
 
 import pandas as pd
 
-from ogn_tool.engine.rf_observation_kernel import (
+from ogn_tool.kernel.rf_observation_kernel import (
     build_rf_dataset,
     compute_distance_bearing,
     compute_packet_bearing_deg,
@@ -41,7 +41,7 @@ from ogn_tool.engine.rf_observation_kernel import (
     observations_to_rows,
 )
 from ogn_tool.rf import azimuth as azimuth_model
-from ogn_tool.engine.network_metrics_kernel import (
+from ogn_tool.kernel.network_metrics_kernel import (
     build_network_metrics,
     build_radio_events,
     build_station_metrics,
@@ -52,17 +52,17 @@ from ogn_tool.engine.network_metrics_kernel import (
     compute_station_overlap,
     enrich_coverage_grid,
 )
-from ogn_tool.engine.rf_analysis_facade import (
+from ogn_tool.kernel.rf_analysis_facade import (
     aggregate_signal_quality,
     build_rf_probability_grid,
     compute_station_quality,
     compute_station_range,
     evaluate_rf_diagnosis,
 )
-from ogn_tool.engine.rf_dataset_builder import build_observations
+from ogn_tool.kernel.rf_dataset_builder import build_observations
 from ogn_tool.analytics.spatial.directional_analysis import build_directional_diagnostics
-from ogn_tool.engine.rf_model_runner import run
-from ogn_tool.engine.rf_models_registry import MODELS
+from ogn_tool.kernel.rf_model_runner import run
+from ogn_tool.kernel.rf_models_registry import MODELS
 
 
 def build_analysis_dataset_impl(engine: Any, dataset_mode: str = "NETWORK", station_id: str | None = None) -> dict:

@@ -1,4 +1,4 @@
-from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.kernel.rf_engine import RFAnalysisEngine
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 
 

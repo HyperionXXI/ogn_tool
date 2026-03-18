@@ -159,7 +159,7 @@ class RFAnalysisEngine:
         else:
             # Try to build from observations as fallback
             try:
-                from ogn_tool.engine.network_graph_analysis_facade import build_spatial_observation_frame
+                from ogn_tool.kernel.network_graph_analysis_facade import build_spatial_observation_frame
                 dataset.results.spatial_observations = build_spatial_observation_frame(dataset.observations)
             except Exception:
                 dataset.results.spatial_observations = None

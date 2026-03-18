@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.engine.multi_station_intelligence_facade import (
+from ogn_tool.kernel.multi_station_intelligence_facade import (
     build_candidate_station_aircraft_sets,
     build_station_addition_evaluations,
     evaluate_multi_station_coverage,

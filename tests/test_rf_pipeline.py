@@ -1,6 +1,6 @@
 import pytest
 
-from ogn_tool.engine.rf_pipeline_executor import execute_rf_pipeline
+from ogn_tool.kernel.rf_pipeline_executor import execute_rf_pipeline
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.models.rf_feature_matrix import RFFeatureMatrix
 from ogn_tool.pipeline.rf_stages import FeatureMatrixStage

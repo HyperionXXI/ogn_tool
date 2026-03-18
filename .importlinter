@@ -1,14 +1,38 @@
 [importlinter]
 root_package = ogn_tool
 
-[importlinter:contract:layers]
-name = Architecture
-type = layers
-layers =
-    ogn_tool.services
+[importlinter:contract:no_pipeline_to_analysis]
+name = Pipeline must not depend on analysis
+type = forbidden
+allow_indirect_imports = True
+source_modules =
     ogn_tool.pipeline
-    ogn_tool.engine
+forbidden_modules =
     ogn_tool.analysis
-    ogn_tool.rf
+
+[importlinter:contract:no_reporting_to_analysis]
+name = Reporting must not depend on analysis
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    ogn_tool.reporting
+forbidden_modules =
+    ogn_tool.analysis
+
+[importlinter:contract:no_runtime_to_analysis]
+name = Runtime must not depend on analysis
+type = forbidden
+allow_indirect_imports = True
+source_modules =
+    ogn_tool.runtime
+forbidden_modules =
+    ogn_tool.analysis
+
+[importlinter:contract:no_domain_to_kernel]
+name = Domain must not depend on kernel
+type = forbidden
+allow_indirect_imports = True
+source_modules =
     ogn_tool.domain
-    ogn_tool.data
+forbidden_modules =
+    ogn_tool.kernel
