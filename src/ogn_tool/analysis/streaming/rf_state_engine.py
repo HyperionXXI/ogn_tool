@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 
 import math
 
-from ogn_tool.analysis.rf_models.rf_visibility_model import compute_radio_horizon
+from ogn_tool.kernel.rf_visibility_model import compute_radio_horizon
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event
