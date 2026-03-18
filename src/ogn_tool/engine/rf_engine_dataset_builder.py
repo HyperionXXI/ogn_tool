@@ -47,7 +47,7 @@ from ogn_tool.analysis.network_metrics import (
 from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis
 from ogn_tool.analysis.rf_observations import compute_distance, compute_bearing
 from ogn_tool.engine.rf_dataset_builder import build_observations
-from ogn_tool.analysis.rf_metrics.directional_analysis import build_directional_diagnostics
+from ogn_tool.analytics.spatial.directional_analysis import build_directional_diagnostics
 from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
 from ogn_tool.analysis.rf_metrics.rf_statistics import summarize_signal_quality
 from ogn_tool.engine.rf_model_runner import run
