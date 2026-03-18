@@ -6,7 +6,7 @@ from ogn_tool.analysis.rf_metrics.antenna_pattern import (
     detect_shadow_sectors,
     estimate_antenna_pattern,
 )
-from ogn_tool.analysis.rf_metrics.feature_matrix import build_feature_matrix
+from ogn_tool.kernel.feature_matrix import build_feature_matrix
 from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
 from ogn_tool.kernel.rf_statistics import summarize_signal_quality
 
