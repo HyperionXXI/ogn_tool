@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ogn_tool.analysis.geo.grid import build_rf_grid as build_base_rf_grid
+from ogn_tool.kernel.grid import build_rf_grid as build_base_rf_grid
 
 
 def distance_decay(distance_km: pd.Series, gamma: float = 2.3, d0: float = 1.0) -> pd.Series:
