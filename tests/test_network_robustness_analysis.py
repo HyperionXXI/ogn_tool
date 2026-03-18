@@ -1,5 +1,5 @@
 from ogn_tool.models.scenario_result import ScenarioMetrics, ScenarioResult
-from ogn_tool.runtime.network_robustness_analysis import analyze_network_robustness
+from ogn_tool.intelligence.network.network_robustness_analysis import analyze_network_robustness
 
 
 def test_network_robustness_sorting(monkeypatch):
@@ -26,7 +26,7 @@ def test_network_robustness_sorting(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "ogn_tool.runtime.network_robustness_analysis.analyze_station_removal",
+        "ogn_tool.intelligence.network.network_robustness_analysis.analyze_station_removal",
         fake_analyze_station_removal,
     )
 
@@ -54,7 +54,7 @@ def test_network_robustness_ignores_invalid_station_ids(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "ogn_tool.runtime.network_robustness_analysis.analyze_station_removal",
+        "ogn_tool.intelligence.network.network_robustness_analysis.analyze_station_removal",
         fake_analyze_station_removal,
     )
 
