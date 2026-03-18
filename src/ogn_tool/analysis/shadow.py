@@ -9,7 +9,7 @@ Parts of this logic overlap with newer implementations in:
 These modules are kept for compatibility with early analysis tools.
 """
 
-from ogn_tool._legacy.analysis.experimental.shadow import compute_shadow_proxy
+from ogn_tool.analysis.experimental.shadow import compute_shadow_proxy
 
 
 
