@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from ogn_tool.analysis.observation_contract import (
+from ogn_tool.domain.observation_contract import (
     RFObservationsContract,
     classify_observations,
     inspect_observations,
