@@ -1,5 +1,5 @@
 import pandas as pd
-from ogn_tool.analysis.rf_metrics.blind_zone_detection import detect_rf_blind_zones
+from ogn_tool.intelligence.blind_zone_inference import detect_rf_blind_zones
 
 
 def test_blind_zone_detection():
