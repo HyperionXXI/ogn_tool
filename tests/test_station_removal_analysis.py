@@ -1,5 +1,5 @@
 from ogn_tool.models.scenario_result import ScenarioResult
-from ogn_tool.runtime.station_removal_analysis import analyze_station_removal
+from ogn_tool.intelligence.scenario.station_removal_analysis import analyze_station_removal
 
 
 def test_station_removal_analysis_basic(monkeypatch):
@@ -21,7 +21,7 @@ def test_station_removal_analysis_basic(monkeypatch):
         }
 
     monkeypatch.setattr(
-        "ogn_tool.runtime.station_removal_analysis.simulate_station_removal",
+        "ogn_tool.intelligence.scenario.station_removal_analysis.simulate_station_removal",
         fake_simulate_station_removal,
     )
 
