@@ -4,7 +4,7 @@ from typing import Optional
 
 import pandas as pd
 
-from ogn_tool.models.rf_analysis_results import RFAnalysisResults
+from ogn_tool.domain.rf_analysis_results import RFAnalysisResults
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.services.rf_analysis_service import run_rf_analysis
 

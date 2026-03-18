@@ -6,7 +6,7 @@ from ogn_tool.analysis.observation_contract import (
     classify_observations,
     inspect_observations,
 )
-from ogn_tool.models.rf_analysis_results import RFAnalysisResults
+from ogn_tool.domain.rf_analysis_results import RFAnalysisResults
 
 
 @dataclass

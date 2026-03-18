@@ -1,6 +1,6 @@
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, Optional
-from ogn_tool.models.rf_analysis_results import RFAnalysisResults
+from ogn_tool.domain.rf_analysis_results import RFAnalysisResults
 
 @dataclass
 class RFAnalysisReport:

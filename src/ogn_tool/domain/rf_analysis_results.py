@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from .network_graph_model import NetworkGraph
+from ogn_tool.models.network_graph_model import NetworkGraph
 
 
 @dataclass
