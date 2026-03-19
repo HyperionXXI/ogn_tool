@@ -26,7 +26,7 @@ from ogn_tool.reporting.views.observation_views import (
     build_shadow_observation_frame,
     build_spatial_observation_frame,
 )
-from ogn_tool.analysis.rf.shadow_coverage import (
+from ogn_tool.intelligence.spatial.shadow_coverage_inference import (
     compute_shadow_risk_scores,
     compute_station_angular_entropy,
 )
