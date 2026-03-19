@@ -2,23 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
-from .network_engineering_report import NetworkEngineeringReport
 from .report_export import export_network_report_json
 
 
-
 def export_network_report_json_file(
-    report: NetworkEngineeringReport,
+    contract: dict[str, Any],
     path: str | Path,
 ) -> Path:
-    """Persist a stable JSON artifact to disk.
-
-    Architectural rule:
-    This module must consume export_network_report_json(...) and must
-    not access NetworkEngineeringReport internals directly.
-    """
-    artifact = export_network_report_json(report)
+    """Persist canonical contract JSON artifact to disk."""
+    artifact = export_network_report_json(contract)
 
     target_path = Path(path)
     target_path.parent.mkdir(parents=True, exist_ok=True)

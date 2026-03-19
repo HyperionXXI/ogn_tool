@@ -1,75 +1,73 @@
 from __future__ import annotations
 
-from ogn_tool.reporting.network_engineering_report import NetworkEngineeringReport
-from ogn_tool.reporting.report_export import export_network_report_json
+from ogn_tool.reporting.report_export import (
+    export_network_report_json,
+    validate_network_report_contract,
+)
 
+
+def _valid_contract() -> dict:
+    return {
+        'run_id': 'run-001',
+        'metadata': {'station_id': 'FK50887'},
+        'network_metrics': {
+            'network_summary': {'packet_count': 10},
+            'station_health': [],
+            'station_dependency': [],
+            'network_robustness': {},
+            'station_placement': {},
+        },
+        'coverage_score': 0.5,
+    }
 
 
 def test_export_network_report_json_structure() -> None:
-    report = NetworkEngineeringReport()
+    contract = _valid_contract()
 
-    data = export_network_report_json(report)
+    data = export_network_report_json(contract)
 
-    assert 'report_metadata' in data
-    assert 'network_status' in data
-    assert 'station_health' in data
-    assert 'network_risk' in data
-    assert 'rf_signature_version' in data
-    assert 'rf_signature' in data
-    assert 'recommended_actions' in data
+    assert set(data.keys()) == {'run_id', 'metadata', 'network_metrics', 'coverage_score'}
+    assert set(data['network_metrics'].keys()) == {
+        'network_summary',
+        'station_health',
+        'station_dependency',
+        'network_robustness',
+        'station_placement',
+    }
 
 
-
-def test_export_network_report_json_metadata() -> None:
-    report = NetworkEngineeringReport()
-
-    data = export_network_report_json(report)
-    meta = data['report_metadata']
-
-    assert meta['report_version'] == '1.0'
-    assert 'generated_at' in meta
-
+def test_validate_network_report_contract_accepts_valid_contract() -> None:
+    validate_network_report_contract(_valid_contract())
 
 
 def test_export_network_report_type_validation() -> None:
     try:
         export_network_report_json(None)  # type: ignore[arg-type]
-    except TypeError as exc:
-        assert str(exc) == 'Expected NetworkEngineeringReport'
+    except RuntimeError as exc:
+        assert str(exc) == 'report contract must be a dict'
     else:
-        raise AssertionError('Expected TypeError when report is invalid')
+        raise AssertionError('Expected RuntimeError when contract is invalid')
 
 
-def test_report_contains_schema_version() -> None:
-    report = NetworkEngineeringReport()
+def test_report_rejects_extra_top_level_keys() -> None:
+    contract = _valid_contract()
+    contract['legacy'] = {}
 
-    data = export_network_report_json(report)
-    meta = data['report_metadata']
-
-    assert meta['report_schema_version'] == '1.0'
-
-
-def test_report_exports_rf_signature_version() -> None:
-    report = NetworkEngineeringReport()
-
-    data = export_network_report_json(report)
-
-    assert data['rf_signature_version'] == 2
+    try:
+        validate_network_report_contract(contract)
+    except RuntimeError as exc:
+        assert 'invalid top-level keys' in str(exc)
+    else:
+        raise AssertionError('Expected RuntimeError when top-level keys are invalid')
 
 
-def test_report_exports_rf_signature() -> None:
-    report = NetworkEngineeringReport(
-        rf_signature={
-            'dominant_corridor_start_deg': 90.0,
-            'dominant_corridor_end_deg': 120.0,
-            'dominant_corridor_share': 0.3,
-        }
-    )
+def test_report_rejects_missing_network_metrics_keys() -> None:
+    contract = _valid_contract()
+    del contract['network_metrics']['station_placement']
 
-    data = export_network_report_json(report)
-
-    assert data['rf_signature'] == {
-        'dominant_corridor_start_deg': 90.0,
-        'dominant_corridor_end_deg': 120.0,
-        'dominant_corridor_share': 0.3,
-    }
+    try:
+        validate_network_report_contract(contract)
+    except RuntimeError as exc:
+        assert 'invalid network_metrics keys' in str(exc)
+    else:
+        raise AssertionError('Expected RuntimeError when network_metrics keys are invalid')

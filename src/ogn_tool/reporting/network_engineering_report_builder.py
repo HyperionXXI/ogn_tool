@@ -4,8 +4,10 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.kernel.network_graph_analysis_facade import (
+from ogn_tool.intelligence.temporal.temporal_observability import (
     compute_temporal_observability,
+)
+from ogn_tool.reporting.views.network_metric_views import (
     network_confidence_level,
     network_redundancy_level,
     station_dependency_level,
@@ -26,6 +28,37 @@ EXPECTED_DATAFRAME_METRICS = {
 }
 
 
+def _to_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        return []
+    return frame.to_dict(orient='records')
+
+
+def build_network_report_contract(
+    *,
+    run_id: str,
+    metadata: dict[str, Any],
+    network_summary: dict[str, Any],
+    station_health: pd.DataFrame,
+    station_dependency: pd.DataFrame,
+    network_robustness: dict[str, Any],
+    station_placement: dict[str, Any],
+    coverage_score: float | None,
+) -> dict[str, Any]:
+    """Build the canonical report JSON contract for reporting consumers."""
+    return {
+        'run_id': str(run_id),
+        'metadata': dict(metadata),
+        'network_metrics': {
+            'network_summary': dict(network_summary),
+            'station_health': _to_records(station_health),
+            'station_dependency': _to_records(station_dependency),
+            'network_robustness': dict(network_robustness),
+            'station_placement': dict(station_placement),
+        },
+        'coverage_score': None if coverage_score is None else float(coverage_score),
+    }
+
 
 def _ensure_dict(metrics: dict[str, Any], key: str, warnings: list[str]) -> dict[str, Any]:
     value = metrics.get(key)
@@ -36,7 +69,6 @@ def _ensure_dict(metrics: dict[str, Any], key: str, warnings: list[str]) -> dict
         warnings.append(f'{key} expected dict but got {type(value).__name__}')
         return {}
     return dict(value)
-
 
 
 def _ensure_dataframe(metrics: dict[str, Any], key: str, warnings: list[str]) -> pd.DataFrame:
@@ -50,7 +82,6 @@ def _ensure_dataframe(metrics: dict[str, Any], key: str, warnings: list[str]) ->
     return value.copy()
 
 
-
 def _ensure_spatial_observations(spatial_observations: Any, warnings: list[str]) -> pd.DataFrame:
     if spatial_observations is None:
         warnings.append('spatial_observations missing from reporting inputs')
@@ -61,7 +92,6 @@ def _ensure_spatial_observations(spatial_observations: Any, warnings: list[str])
     return spatial_observations.copy()
 
 
-
 def _collect_pipeline_warnings(metrics: dict[str, Any]) -> list[str]:
     warnings: list[str] = []
     for key in ('_contract_warnings', '_coherence_warnings', '_confidence_warnings'):
@@ -69,7 +99,6 @@ def _collect_pipeline_warnings(metrics: dict[str, Any]) -> list[str]:
         if isinstance(value, list):
             warnings.extend(str(item) for item in value)
     return warnings
-
 
 
 def _collect_station_dependency_levels(metrics: dict[str, Any], station_dependency: pd.DataFrame) -> list[str]:
@@ -82,7 +111,6 @@ def _collect_station_dependency_levels(metrics: dict[str, Any], station_dependen
         if level is not None:
             levels.append(level)
     return levels
-
 
 
 def _build_recommended_actions(metrics: dict[str, Any], station_health: pd.DataFrame, station_dependency: pd.DataFrame) -> list[str]:
@@ -120,7 +148,6 @@ def _build_recommended_actions(metrics: dict[str, Any], station_health: pd.DataF
     return deduped
 
 
-
 def build_network_engineering_report(
     metrics: dict[str, Any] | None,
     spatial_observations: pd.DataFrame | None,
@@ -142,8 +169,6 @@ def build_network_engineering_report(
     station_dominance = _ensure_dataframe(metrics, 'station_dominance', warnings)
     spatial_frame = _ensure_spatial_observations(spatial_observations, warnings)
 
-
-    # Calcul de l'observabilité temporelle
     if spatial_frame is not None and not spatial_frame.empty and 'ts_epoch' in spatial_frame.columns:
         ts = spatial_frame['ts_epoch']
         window_hours = int((ts.max() - ts.min()) // 3600) + 1 if len(ts) > 0 else 0
@@ -169,4 +194,4 @@ def build_network_engineering_report(
     return report
 
 
-__all__ = ['build_network_engineering_report']
+__all__ = ['build_network_engineering_report', 'build_network_report_contract']
