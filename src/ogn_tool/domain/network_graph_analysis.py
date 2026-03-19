@@ -22,7 +22,7 @@ from ogn_tool.intelligence.network.station_placement_planner import compute_opti
 from ogn_tool.reporting.contracts.network_metrics_validation import validate_network_metrics
 from ogn_tool.analysis.network_metrics_assembly import assemble_network_metrics
 from ogn_tool.analysis.network_metrics_contract import collect_network_metric_warnings
-from ogn_tool.analysis.observation_views import (
+from ogn_tool.reporting.views.observation_views import (
     build_shadow_observation_frame,
     build_spatial_observation_frame,
 )

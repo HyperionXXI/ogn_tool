@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.analysis.intelligence import (
+from ogn_tool.intelligence import (
     compute_network_confidence,
     compute_network_redundancy_score,
     compute_network_summary,
@@ -8,7 +8,7 @@ from ogn_tool.analysis.intelligence import (
     compute_station_dominance,
     compute_station_health,
 )
-from ogn_tool.analysis.observation_views import (
+from ogn_tool.reporting.views.observation_views import (
     build_spatial_observation_frame,
     build_visibility_observation_frame,
 )
