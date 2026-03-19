@@ -27,7 +27,7 @@ from .station_metrics import (
     station_metrics,
     station_overlap,
 )
-from .coverage_metrics import (
+from ogn_tool.kernel.coverage_metrics import (
     aircraft_redundancy,
     build_network_metrics,
     build_reception_events,

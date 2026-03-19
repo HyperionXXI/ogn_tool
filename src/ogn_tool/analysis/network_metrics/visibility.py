@@ -4,7 +4,7 @@ from collections.abc import Iterable
 
 import pandas as pd
 
-from .coverage_metrics import aircraft_redundancy
+from ogn_tool.kernel.coverage_metrics import aircraft_redundancy
 from .station_metrics import compute_station_overlap, station_aircraft_matrix, station_overlap
 
 
