@@ -45,7 +45,7 @@ from ogn_tool.kernel.visibility_metrics import (
     compute_visibility_summary,
 )
 from ogn_tool.intelligence.network.station_influence import compute_station_influence
-from .station_anomaly import detect_station_anomalies
+from ogn_tool.intelligence.network.station_anomaly_detection import detect_station_anomalies
 from .network_robustness import compute_station_removal_impact
 from .station_placement import compute_optimal_station_locations, extract_fragile_aircraft
 
