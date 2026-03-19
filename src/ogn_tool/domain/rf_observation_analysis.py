@@ -1,4 +1,4 @@
-from ogn_tool.analysis.geo import compute_distance_bearing
+from ogn_tool.kernel.geo_utils import compute_distance_bearing
 from ogn_tool.kernel.observation_rows import observations_to_rows
 from ogn_tool.analysis.rf_dataset_builder import build_rf_dataset
 from ogn_tool.domain.rf.rf_observations import compute_bearing as compute_packet_bearing_deg
