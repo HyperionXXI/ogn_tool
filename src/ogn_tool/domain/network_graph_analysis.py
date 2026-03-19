@@ -12,7 +12,7 @@ from ogn_tool.kernel.graph_metrics import compute_graph_metrics
 import ogn_tool.intelligence.network_events as network_events
 import ogn_tool.kernel.network_timeseries as network_timeseries
 from ogn_tool.kernel.graph_metrics import compute_network_evolution_metrics
-from ogn_tool.analysis.network_intelligence_assembly import assemble_network_intelligence
+from ogn_tool.reporting.builders.network_intelligence_assembly import assemble_network_intelligence
 from ogn_tool.reporting.views.network_metric_views import (
     network_confidence_level,
     network_redundancy_level,
