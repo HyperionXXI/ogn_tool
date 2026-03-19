@@ -2,7 +2,7 @@
 Unit tests for temporal_observability.py
 """
 import pandas as pd
-from ogn_tool.analysis.temporal_observability import compute_temporal_observability
+from ogn_tool.intelligence.temporal.temporal_observability import compute_temporal_observability
 
 def test_empty_window():
     result = compute_temporal_observability(pd.Series([], dtype='int64'), 24)

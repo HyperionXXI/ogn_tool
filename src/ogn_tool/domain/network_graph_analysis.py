@@ -30,7 +30,7 @@ from ogn_tool.analysis.rf.shadow_coverage import (
     compute_shadow_risk_scores,
     compute_station_angular_entropy,
 )
-from ogn_tool.analysis.temporal_observability import compute_temporal_observability
+from ogn_tool.intelligence.temporal.temporal_observability import compute_temporal_observability
 
 __all__ = [
     "assemble_network_intelligence",
