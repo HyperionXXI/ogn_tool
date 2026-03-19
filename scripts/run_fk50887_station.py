@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ogn_tool.analysis import compute_azimuth_distance_matrix
-from ogn_tool.analysis.dataset_identity import build_dataset_identity
+from ogn_tool.domain.rf.dataset_identity import build_dataset_identity
 from ogn_tool.analysis.rf_observations import compute_bearing, compute_distance
 from ogn_tool.reporting import (
     build_azimuth_distance_summary,
