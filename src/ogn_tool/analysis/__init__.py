@@ -1,5 +1,5 @@
 from ogn_tool.rf.azimuth import compute_azimuth_histogram, analyze_directional_balance
-from .azimuth_distance_matrix import compute_azimuth_distance_matrix
+from ogn_tool.kernel.azimuth_distance_matrix import compute_azimuth_distance_matrix
 from ogn_tool.kernel.coverage_metrics import detect_network_blind_zones
 from .rf_diagnosis import RFDiagnosis, evaluate_rf_diagnosis
 
