@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.analysis.network_metric_registry import NETWORK_METRIC_REGISTRY
+from ogn_tool.reporting.contracts.network_metric_registry import NETWORK_METRIC_REGISTRY
 
 
 def test_network_metric_registry_contains_critical_metrics() -> None:
