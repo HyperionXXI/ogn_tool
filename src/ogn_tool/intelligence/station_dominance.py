@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.network_metrics.visibility import build_visibility_matrix
+from ogn_tool.kernel.visibility_metrics import build_visibility_matrix
 
 from .contracts import NetworkMetrics, ensure_metrics
 

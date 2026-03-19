@@ -36,7 +36,7 @@ from ogn_tool.kernel.coverage_metrics import (
     detect_network_blind_zones,
     enrich_coverage_grid,
 )
-from .visibility import (
+from ogn_tool.kernel.visibility_metrics import (
     build_visibility_matrix,
     compute_station_dependency,
     compute_visibility_metrics,
