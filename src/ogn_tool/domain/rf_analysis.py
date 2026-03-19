@@ -1,5 +1,5 @@
 from ogn_tool.intelligence.network import station_quality_analysis as station_quality_module
-from ogn_tool.analysis.network import station_range as station_range_module
+from ogn_tool.intelligence.network import station_range_analysis as station_range_module
 from ogn_tool.kernel.coverage_metrics import detect_network_blind_zones
 from ogn_tool.analysis.rf_diagnosis import evaluate_rf_diagnosis
 from ogn_tool.intelligence.antenna_pattern_inference import (
