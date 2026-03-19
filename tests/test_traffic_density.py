@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from ogn_tool.analysis.spatial.traffic_density import (
+from ogn_tool.kernel.spatial.traffic_density import (
     build_aircraft_weights,
     compute_traffic_density,
 )
