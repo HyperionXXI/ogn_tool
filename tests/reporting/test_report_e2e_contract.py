@@ -49,3 +49,6 @@ def test_report_e2e_contract(tmp_path: Path) -> None:
     assert payload['network_summary']['coverage_score'] == 0.61
     assert payload['network_summary']['station_count'] == 2
     assert isinstance(payload['stations'], list)
+    assert payload['intelligence']['alerts'] == [
+        {'type': 'degraded_station', 'severity': 'warning', 'station_id': 'S2'}
+    ]

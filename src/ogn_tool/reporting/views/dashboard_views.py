@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from ogn_tool.reporting.report_intelligence import build_report_intelligence
 from ogn_tool.reporting.ui_projection import build_ui_projection
 
 
@@ -33,12 +34,14 @@ def build_dashboard_payload(report: dict[str, Any]) -> dict[str, Any]:
     network_summary.setdefault('station_count', len(station_health))
     network_summary['coverage_score'] = report['coverage_score']
 
-    projection = build_ui_projection(report)
+    intelligence = build_report_intelligence(report)
+    projection = build_ui_projection(report, intelligence)
 
     return {
         'network_summary': network_summary,
         'stations': station_health,
         'metrics': projection,
+        'intelligence': intelligence,
         'debug': {
             'run_id': report['run_id'],
             'packet_count': network_summary.get('packet_count'),

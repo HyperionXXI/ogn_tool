@@ -15,6 +15,7 @@ from .report_views import (
 )
 from .report_export import export_network_report_json
 from .report_export_io import export_network_report_json_file
+from .report_intelligence import build_report_intelligence
 from .run_artifact_bundle import export_analysis_run_bundle
 from .run_comparability import build_run_comparability
 from .run_comparison_views import compare_run_bundles
@@ -45,6 +46,7 @@ __all__ = [
     'get_recommended_actions',
     'export_network_report_json',
     'export_network_report_json_file',
+    'build_report_intelligence',
     'export_analysis_run_bundle',
     'build_run_comparability',
     'compare_run_bundles',

@@ -48,4 +48,29 @@ def test_dashboard_payload_direct_contract_mapping() -> None:
     assert payload['network_summary']['coverage_score'] == 0.66
     assert payload['network_summary']['station_count'] == 1
     assert payload['stations'] == [{'station_id': 'S1', 'health_status': 'GOOD'}]
+    assert payload['intelligence'] == {
+        'diagnostics': [
+            {
+                'type': 'network_fragility',
+                'severity': 'warning',
+                'message': 'Low network redundancy detected',
+                'redundancy_score': 0.0,
+                'confidence': 0.0,
+            },
+            {
+                'type': 'low_confidence',
+                'severity': 'warning',
+                'message': 'Low confidence in analysis results',
+                'confidence': 0.0,
+            },
+        ],
+        'alerts': [],
+        'recommended_actions': [
+            {
+                'type': 'increase_redundancy',
+                'priority': 'high',
+                'message': 'Consider adding additional stations to improve redundancy',
+            }
+        ],
+    }
     assert payload['debug']['run_id'] == 'run-1'

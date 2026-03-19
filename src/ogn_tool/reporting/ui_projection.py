@@ -34,7 +34,10 @@ def _normalize_station(row: Mapping[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def build_ui_projection(report: dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+def build_ui_projection(
+    report: dict[str, Any],
+    intelligence: dict[str, Any] | None = None,
+) -> Dict[str, List[Dict[str, Any]]]:
     """Build UI projection from canonical report contract only."""
     _require(isinstance(report, dict), 'report must be a dict')
     network_metrics = report.get('network_metrics')
@@ -44,23 +47,38 @@ def build_ui_projection(report: dict[str, Any]) -> Dict[str, List[Dict[str, Any]
     _require(isinstance(station_health, list), 'report.network_metrics.station_health must be a list')
 
     stations = [_normalize_station(row) for row in station_health if isinstance(row, Mapping)]
+    station_index = {
+        str(station.get('station_id')): station
+        for station in stations
+        if station.get('station_id')
+    }
+
+    alert_block = intelligence or {}
+    alerts = alert_block.get('alerts', []) if isinstance(alert_block, dict) else []
+    _require(isinstance(alerts, list), 'intelligence.alerts must be a list')
 
     risk_zones: List[Dict[str, Any]] = []
-    for station in stations:
-        status = str(station.get('health_status') or '').upper()
-        if status not in {'CRITICAL', 'WARNING'}:
+    for alert in alerts:
+        if not isinstance(alert, Mapping):
+            continue
+        station_id = alert.get('station_id')
+        if station_id is None:
+            continue
+        station = station_index.get(str(station_id))
+        if station is None:
             continue
         lat = station.get('lat')
         lon = station.get('lon')
         if lat is None or lon is None:
             continue
+        severity = str(alert.get('severity') or '').lower()
         risk_zones.append(
             {
                 'type': 'station',
                 'station_id': station.get('station_id'),
                 'lat': lat,
                 'lon': lon,
-                'risk': status.lower(),
+                'risk': 'critical' if severity == 'critical' else 'warning',
                 'impact_score': station.get('impact_score'),
             }
         )
