@@ -19,7 +19,7 @@ Outputs:
 This package does not build graphs itself.
 """
 
-from .station_metrics import (
+from ogn_tool.kernel.station_metrics import (
     build_station_metrics,
     build_station_reception,
     compute_station_overlap,

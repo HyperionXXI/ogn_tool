@@ -5,7 +5,7 @@ from collections.abc import Iterable
 import pandas as pd
 
 from ogn_tool.kernel.coverage_metrics import aircraft_redundancy
-from .station_metrics import compute_station_overlap, station_aircraft_matrix, station_overlap
+from ogn_tool.kernel.station_metrics import compute_station_overlap, station_aircraft_matrix, station_overlap
 
 
 def _observations_to_visibility_frame(observations) -> pd.DataFrame:
