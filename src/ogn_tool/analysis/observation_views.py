@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ogn_tool.kernel.observation_rows import observations_to_rows
-from ogn_tool.analysis.observation_schema import (
+from ogn_tool.domain.rf.observation_schema import (
     SHADOW_COLUMNS,
     SPATIAL_COLUMNS,
     VISIBILITY_COLUMNS,
