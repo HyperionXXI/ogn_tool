@@ -1,7 +1,7 @@
 import random
 import time
 
-from ogn_tool.analysis.rf_state_engine import RFStateEngine
+from ogn_tool.runtime.streaming.rf_state_engine import RFStateEngine
 
 # station test (Delemont approx)
 stations = {

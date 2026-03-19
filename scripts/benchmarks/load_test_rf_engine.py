@@ -1,7 +1,7 @@
 import random
 import time
 
-from ogn_tool.analysis.rf_state_engine import RFStateEngine
+from ogn_tool.runtime.streaming.rf_state_engine import RFStateEngine
 
 stations = {"FK50887": (47.37, 7.35, 430)}
 engine = RFStateEngine(station_coords=stations)
