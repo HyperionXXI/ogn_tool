@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.network_metric_views import (
+from ogn_tool.reporting.views.network_metric_views import (
     network_confidence_level,
     network_redundancy_level,
     shadow_risk_level,
