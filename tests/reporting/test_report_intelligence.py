@@ -21,6 +21,10 @@ def test_intelligence_detects_critical_station() -> None:
 
     assert len(out['alerts']) == 1
     assert out['alerts'][0]['type'] == 'critical_station'
+    assert out['rf_analysis'] == {
+        'rf_signature_version': 'v1',
+        'rf_signature': {},
+    }
 
 
 def test_intelligence_builds_recommendations_and_diagnostics() -> None:
@@ -42,3 +46,7 @@ def test_intelligence_builds_recommendations_and_diagnostics() -> None:
     assert any(item['type'] == 'network_fragility' for item in out['diagnostics'])
     assert any(item['type'] == 'low_confidence' for item in out['diagnostics'])
     assert any(item['type'] == 'increase_redundancy' for item in out['recommended_actions'])
+    assert out['rf_analysis'] == {
+        'rf_signature_version': 'v1',
+        'rf_signature': {},
+    }
