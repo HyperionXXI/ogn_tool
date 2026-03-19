@@ -18,7 +18,7 @@ from ogn_tool.analysis.network_metric_views import (
     network_redundancy_level,
     station_dependency_level,
 )
-from ogn_tool.analysis.network_metrics.station_placement import compute_optimal_station_locations
+from ogn_tool.intelligence.network.station_placement_planner import compute_optimal_station_locations
 from ogn_tool.analysis.network_metrics.validate import validate_network_metrics
 from ogn_tool.analysis.network_metrics_assembly import assemble_network_metrics
 from ogn_tool.analysis.network_metrics_contract import collect_network_metric_warnings
