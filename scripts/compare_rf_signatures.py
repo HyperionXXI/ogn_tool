@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_RUNS_DIR = Path("analysis_runs")
+DEFAULT_RUNS_DIR = Path("data/runs/analysis_runs")
 SECTION_ORDER = {
     'anisotropy_index': 'direction',
     'direction_entropy': 'direction',

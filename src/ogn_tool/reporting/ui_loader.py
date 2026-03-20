@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import json
 
-from ogn_tool.reporting.views.dashboard_views import build_dashboard_payload
+from ogn_tool.reporting.views.dashboard_views import build_dashboard_payload, load_report_from_path
 
 
 def load_json(path: Path) -> dict:
@@ -16,7 +16,9 @@ def load_json(path: Path) -> dict:
 
 def build_ui_artifact_from_run(run_path: Path) -> dict:
     report_path = run_path / 'report.json'
-    report = load_json(report_path)
+    report = load_report_from_path(str(report_path))
+    if report is None:
+        report = load_json(report_path)
     return build_dashboard_payload(report)
 
 

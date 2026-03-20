@@ -130,7 +130,7 @@ def main() -> None:
     lag_hours = int((datetime.now(timezone.utc) - end_dt).total_seconds() // 3600)
 
     run_id = end_dt.strftime(f"fk50887_%Y_%m_%d_%H%M%S_{window_hours}h_offset{end_offset_hours}h")
-    registry_dir = Path("analysis_runs")
+    registry_dir = Path("data/runs/analysis_runs")
     bundle_dir = registry_dir / run_id
 
     export_analysis_run_bundle(

@@ -45,7 +45,53 @@ def _uniformity_score(coverage: list[float]) -> float:
     return max(0.0, min(1.0, normalized))
 
 
+def build_rf_signature_from_surface(report: dict[str, Any]) -> dict[str, Any]:
+    artifacts = report.get('artifacts') if isinstance(report, dict) else None
+    if not isinstance(artifacts, dict):
+        return {}
+
+    surface = artifacts.get('azimuth_distance_surface')
+    if not isinstance(surface, dict):
+        return {}
+
+    summary = surface.get('summary')
+    if not isinstance(summary, dict):
+        return {}
+
+    signature = summary.get('rf_signature')
+    if not isinstance(signature, dict):
+        return {}
+
+    enriched = dict(signature)
+
+    azimuth_profile = summary.get('azimuth_profile')
+    if isinstance(azimuth_profile, list) and len(azimuth_profile) >= 36:
+        shares_10deg: list[float] = []
+        for row in azimuth_profile[:36]:
+            if not isinstance(row, dict):
+                shares_10deg.append(0.0)
+                continue
+            share = _safe_float(row.get('share'))
+            shares_10deg.append(share if share is not None else 0.0)
+
+        coverage_30deg = [sum(shares_10deg[i:i + 3]) for i in range(0, 36, 3)]
+        total = sum(coverage_30deg)
+        if total > 0:
+            coverage_30deg = [value / total for value in coverage_30deg]
+            enriched['azimuth_coverage'] = coverage_30deg
+            enriched['coverage_uniformity_score'] = _uniformity_score(coverage_30deg)
+
+            top_bins = sorted(enumerate(coverage_30deg), key=lambda item: item[1], reverse=True)[:3]
+            enriched['dominant_directions'] = [index * 30 for index, value in top_bins if value > 0]
+
+    return enriched
+
+
 def build_rf_signature(report: dict[str, Any]) -> dict[str, Any]:
+    surface_signature = build_rf_signature_from_surface(report)
+    if surface_signature:
+        return surface_signature
+
     nm = _get_network_metrics(report)
 
     stations = nm.get('station_health', [])
@@ -355,4 +401,5 @@ __all__ = [
     'build_rf_gap_structure',
     'build_rf_shadow_analysis',
     'build_rf_signature',
+    'build_rf_signature_from_surface',
 ]
