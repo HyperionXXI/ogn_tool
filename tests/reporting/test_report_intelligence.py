@@ -25,6 +25,7 @@ def test_intelligence_detects_critical_station() -> None:
         'rf_signature_version': 'v1',
         'rf_signature': {},
         'rf_directional_gaps': {},
+        'rf_shadow_analysis': {},
     }
 
 
@@ -51,4 +52,5 @@ def test_intelligence_builds_recommendations_and_diagnostics() -> None:
         'rf_signature_version': 'v1',
         'rf_signature': {},
         'rf_directional_gaps': {},
+        'rf_shadow_analysis': {},
     }

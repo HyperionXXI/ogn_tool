@@ -126,6 +126,31 @@ def build_rf_directional_gaps(rf_signature: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+
+
+def build_rf_shadow_analysis(rf_signature: dict[str, Any], rf_gaps: dict[str, Any]) -> dict[str, Any]:
+    if not rf_signature or not rf_gaps:
+        return {}
+
+    uniformity = _safe_float(rf_signature.get('coverage_uniformity_score'))
+    gaps = rf_gaps.get('gaps') if isinstance(rf_gaps, dict) else None
+
+    if uniformity is None or not isinstance(gaps, list) or not gaps:
+        return {}
+
+    suspected = uniformity < 0.5
+    confidence = (1.0 - uniformity) * (len(gaps) / 12.0)
+    confidence = max(0.0, min(1.0, confidence))
+
+    if not suspected:
+        return {}
+
+    return {
+        'suspected': True,
+        'directions': gaps,
+        'confidence': confidence,
+    }
+
 def build_diagnostics(report: dict[str, Any]) -> list[dict[str, Any]]:
     nm = _get_network_metrics(report)
 
@@ -242,6 +267,7 @@ def build_report_intelligence(report: dict[str, Any]) -> dict[str, Any]:
     recommendations = build_recommendations(report)
     rf_signature = build_rf_signature(report)
     rf_gaps = build_rf_directional_gaps(rf_signature) if rf_signature else {}
+    rf_shadow = build_rf_shadow_analysis(rf_signature, rf_gaps)
 
     return {
         'diagnostics': diagnostics,
@@ -251,6 +277,7 @@ def build_report_intelligence(report: dict[str, Any]) -> dict[str, Any]:
             'rf_signature_version': 'v1',
             'rf_signature': rf_signature,
             'rf_directional_gaps': rf_gaps,
+            'rf_shadow_analysis': rf_shadow,
         },
     }
 
@@ -261,5 +288,6 @@ __all__ = [
     'build_recommendations',
     'build_report_intelligence',
     'build_rf_directional_gaps',
+    'build_rf_shadow_analysis',
     'build_rf_signature',
 ]

@@ -281,5 +281,21 @@ with col_inspector:
                 else:
                     st.info("Minor directional gaps")
 
+    shadow = rf.get("rf_shadow_analysis", {}) if isinstance(rf, dict) else {}
+    if isinstance(shadow, dict) and shadow:
+        directions = shadow.get("directions", [])
+        confidence = _safe_float(shadow.get("confidence"))
+        if isinstance(directions, list) and directions:
+            shadow_dirs = ", ".join(f"{int(d)}°" for d in directions if _safe_float(d) is not None)
+            st.write(f"Shadow suspected in: {shadow_dirs}")
+        if confidence is not None:
+            st.write(f"Confidence: {confidence:.2f}")
+            if confidence > 0.7:
+                st.error("Strong terrain shadow suspected")
+            elif confidence > 0.4:
+                st.warning("Possible terrain shadow")
+            else:
+                st.info("Weak shadow signal")
+
     with st.expander("Debug"):
         st.json(payload.get("debug", {}))
