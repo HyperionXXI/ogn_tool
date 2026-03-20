@@ -93,6 +93,39 @@ def build_rf_signature(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_rf_directional_gaps(rf_signature: dict[str, Any]) -> dict[str, Any]:
+    coverage = rf_signature.get('azimuth_coverage') if isinstance(rf_signature, dict) else None
+
+    if not isinstance(coverage, list) or len(coverage) != 12:
+        return {}
+
+    mean = sum(coverage) / len(coverage)
+    threshold = mean * 0.5
+
+    gaps = [
+        idx * 30
+        for idx, value in enumerate(coverage)
+        if _safe_float(value) is not None and float(value) < threshold
+    ]
+
+    if not gaps:
+        return {}
+
+    ratio = len(gaps) / len(coverage)
+
+    if ratio > 0.5:
+        severity = 'high'
+    elif ratio > 0.25:
+        severity = 'medium'
+    else:
+        severity = 'low'
+
+    return {
+        'gaps': gaps,
+        'severity': severity,
+    }
+
+
 def build_diagnostics(report: dict[str, Any]) -> list[dict[str, Any]]:
     nm = _get_network_metrics(report)
 
@@ -208,6 +241,7 @@ def build_report_intelligence(report: dict[str, Any]) -> dict[str, Any]:
     alerts = build_alerts(report)
     recommendations = build_recommendations(report)
     rf_signature = build_rf_signature(report)
+    rf_gaps = build_rf_directional_gaps(rf_signature) if rf_signature else {}
 
     return {
         'diagnostics': diagnostics,
@@ -216,6 +250,7 @@ def build_report_intelligence(report: dict[str, Any]) -> dict[str, Any]:
         'rf_analysis': {
             'rf_signature_version': 'v1',
             'rf_signature': rf_signature,
+            'rf_directional_gaps': rf_gaps,
         },
     }
 
@@ -225,5 +260,6 @@ __all__ = [
     'build_diagnostics',
     'build_recommendations',
     'build_report_intelligence',
+    'build_rf_directional_gaps',
     'build_rf_signature',
 ]

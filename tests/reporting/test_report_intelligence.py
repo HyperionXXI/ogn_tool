@@ -24,6 +24,7 @@ def test_intelligence_detects_critical_station() -> None:
     assert out['rf_analysis'] == {
         'rf_signature_version': 'v1',
         'rf_signature': {},
+        'rf_directional_gaps': {},
     }
 
 
@@ -49,4 +50,5 @@ def test_intelligence_builds_recommendations_and_diagnostics() -> None:
     assert out['rf_analysis'] == {
         'rf_signature_version': 'v1',
         'rf_signature': {},
+        'rf_directional_gaps': {},
     }

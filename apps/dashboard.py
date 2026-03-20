@@ -1,56 +1,31 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-OGN Tool — Spatial RF Network Explorer (Product Layer)
+OGN Tool - Spatial RF Network Explorer (Product Layer)
 
-This dashboard intentionally contains:
+Dashboard v2 constraints:
 - No database access
 - No analysis logic
 - No pipeline execution
-
-It only renders an explorable, map-centric UI from an input report by using
-`ogn_tool.reporting.ui_projection.build_ui_projection`.
-
-Run:
-  streamlit run .\\apps\\dashboard.py
-
-Optional env:
-  OGN_REPORT_PATH=/path/to/report.json
+- UI consumes reporting views/contracts only
 """
 
 from __future__ import annotations
 
-import json
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-import pandas as pd
 import pydeck as pdk
 import streamlit as st
 
-from ogn_tool.reporting.ui_projection import build_ui_projection
+from ogn_tool.reporting.views.dashboard_views import (
+    build_dashboard_payload,
+    load_report_from_path,
+    load_report_from_upload,
+)
 
 
-st.set_page_config(page_title="OGN Tool — Spatial Explorer", layout="wide")
-
-
-def _load_report_from_path(path: str) -> Optional[Dict[str, Any]]:
-    if not path:
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-
-def _load_report_from_upload(upload) -> Optional[Dict[str, Any]]:
-    if upload is None:
-        return None
-    try:
-        return json.loads(upload.read().decode("utf-8"))
-    except Exception:
-        return None
+st.set_page_config(page_title="OGN Tool - Spatial Explorer", layout="wide")
 
 
 def _safe_float(x) -> Optional[float]:
@@ -68,7 +43,7 @@ def _center_from_points(points: List[Dict[str, Any]]) -> Tuple[float, float]:
     lat = [v for v in lat if v is not None]
     lon = [v for v in lon if v is not None]
     if not lat or not lon:
-        return 47.3359, 7.2728  # benign default
+        return 47.3359, 7.2728
     return float(sum(lat) / len(lat)), float(sum(lon) / len(lon))
 
 
@@ -85,6 +60,29 @@ def _coerce_points(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+@st.cache_data
+def _load_payload_from_path(path: str) -> Optional[Dict[str, Any]]:
+    report = load_report_from_path(path)
+    if report is None:
+        return None
+    return build_dashboard_payload(report)
+
+
+@st.cache_data
+def _load_payload_from_bytes(raw: bytes) -> Optional[Dict[str, Any]]:
+    class _UploadShim:
+        def __init__(self, payload: bytes):
+            self._payload = payload
+
+        def read(self) -> bytes:
+            return self._payload
+
+    report = load_report_from_upload(_UploadShim(raw))
+    if report is None:
+        return None
+    return build_dashboard_payload(report)
+
+
 st.title("Spatial RF Network Explorer")
 st.caption("Load a report and explore the network spatially (stations, links, coverage, blind zones, risks).")
 
@@ -92,26 +90,25 @@ with st.sidebar:
     st.markdown("## Data")
     default_path = os.getenv("OGN_REPORT_PATH", "")
     report_path = st.text_input("Report JSON path (optional)", value=default_path)
-    uploaded = st.file_uploader("…or upload `report.json`", type=["json"])
+    uploaded = st.file_uploader("...or upload `report.json`", type=["json"])
+
     st.markdown("## Layers")
     show_links = st.checkbox("Links", value=True)
     show_coverage = st.checkbox("Coverage", value=True)
     show_blind = st.checkbox("Blind zones", value=True)
     show_risk = st.checkbox("Risk zones", value=True)
 
-
-report: Optional[Dict[str, Any]] = None
+payload: Optional[Dict[str, Any]] = None
 if uploaded is not None:
-    report = _load_report_from_upload(uploaded)
+    payload = _load_payload_from_bytes(uploaded.getvalue())
 elif report_path:
-    report = _load_report_from_path(report_path)
+    payload = _load_payload_from_path(report_path)
 
-if report is None:
+if payload is None:
     st.info("Provide a report (`report.json`) to begin.")
     st.stop()
 
-projection = build_ui_projection(report)
-
+projection = payload.get("metrics", {})
 stations = _coerce_points(projection.get("stations", []))
 coverage = _coerce_points(projection.get("coverage", []))
 blind = _coerce_points(projection.get("blind_zones", []))
@@ -192,12 +189,7 @@ if show_links and projection.get("links"):
         b = station_index.get(dst)
         if not a or not b:
             continue
-        paths.append(
-            {
-                "path": [[a["lon"], a["lat"]], [b["lon"], b["lat"]]],
-                "kind": e.get("type") or e.get("kind"),
-            }
-        )
+        paths.append({"path": [[a["lon"], a["lat"]], [b["lon"], b["lat"]]], "kind": e.get("type") or e.get("kind")})
     if paths:
         layers.append(
             pdk.Layer(
@@ -211,11 +203,7 @@ if show_links and projection.get("links"):
         )
 
 view_state = pdk.ViewState(latitude=center_lat, longitude=center_lon, zoom=8, pitch=0)
-deck = pdk.Deck(
-    layers=layers,
-    initial_view_state=view_state,
-    tooltip={"text": "{station_id}\n{health_status}\n{risk}"},
-)
+deck = pdk.Deck(layers=layers, initial_view_state=view_state, tooltip={"text": "{station_id}\n{health_status}\n{risk}"})
 
 col_map, col_inspector = st.columns([0.72, 0.28], gap="large")
 with col_map:
@@ -223,7 +211,15 @@ with col_map:
 
 with col_inspector:
     st.markdown("### Inspector")
-    st.caption("This panel will evolve into an entity/relationship explorer.")
+    st.caption("Projection-only panel fed by reporting views.")
+
+    summary = payload.get("network_summary", {})
+    st.metric("Stations", summary.get("station_count") or 0)
+    st.metric("Packet count", summary.get("packet_count") or 0)
+
+    if not payload.get("stations"):
+        st.info("No stations available for this dataset")
+
     st.markdown("**Counts**")
     st.write(
         {
@@ -234,16 +230,56 @@ with col_inspector:
             "risk_zones": len(projection.get("risk_zones", [])),
         }
     )
-    with st.expander("Projection preview"):
-        st.json(projection)
 
+    st.subheader("RF Coverage Signature")
+    rf = payload.get("intelligence", {}).get("rf_analysis", {})
+    sig = rf.get("rf_signature", {}) if isinstance(rf, dict) else {}
 
+    if not sig:
+        st.info("RF signature unavailable (insufficient station data)")
+    else:
+        coverage_bins = sig.get("azimuth_coverage", [])
+        dominant = sig.get("dominant_directions", [])
+        uniformity = sig.get("coverage_uniformity_score")
 
+        st.write("Azimuth coverage (360°)")
+        for i, value in enumerate(coverage_bins):
+            numeric_value = _safe_float(value)
+            if numeric_value is None:
+                continue
+            bounded = min(1.0, max(0.0, numeric_value))
+            angle = i * 30
+            st.progress(bounded)
+            st.caption(f"{angle}° - {bounded:.2f}")
 
+        if isinstance(dominant, list) and dominant:
+            dirs = ", ".join(f"{int(d)}°" for d in dominant if _safe_float(d) is not None)
+            st.write(f"Dominant directions: {dirs}" if dirs else "Dominant directions: none")
+        else:
+            st.write("Dominant directions: none")
 
+        uniformity_value = _safe_float(uniformity)
+        if uniformity_value is not None:
+            st.write(f"Coverage uniformity: {uniformity_value:.2f}")
+            if uniformity_value > 0.75:
+                st.success("Uniform coverage")
+            elif uniformity_value > 0.5:
+                st.warning("Moderately directional coverage")
+            else:
+                st.error("Strong directional bias (possible terrain shadowing)")
 
+        gaps = rf.get("rf_directional_gaps", {}) if isinstance(rf, dict) else {}
+        if isinstance(gaps, dict) and gaps:
+            gap_angles = gaps.get("gaps", [])
+            if isinstance(gap_angles, list) and gap_angles:
+                st.write("Coverage gaps:", ", ".join(f"{int(g)}°" for g in gap_angles if _safe_float(g) is not None))
+                severity = str(gaps.get("severity") or "").lower()
+                if severity == "high":
+                    st.error("Severe directional coverage gaps")
+                elif severity == "medium":
+                    st.warning("Moderate directional gaps")
+                else:
+                    st.info("Minor directional gaps")
 
-
-
-
-
+    with st.expander("Debug"):
+        st.json(payload.get("debug", {}))

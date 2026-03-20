@@ -74,5 +74,6 @@ def test_dashboard_payload_direct_contract_mapping() -> None:
     assert payload['intelligence']['rf_analysis'] == {
         'rf_signature_version': 'v1',
         'rf_signature': {},
+        'rf_directional_gaps': {},
     }
     assert payload['debug']['run_id'] == 'run-1'
