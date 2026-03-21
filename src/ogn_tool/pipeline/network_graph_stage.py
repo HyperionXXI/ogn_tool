@@ -2,33 +2,28 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence import (
+from ogn_tool.kernel.network_graph_analysis_facade import (
+    assemble_network_intelligence,
+    assemble_network_metrics,
+    build_shadow_observation_frame,
+    build_spatial_observation_frame,
     check_intelligence_coherence,
+    collect_network_metric_warnings,
+    compute_network_evolution_metrics,
+    compute_optimal_station_locations,
+    compute_shadow_risk_scores,
+    compute_station_angular_entropy,
     detect_coverage_gaps,
     detect_single_points_of_failure,
+    network_events,
+    network_timeseries,
     plan_redundancy_improvements,
     prioritize_coverage_gaps,
     simulate_station_addition,
+    suggest_station_locations,
+    validate_network_metrics,
 )
-from ogn_tool.analysis.intelligence.station_planner import suggest_station_locations
-from ogn_tool.analysis.network_metrics.station_placement import (
-    compute_optimal_station_locations,
-)
-from ogn_tool.analysis.network_intelligence_assembly import assemble_network_intelligence
-from ogn_tool.analysis.network_metrics_assembly import assemble_network_metrics
-from ogn_tool.analysis.rf.shadow_coverage import (
-    compute_shadow_risk_scores,
-    compute_station_angular_entropy,
-)
-from ogn_tool.analysis.network_metrics.validate import validate_network_metrics
-from ogn_tool.analysis.network_metrics_contract import collect_network_metric_warnings
-from ogn_tool.analysis.network_graph import network_events, network_timeseries
-from ogn_tool.analysis.network_graph.graph_metrics import compute_network_evolution_metrics
-from ogn_tool.analysis.observation_views import (
-    build_shadow_observation_frame,
-    build_spatial_observation_frame,
-)
-from ogn_tool.engine import network_graph_engine
+from ogn_tool.kernel import network_graph_engine
 
 
 EMPTY_GAP_COLUMNS = ["lat", "lon", "station_count", "gap_level", "notes"]

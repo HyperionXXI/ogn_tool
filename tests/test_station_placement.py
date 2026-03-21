@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ogn_tool.analysis.network_metrics.station_placement import compute_optimal_station_locations
+from ogn_tool.intelligence.network.station_placement_planner import compute_optimal_station_locations
 
 
 def test_compute_optimal_station_locations_returns_sorted_dataframe():

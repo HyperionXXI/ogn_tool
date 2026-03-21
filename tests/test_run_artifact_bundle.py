@@ -7,7 +7,6 @@ from ogn_tool.reporting.network_engineering_report import NetworkEngineeringRepo
 from ogn_tool.reporting.run_artifact_bundle import export_analysis_run_bundle
 
 
-
 def test_export_analysis_run_bundle_creates_artifacts(tmp_path: Path) -> None:
     bundle_dir = tmp_path / 'run-001'
     report = NetworkEngineeringReport()
@@ -45,6 +44,18 @@ def test_export_analysis_run_bundle_creates_artifacts(tmp_path: Path) -> None:
     assert (result / 'report.json').exists()
     assert (result / 'run_metadata.json').exists()
     assert (result / 'azimuth_distance_surface.json').exists()
+
+    report_json = json.loads((result / 'report.json').read_text(encoding='utf-8'))
+    assert set(report_json.keys()) == {'run_id', 'metadata', 'network_metrics', 'coverage_score'}
+    assert set(report_json['network_metrics'].keys()) == {
+        'network_summary',
+        'station_health',
+        'station_dependency',
+        'network_robustness',
+        'station_placement',
+    }
+    assert 'report_metadata' not in report_json
+    assert 'diagnostics' not in report_json
 
     metadata = json.loads((result / 'run_metadata.json').read_text(encoding='utf-8'))
     assert metadata['bundle_version'] == '1.0'

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.multi_station_coverage import (
+from ogn_tool.kernel.multi_station_intelligence_facade import (
     build_candidate_station_aircraft_sets,
+    select_stations_lazy_greedy,
 )
-from ogn_tool.analysis.intelligence.multi_station_planner import select_stations_lazy_greedy
 from ogn_tool.models.multi_station_scenario_result import MultiStationScenarioResult
 from ogn_tool.models.scenario_result import ScenarioResult
 from ogn_tool.runtime.network_multi_station_simulation import simulate_multi_station_addition

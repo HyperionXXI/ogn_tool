@@ -84,7 +84,16 @@ def _extract_events(run_entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for station_id in topology_delta.get('new_critical_stations', []):
             events.append({'run': current.get('run_id'), 'type': 'new_critical_station', 'station_id': station_id})
 
-        redundancy_delta = summary_delta.get('redundancy_score', {}).get('delta', 0.0)
+        redundancy_delta = summary_delta.get('redundancy_score', {}).get('delta')
+        if redundancy_delta is None:
+            prev_report = previous.get('report') if isinstance(previous.get('report'), dict) else {}
+            curr_report = current.get('report') if isinstance(current.get('report'), dict) else {}
+            prev_risk = prev_report.get('network_risk') if isinstance(prev_report.get('network_risk'), dict) else {}
+            curr_risk = curr_report.get('network_risk') if isinstance(curr_report.get('network_risk'), dict) else {}
+            prev_value = float(prev_risk.get('redundancy_score') or 0.0)
+            curr_value = float(curr_risk.get('redundancy_score') or 0.0)
+            redundancy_delta = curr_value - prev_value
+
         if redundancy_delta > 0:
             events.append({'run': current.get('run_id'), 'type': 'redundancy_improved', 'delta': redundancy_delta})
         elif redundancy_delta < 0:

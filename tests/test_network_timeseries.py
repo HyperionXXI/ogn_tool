@@ -1,4 +1,4 @@
-from ogn_tool.analysis.network_graph.network_timeseries import (
+from ogn_tool.kernel.network_timeseries import (
     compute_station_activity_timeseries,
     compute_network_load_timeseries,
 )

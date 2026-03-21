@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.observation_views import (
+from ogn_tool.reporting.views.observation_views import (
     build_shadow_observation_frame,
     build_spatial_observation_frame,
     build_visibility_observation_frame,

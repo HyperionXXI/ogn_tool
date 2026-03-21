@@ -1,4 +1,4 @@
-from ogn_tool.analysis.streaming.rf_state_engine import RFStateEngine
+from ogn_tool.runtime.streaming.rf_state_engine import RFStateEngine
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 
 

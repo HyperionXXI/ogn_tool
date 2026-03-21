@@ -1,104 +1,72 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
-from .network_engineering_report import NetworkEngineeringReport
-from .report_views import (
-    get_network_risk_summary,
-    get_network_status,
-    get_recommended_actions,
-    get_rf_signature,
-    get_station_health_summary,
-    get_station_availability,
-    get_analysis_confidence,
-)
+REPORT_CONTRACT_VERSION = '1.0'
 
-import subprocess
+REQUIRED_TOP_LEVEL_KEYS = {
+    'run_id',
+    'metadata',
+    'network_metrics',
+    'coverage_score',
+}
 
-
-REPORT_EXPORT_VERSION = '1.0'
-REPORT_SCHEMA_VERSION = '1.0'
-RF_SIGNATURE_VERSION = 2
-ANALYSIS_ENGINE_VERSION = '0.1'
-METRIC_SCHEMA_VERSION = 1
-
-def _git_info():
-    try:
-        commit = subprocess.check_output([
-            "git", "rev-parse", "--short", "HEAD"
-        ]).decode().strip()
-        branch = subprocess.check_output([
-            "git", "rev-parse", "--abbrev-ref", "HEAD"
-        ]).decode().strip()
-        dirty = bool(subprocess.check_output([
-            "git", "status", "--porcelain"
-        ]).decode().strip())
-        return commit, branch, dirty
-    except Exception:
-        return "unknown", "unknown", None
+REQUIRED_NETWORK_METRIC_KEYS = {
+    'network_summary',
+    'station_health',
+    'station_dependency',
+    'network_robustness',
+    'station_placement',
+}
 
 
+def _require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
 
 
-def export_network_report_json(report: NetworkEngineeringReport) -> dict[str, Any]:
-    """Export a stable JSON artifact from a NetworkEngineeringReport.
+def validate_network_report_contract(contract: dict[str, Any]) -> None:
+    _require(isinstance(contract, dict), 'report contract must be a dict')
 
-    Architectural rule:
-    This module must consume report_views only and must not read internal
-    fields from NetworkEngineeringReport.
-    """
-    if not isinstance(report, NetworkEngineeringReport):
-        raise TypeError('Expected NetworkEngineeringReport')
-
-    generated_at = (
-        datetime.now(timezone.utc)
-        .isoformat(timespec='seconds')
-        .replace('+00:00', 'Z')
+    top_keys = set(contract.keys())
+    _require(
+        top_keys == REQUIRED_TOP_LEVEL_KEYS,
+        f'invalid top-level keys: expected {sorted(REQUIRED_TOP_LEVEL_KEYS)}, got {sorted(top_keys)}',
     )
 
-    # Projections
-    station_availability = get_station_availability(report)
-    analysis_confidence = get_analysis_confidence(report)
-    network_status = get_network_status(report)
-    network_risk = get_network_risk_summary(report)
+    _require(isinstance(contract['run_id'], str), 'run_id must be a string')
+    _require(isinstance(contract['metadata'], dict), 'metadata must be a dict')
 
-    commit, branch, dirty = _git_info()
-    artifact = {
-        'report_metadata': {
-            'report_version': REPORT_EXPORT_VERSION,
-            'report_schema_version': REPORT_SCHEMA_VERSION,
-            'git_commit': commit,
-            'git_branch': branch,
-            'git_dirty': dirty,
-            'generated_at': generated_at,
-        },
-        'metrics': {
-            'station_availability': station_availability,
-        },
-        'diagnostics': {
-            'analysis_confidence': analysis_confidence,
-            'network_status': network_status,
-            'network_risk': network_risk,
-        },
-        'rf_signature_version': RF_SIGNATURE_VERSION,
-        'rf_signature': get_rf_signature(report),
-        'recommended_actions': get_recommended_actions(report),
-        # Backward compatibility: keep previous keys at root
-        'station_availability': station_availability,
-        'analysis_confidence': analysis_confidence,
-        'network_status': network_status,
-        'network_risk': network_risk,
-        'station_health': get_station_health_summary(report),
-    }
-    if hasattr(report, 'analysis_stats') and report.analysis_stats:
-        artifact['analysis_stats'] = report.analysis_stats
-    return artifact
+    network_metrics = contract['network_metrics']
+    _require(isinstance(network_metrics, dict), 'network_metrics must be a dict')
+
+    metric_keys = set(network_metrics.keys())
+    _require(
+        metric_keys == REQUIRED_NETWORK_METRIC_KEYS,
+        f'invalid network_metrics keys: expected {sorted(REQUIRED_NETWORK_METRIC_KEYS)}, got {sorted(metric_keys)}',
+    )
+
+    _require(isinstance(network_metrics['network_summary'], dict), 'network_metrics.network_summary must be a dict')
+    _require(isinstance(network_metrics['station_health'], list), 'network_metrics.station_health must be a list')
+    _require(isinstance(network_metrics['station_dependency'], list), 'network_metrics.station_dependency must be a list')
+    _require(isinstance(network_metrics['network_robustness'], dict), 'network_metrics.network_robustness must be a dict')
+    _require(isinstance(network_metrics['station_placement'], dict), 'network_metrics.station_placement must be a dict')
+
+    coverage_score = contract['coverage_score']
+    _require(
+        coverage_score is None or isinstance(coverage_score, (int, float)),
+        'coverage_score must be a float or null',
+    )
+
+
+def export_network_report_json(contract: dict[str, Any]) -> dict[str, Any]:
+    """Return canonical report.json artifact after strict contract validation."""
+    validate_network_report_contract(contract)
+    return contract
 
 
 __all__ = [
-    'REPORT_EXPORT_VERSION',
-    'REPORT_SCHEMA_VERSION',
-    'RF_SIGNATURE_VERSION',
+    'REPORT_CONTRACT_VERSION',
+    'validate_network_report_contract',
     'export_network_report_json',
 ]

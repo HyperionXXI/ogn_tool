@@ -18,7 +18,7 @@ from ogn_tool.data.db_repository import (
 )
 from ogn_tool.data.packets_repository import load_packets_window as _load_packets_window
 from ogn_tool.data.receptions_repository import load_rf_receptions as _load_rf_receptions
-from ogn_tool.engine.rf_engine import RFAnalysisEngine
+from ogn_tool.kernel.rf_engine import RFAnalysisEngine
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.domain.rf_analysis_results import RFAnalysisResults
 from ogn_tool.models.rf_observation_vector import RFObservationVector

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.rf.shadow_coverage import (
+from ogn_tool.intelligence.spatial.shadow_coverage_inference import (
     compute_shadow_risk_scores,
     compute_station_angular_entropy,
 )

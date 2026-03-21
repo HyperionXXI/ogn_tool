@@ -1,4 +1,4 @@
-from ogn_tool.analysis.network_metrics_contract import collect_network_metric_warnings
+from ogn_tool.reporting.contracts.network_metrics_contract import collect_network_metric_warnings
 
 
 def test_collect_network_metric_warnings_reports_missing_families() -> None:

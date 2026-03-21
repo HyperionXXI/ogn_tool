@@ -1,4 +1,4 @@
-from ogn_tool.engine import network_graph_engine
+from ogn_tool.kernel import network_graph_engine
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 
 

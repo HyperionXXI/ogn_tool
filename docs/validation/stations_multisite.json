@@ -1,0 +1,50 @@
+{
+  "profile": "jura_local_multistation_v1",
+  "selection_rule": "local relevance over global packet volume",
+  "source": {
+    "db": "F:/Data/ogn/ogn_log.sqlite3",
+    "query": "packets where lat in [47.2,47.5] and lon in [7.0,7.6], grouped by igate"
+  },
+  "notes": [
+    "Coordinates are approximate and should be verified before strict spatial interpretation.",
+    "Stations were selected for local Jura validation, not global OGN dominance."
+  ],
+  "stations": [
+    {
+      "station_id": "FK50887",
+      "lat": 47.335831,
+      "lon": 7.273000,
+      "coords_status": "verified"
+    },
+    {
+      "station_id": "LSPD",
+      "lat": 47.440,
+      "lon": 7.500,
+      "coords_status": "approx_to_verify"
+    },
+    {
+      "station_id": "SOLOTHURN",
+      "lat": 47.210,
+      "lon": 7.540,
+      "coords_status": "approx_to_verify"
+    },
+    {
+      "station_id": "LSZG",
+      "lat": 47.180,
+      "lon": 7.420,
+      "coords_status": "approx_to_verify"
+    },
+    {
+      "station_id": "LSZJ",
+      "lat": 47.180,
+      "lon": 7.070,
+      "coords_status": "approx_to_verify"
+    },
+    {
+      "station_id": "DORNACH",
+      "lat": 47.480,
+      "lon": 7.620,
+      "coords_status": "approx_to_verify"
+    }
+  ]
+}

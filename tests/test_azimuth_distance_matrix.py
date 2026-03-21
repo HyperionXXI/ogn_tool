@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ogn_tool.analysis.azimuth_distance_matrix import compute_azimuth_distance_matrix
+from ogn_tool.kernel.azimuth_distance_matrix import compute_azimuth_distance_matrix
 
 
 AZIMUTH_BINS = [0.0, 90.0, 180.0, 270.0, 360.0]

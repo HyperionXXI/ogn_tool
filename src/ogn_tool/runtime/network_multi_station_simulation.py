@@ -4,12 +4,10 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.multi_station_coverage import (
+from ogn_tool.kernel.multi_station_intelligence_facade import (
     build_candidate_station_aircraft_sets,
-    evaluate_multi_station_coverage,
-)
-from ogn_tool.analysis.intelligence.station_addition_evaluations import (
     build_station_addition_evaluations,
+    evaluate_multi_station_coverage,
 )
 from ogn_tool.models.multi_station_scenario_result import MultiStationScenarioResult
 from ogn_tool.models.scenario_result import ScenarioMetrics

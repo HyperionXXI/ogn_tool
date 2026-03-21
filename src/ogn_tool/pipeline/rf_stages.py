@@ -2,14 +2,19 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.network_metrics import detect_network_blind_zones
-from ogn_tool.engine.rf_model_runner import run
+from ogn_tool.kernel.rf_model_runner import run
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
-from ogn_tool.analysis.network import station_quality as analysis_station_quality
-from ogn_tool.analysis.network import station_range as analysis_station_range
+from ogn_tool.kernel.rf_analysis_facade import (
+    analysis_station_quality,
+    analysis_station_range,
+    build_feature_matrix,
+    build_rf_probability_field,
+    detect_network_blind_zones,
+    detect_shadow_sectors,
+    estimate_antenna_pattern,
+)
 from ogn_tool.rf import azimuth as analysis_azimuth
-from ogn_tool.analysis.rf_metrics.probability_field import build_rf_probability_field
-from ogn_tool.engine.rf_models_registry import MODELS
+from ogn_tool.kernel.rf_models_registry import MODELS
 
 from .rf_stage import RFAnalysisStage
 
@@ -20,8 +25,6 @@ class FeatureMatrixStage(RFAnalysisStage):
     produces = ["feature_matrix"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
-        from ogn_tool.analysis.rf_metrics.feature_matrix import build_feature_matrix
-
         dataset.results.feature_matrix = build_feature_matrix(dataset.observations)
         return dataset
 
@@ -153,8 +156,6 @@ class AntennaPatternStage(RFAnalysisStage):
     produces = ["antenna_pattern", "antenna_shadow_sectors"]
 
     def run(self, dataset: RFAnalysisDataset) -> RFAnalysisDataset:
-
-        from ogn_tool.analysis.rf_metrics.antenna_pattern import estimate_antenna_pattern, detect_shadow_sectors
 
         pattern = estimate_antenna_pattern(dataset.results.feature_matrix)
 

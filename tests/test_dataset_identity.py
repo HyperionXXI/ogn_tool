@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.analysis.dataset_identity import build_dataset_identity
+from ogn_tool.domain.rf.dataset_identity import build_dataset_identity
 
 
 

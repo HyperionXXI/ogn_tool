@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable
 
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
-from ogn_tool.engine.rf_pipeline_executor import execute_rf_pipeline
+from ogn_tool.kernel.rf_pipeline_executor import execute_rf_pipeline
 from .rf_stages import (
     AntennaPatternStage,
     BlindZoneDetectionStage,

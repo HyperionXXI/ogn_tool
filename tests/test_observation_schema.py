@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.analysis.observation_schema import (
+from ogn_tool.domain.rf.observation_schema import (
     SHADOW_COLUMNS,
     SPATIAL_COLUMNS,
     VISIBILITY_COLUMNS,

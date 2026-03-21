@@ -1,11 +1,9 @@
 import pandas as pd
 
-from ogn_tool.analysis.network_graph import (
-    build_coverage_graph,
-    build_rf_graph,
-    compute_graph_metrics,
-    compute_station_aircraft_links,
-)
+from ogn_tool.kernel.coverage_graph import build_coverage_graph
+from ogn_tool.kernel.graph_metrics import compute_graph_metrics
+from ogn_tool.kernel.rf_graph_builder import build_rf_graph
+from ogn_tool.kernel.station_graph import compute_station_aircraft_links
 
 
 def test_station_aircraft_links_and_coverage_graph():

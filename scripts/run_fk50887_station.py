@@ -4,9 +4,9 @@ import argparse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ogn_tool.analysis import compute_azimuth_distance_matrix
-from ogn_tool.analysis.dataset_identity import build_dataset_identity
-from ogn_tool.analysis.rf_observations import compute_bearing, compute_distance
+from ogn_tool.kernel.azimuth_distance_matrix import compute_azimuth_distance_matrix
+from ogn_tool.domain.rf.dataset_identity import build_dataset_identity
+from ogn_tool.domain.rf.rf_observations import compute_bearing, compute_distance
 from ogn_tool.reporting import (
     build_azimuth_distance_summary,
     build_network_engineering_report,
@@ -130,7 +130,7 @@ def main() -> None:
     lag_hours = int((datetime.now(timezone.utc) - end_dt).total_seconds() // 3600)
 
     run_id = end_dt.strftime(f"fk50887_%Y_%m_%d_%H%M%S_{window_hours}h_offset{end_offset_hours}h")
-    registry_dir = Path("analysis_runs")
+    registry_dir = Path("data/runs/analysis_runs")
     bundle_dir = registry_dir / run_id
 
     export_analysis_run_bundle(
