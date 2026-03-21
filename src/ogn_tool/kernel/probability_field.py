@@ -63,7 +63,11 @@ def compute_reception_probability(grid: pd.DataFrame) -> pd.DataFrame:
 
     grid["probability"] = probability
     grid["confidence"] = density.clip(lower=0.0, upper=1.0)
-    grid["sample_count"] = pd.to_numeric(grid.get("packets", 0), errors="coerce").fillna(0).astype(int)
+    if "packets" in grid.columns:
+        sample_count = pd.to_numeric(grid["packets"], errors="coerce").fillna(0).astype(int)
+    else:
+        sample_count = pd.Series(0, index=grid.index, dtype=int)
+    grid["sample_count"] = sample_count
 
     return grid
 

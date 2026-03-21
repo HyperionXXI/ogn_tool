@@ -3,140 +3,236 @@
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T14:12:23Z",
-      "path": "analysis_runs\\fk50887_2026_03_09_181353",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_09_181353",
       "run_id": "fk50887_2026_03_09_181353"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T14:17:32Z",
-      "path": "analysis_runs\\fk50887_2026_03_09_181353_72h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_09_181353_72h",
       "run_id": "fk50887_2026_03_09_181353_72h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T14:17:45Z",
-      "path": "analysis_runs\\fk50887_2026_03_09_181353_24h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_09_181353_24h",
       "run_id": "fk50887_2026_03_09_181353_24h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T14:47:40Z",
-      "path": "analysis_runs\\fk50887_2026_03_09_181353_24h_offset0h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_09_181353_24h_offset0h",
       "run_id": "fk50887_2026_03_09_181353_24h_offset0h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T14:47:55Z",
-      "path": "analysis_runs\\fk50887_2026_03_08_181353_24h_offset24h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_08_181353_24h_offset24h",
       "run_id": "fk50887_2026_03_08_181353_24h_offset24h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T19:33:52Z",
-      "path": "analysis_runs\\fk50887_2026_03_15_172552_24h_offset0h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_15_172552_24h_offset0h",
       "run_id": "fk50887_2026_03_15_172552_24h_offset0h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T19:53:27Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_152552_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_152552_72h_offset122h",
       "run_id": "fk50887_2026_03_10_152552_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T20:20:52Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_162552_72h_offset121h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_162552_72h_offset121h",
       "run_id": "fk50887_2026_03_10_162552_72h_offset121h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T20:51:48Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_185138_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_185138_72h_offset122h",
       "run_id": "fk50887_2026_03_10_185138_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T21:12:48Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_191238_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_191238_72h_offset122h",
       "run_id": "fk50887_2026_03_10_191238_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T21:27:28Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_192715_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_192715_72h_offset122h",
       "run_id": "fk50887_2026_03_10_192715_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T21:38:12Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_193757_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_193757_72h_offset122h",
       "run_id": "fk50887_2026_03_10_193757_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:28:23Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_202803_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_202803_72h_offset122h",
       "run_id": "fk50887_2026_03_10_202803_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:33:21Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_203305_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_203305_72h_offset122h",
       "run_id": "fk50887_2026_03_10_203305_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:44:21Z",
-      "path": "analysis_runs\\fk50887_2026_03_03_104358_72h_offset300h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_03_104358_72h_offset300h",
       "run_id": "fk50887_2026_03_03_104358_72h_offset300h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:48:55Z",
-      "path": "analysis_runs\\fk50887_2026_03_03_104832_24h_offset300h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_03_104832_24h_offset300h",
       "run_id": "fk50887_2026_03_03_104832_24h_offset300h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:49:24Z",
-      "path": "analysis_runs\\fk50887_2026_03_03_104905_72h_offset300h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_03_104905_72h_offset300h",
       "run_id": "fk50887_2026_03_03_104905_72h_offset300h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:49:59Z",
-      "path": "analysis_runs\\fk50887_2026_03_03_104940_168h_offset300h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_03_104940_168h_offset300h",
       "run_id": "fk50887_2026_03_03_104940_168h_offset300h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:56:41Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_205621_72h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_205621_72h_offset122h",
       "run_id": "fk50887_2026_03_10_205621_72h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T22:56:54Z",
-      "path": "analysis_runs\\fk50887_2026_03_10_205633_168h_offset122h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_10_205633_168h_offset122h",
       "run_id": "fk50887_2026_03_10_205633_168h_offset122h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-15T23:05:56Z",
-      "path": "analysis_runs\\fk50887_2026_03_12_230533_168h_offset72h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_12_230533_168h_offset72h",
       "run_id": "fk50887_2026_03_12_230533_168h_offset72h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-16T17:13:40Z",
-      "path": "analysis_runs\\fk50887_2026_03_11_091325_168h_offset128h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_11_091325_168h_offset128h",
       "run_id": "fk50887_2026_03_11_091325_168h_offset128h"
     },
     {
       "bundle_version": "1.0",
       "generated_at": "2026-03-16T17:14:06Z",
-      "path": "analysis_runs\\fk50887_2026_03_11_091356_72h_offset128h",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_11_091356_72h_offset128h",
       "run_id": "fk50887_2026_03_11_091356_72h_offset128h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:00:02Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_15_195954_72h_offset122h",
+      "run_id": "fk50887_2026_03_15_195954_72h_offset122h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:00:56Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_08_100046_72h_offset300h",
+      "run_id": "fk50887_2026_03_08_100046_72h_offset300h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:15:33Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_20_220358_12h_offset0h",
+      "run_id": "fk50887_2026_03_20_220358_12h_offset0h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:31:29Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_20_173108_6h_offset5h",
+      "run_id": "fk50887_2026_03_20_173108_6h_offset5h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:31:35Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_20_163124_6h_offset6h",
+      "run_id": "fk50887_2026_03_20_163124_6h_offset6h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:31:58Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_20_173141_6h_offset5h",
+      "run_id": "fk50887_2026_03_20_173141_6h_offset5h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:32:21Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_20_163212_6h_offset6h",
+      "run_id": "fk50887_2026_03_20_163212_6h_offset6h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-20T22:32:34Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_20_153228_6h_offset7h",
+      "run_id": "fk50887_2026_03_20_153228_6h_offset7h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T08:29:33Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_16_062926_24h_offset122h",
+      "run_id": "fk50887_2026_03_16_062926_24h_offset122h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T08:30:11Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_19_083007_24h_offset48h",
+      "run_id": "fk50887_2026_03_19_083007_24h_offset48h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T08:30:23Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_20_083019_24h_offset24h",
+      "run_id": "fk50887_2026_03_20_083019_24h_offset24h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T08:31:15Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_19_083032_72h_offset48h",
+      "run_id": "fk50887_2026_03_19_083032_72h_offset48h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T19:19:36Z",
+      "path": "data\\runs\\analysis_runs\\fk50887_2026_03_21_121927_6h_offset7h",
+      "run_id": "fk50887_2026_03_21_121927_6h_offset7h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T19:19:45Z",
+      "path": "data\\runs\\analysis_runs\\lspd_2026_03_21_121927_6h_offset7h",
+      "run_id": "lspd_2026_03_21_121927_6h_offset7h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T19:19:46Z",
+      "path": "data\\runs\\analysis_runs\\solothurn_2026_03_21_121927_6h_offset7h",
+      "run_id": "solothurn_2026_03_21_121927_6h_offset7h"
+    },
+    {
+      "bundle_version": "1.0",
+      "generated_at": "2026-03-21T19:20:36Z",
+      "path": "data\\runs\\analysis_runs\\lszg_2026_03_21_121927_6h_offset7h",
+      "run_id": "lszg_2026_03_21_121927_6h_offset7h"
     }
   ]
 }
