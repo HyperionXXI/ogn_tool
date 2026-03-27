@@ -236,6 +236,9 @@ def get_payload(run_id: str = Query(..., min_length=1)) -> dict:
 
     payload = _enrich_station_coordinates(payload, report_path)
 
+    meta = metadata_doc.get('metadata') if isinstance(metadata_doc.get('metadata'), dict) else {}
+    payload['analysis_mode'] = str(meta.get('analysis_mode') or 'observed')
+
     metadata_doc = _load_run_metadata(report_path)
     aircraft_positions = _extract_aircraft_positions(metadata_doc)
     metrics = payload.get('metrics')

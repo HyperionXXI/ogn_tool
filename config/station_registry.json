@@ -1,0 +1,84 @@
+{
+  "stations": [
+    {
+      "station_id": "FK50887",
+      "lat": 47.335831,
+      "lon": 7.273,
+      "alt_m": 454.1,
+      "coords_status": "verified",
+      "source": "local_registry"
+    },
+    {
+      "station_id": "LSPD",
+      "lat": 47.44,
+      "lon": 7.5,
+      "alt_m": null,
+      "coords_status": "approx_to_verify",
+      "source": "local_registry"
+    },
+    {
+      "station_id": "LSZG",
+      "lat": 47.181,
+      "lon": 7.417,
+      "alt_m": null,
+      "coords_status": "approx_to_verify",
+      "source": "local_registry"
+    },
+    {
+      "station_id": "SOLOTHURN",
+      "lat": 47.21,
+      "lon": 7.54,
+      "alt_m": null,
+      "coords_status": "approx_to_verify",
+      "source": "local_registry"
+    },
+    {
+      "station_id": "LSZJ",
+      "lat": 47.18,
+      "lon": 7.07,
+      "alt_m": null,
+      "coords_status": "approx_to_verify",
+      "source": "local_registry"
+    },
+    {
+      "station_id": "DORNACH",
+      "lat": 47.48,
+      "lon": 7.62,
+      "alt_m": null,
+      "coords_status": "approx_to_verify",
+      "source": "local_registry"
+    },
+    {
+      "station_id": "FNT010164",
+      "lat": 47.377,
+      "lon": 7.2085,
+      "alt_m": null,
+      "coords_status": "to_verify",
+      "source": "manual"
+    },
+    {
+      "station_id": "FNT010165",
+      "lat": 47.2565,
+      "lon": 7.375,
+      "alt_m": null,
+      "coords_status": "to_verify",
+      "source": "manual"
+    },
+    {
+      "station_id": "FNT010166",
+      "lat": 47.30717,
+      "lon": 7.42867,
+      "alt_m": null,
+      "coords_status": "to_verify",
+      "source": "manual"
+    },
+    {
+      "station_id": "FNTBA0002",
+      "lat": 47.2085,
+      "lon": 7.21783,
+      "alt_m": null,
+      "coords_status": "to_verify",
+      "source": "manual"
+    }
+  ]
+}
