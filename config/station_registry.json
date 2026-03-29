@@ -10,40 +10,40 @@
     },
     {
       "station_id": "LSPD",
-      "lat": 47.44,
-      "lon": 7.5,
-      "alt_m": null,
+      "lat": 47.4385,
+      "lon": 7.489,
+      "alt_m":  550.16,
       "coords_status": "approx_to_verify",
       "source": "local_registry"
     },
     {
       "station_id": "LSZG",
-      "lat": 47.181,
-      "lon": 7.417,
-      "alt_m": null,
+      "lat": 47.182,
+      "lon": 7.4115,
+      "alt_m":  452.93,
       "coords_status": "approx_to_verify",
       "source": "local_registry"
     },
     {
       "station_id": "SOLOTHURN",
-      "lat": 47.21,
-      "lon": 7.54,
+      "lat": 47.211,
+      "lon": 7.5315,
       "alt_m": null,
       "coords_status": "approx_to_verify",
       "source": "local_registry"
     },
     {
       "station_id": "LSZJ",
-      "lat": 47.18,
-      "lon": 7.07,
+      "lat": 47.1835,
+      "lon": 7.08967,
       "alt_m": null,
       "coords_status": "approx_to_verify",
       "source": "local_registry"
     },
     {
       "station_id": "DORNACH",
-      "lat": 47.48,
-      "lon": 7.62,
+      "lat": 47.478,
+      "lon": 7.62133,
       "alt_m": null,
       "coords_status": "approx_to_verify",
       "source": "local_registry"

@@ -26,10 +26,6 @@ samples_rx*.txt
 rx_*.csv
 
 # local data
-/data/*.sqlite3
-/data/*.sqlite3-wal
-/data/*.sqlite3-shm
-/data/ogn_log.sqlite3*
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
@@ -39,7 +35,6 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-data/
 *.sqlite
 *.log
 scripts/rf_out/
@@ -60,3 +55,9 @@ report 1.txt
 *.tmp
 report*.txt
 !docs/architecture/REFACTOR_WORK_LOG.txt
+data/*
+!data/.gitkeep
+# runtime artifacts
+data/runs/analysis_runs/
+*.cache
+console.log*
