@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.station_addition_evaluations import _candidate_id_from_coordinates
-from ogn_tool.analysis.intelligence.station_addition_simulation import _distance_km
+from ogn_tool.intelligence.station_addition_evaluations import _candidate_id_from_coordinates
+from ogn_tool.intelligence.station_addition_simulation import _distance_km
 from ogn_tool.models.multi_station_coverage_evaluation import MultiStationCoverageEvaluation
 
 

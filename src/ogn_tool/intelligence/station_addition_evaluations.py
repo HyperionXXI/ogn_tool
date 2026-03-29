@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence import simulate_station_addition
+from ogn_tool.intelligence import simulate_station_addition
 from ogn_tool.models.station_addition_evaluation import StationAdditionEvaluation
 
 

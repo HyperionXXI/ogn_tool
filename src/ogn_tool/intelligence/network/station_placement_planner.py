@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.rf.geometry import haversine_km_vector
+from ogn_tool.kernel.rf.geometry import haversine_km_vector
 
 MAX_CANDIDATE_POINTS = 2000
 SUPPORT_RADIUS_KM = 30.0

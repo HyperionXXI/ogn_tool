@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ogn_tool.analysis.intelligence import simulate_station_removal
+from ogn_tool.intelligence import simulate_station_removal
 from ogn_tool.models.scenario_result import ScenarioMetrics, ScenarioResult
 
 

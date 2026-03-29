@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.rf.geometry import bearing_deg_vector, haversine_km_vector
+from ogn_tool.kernel.rf.geometry import bearing_deg_vector, haversine_km_vector
 
 
 def build_rf_observations(packets_df: pd.DataFrame, receptions_df: pd.DataFrame) -> pd.DataFrame:

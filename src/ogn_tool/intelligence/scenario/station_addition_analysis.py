@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.station_addition_evaluations import (
+from ogn_tool.intelligence.station_addition_evaluations import (
     build_station_addition_evaluations,
 )
 from ogn_tool.models.scenario_result import ScenarioMetrics, ScenarioResult
