@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from ogn_tool.reporting.report_intelligence import build_report_intelligence
+from ogn_tool.reporting.spatial_network_builder import build_spatial_network_features
 from ogn_tool.reporting.ui_projection import build_ui_projection
 
 
@@ -63,6 +64,12 @@ def build_dashboard_payload(report: dict[str, Any]) -> dict[str, Any]:
 
     intelligence = build_report_intelligence(report)
     projection = build_ui_projection(report, intelligence)
+
+    aircraft_observations = report.get('aircraft_observations')
+    if isinstance(aircraft_observations, list):
+        projection['spatial_network_features'] = build_spatial_network_features(aircraft_observations)
+    else:
+        projection['spatial_network_features'] = build_spatial_network_features([])
 
     return {
         'network_summary': network_summary,

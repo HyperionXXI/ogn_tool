@@ -24,6 +24,9 @@ from ogn_tool.reporting.views.dashboard_views import (
     load_report_from_upload,
 )
 
+from ogn_tool.ui.adapters.payload_to_ui import build_station_insights
+from ogn_tool.ui.views.station_view import render_station_list
+
 
 st.set_page_config(page_title="OGN Tool - Spatial Explorer", layout="wide")
 
@@ -107,6 +110,8 @@ elif report_path:
 if payload is None:
     st.info("Provide a report (`report.json`) to begin.")
     st.stop()
+
+insights = build_station_insights(payload)
 
 projection = payload.get("metrics", {})
 stations = _coerce_points(projection.get("stations", []))
@@ -296,6 +301,8 @@ with col_inspector:
                 st.warning("Possible terrain shadow")
             else:
                 st.info("Weak shadow signal")
+
+    render_station_list(insights)
 
     with st.expander("Debug"):
         st.json(payload.get("debug", {}))

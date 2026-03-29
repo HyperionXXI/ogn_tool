@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <link rel="icon" href="data:," />
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <title>OGN RF Intelligence Map</title>
+  <style>
+    :root {
+      --bg: #0B0F14;
+      --panel: rgba(11, 15, 20, 0.72);
+      --border: rgba(255, 255, 255, 0.10);
+      --text: #E5E7EB;
+      --muted: #9CA3AF;
+      --good: #22c55e;
+      --limited: #f59e0b;
+      --poor: #ef4444;
+      --focus: #facc15;
+      --context-panel: rgba(16, 22, 30, 0.88);
+      --setup-panel: rgba(10, 14, 20, 0.58);
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    #layout {
+      display: grid;
+      grid-template-columns: 320px 1fr 320px;
+      grid-template-rows: 60px 1fr;
+      height: 100vh;
+      background: var(--bg);
+    }
+
+    .overlay {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    #top-bar {
+      grid-column: 1 / 4;
+      grid-row: 1;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 14px;
+      align-items: center;
+      margin: 8px 16px;
+      padding: 8px 14px;
+      z-index: 20;
+    }
+
+    #left-panel {
+      grid-column: 1;
+      grid-row: 2;
+      padding: 16px;
+      border-right: 1px solid #1f2933;
+      overflow-y: auto;
+    }
+
+    #map-container {
+      grid-column: 2;
+      grid-row: 2;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #map-container::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: var(--map-tint, rgba(34, 197, 94, 0));
+      pointer-events: none;
+      z-index: 1;
+      transition: background 180ms ease;
+    }
+
+    #map {
+      position: absolute;
+      inset: 0;
+    }
+
+    .mode-observed {
+      --map-tint: rgba(34, 197, 94, 0);
+    }
+
+    .mode-estimated {
+      --map-tint: rgba(59, 130, 246, 0.08);
+    }
+
+    .mode-heuristic {
+      --map-tint: rgba(245, 158, 11, 0.08);
+    }
+
+    #right-panel {
+      grid-column: 3;
+      grid-row: 2;
+      padding: 16px;
+      border-left: 1px solid #1f2933;
+      overflow-y: auto;
+    }
+
+    #decision-panel {
+      position: absolute;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(640px, calc(100% - 48px));
+      padding: 14px;
+      z-index: 50;
+    }
+
+    #no-data-banner {
+      position: absolute;
+      z-index: 60;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(239, 68, 68, 0.55);
+      background: rgba(40, 10, 10, 0.82);
+      color: #fee2e2;
+      font-size: 13px;
+      display: none;
+    }
+
+    #mode-warning {
+      position: absolute;
+      z-index: 55;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      background: rgba(56, 40, 12, 0.78);
+      color: #fde68a;
+      font-size: 12px;
+      display: none;
+    }
+
+    .panel {
+      margin-bottom: 20px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(10, 15, 25, 0.95), rgba(5, 10, 20, 0.98));
+      border: 1px solid rgba(120, 200, 255, 0.12);
+      box-shadow: inset 0 0 10px rgba(120, 200, 255, 0.05), 0 10px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .panel.setup-panel {
+      background: linear-gradient(180deg, var(--setup-panel), rgba(7, 10, 16, 0.7));
+      opacity: 0.88;
+      padding: 12px;
+    }
+
+    .panel.context-panel {
+      background: linear-gradient(180deg, var(--context-panel), rgba(10, 15, 24, 0.96));
+      border-color: rgba(125, 211, 252, 0.18);
+      box-shadow: inset 0 0 14px rgba(125, 211, 252, 0.06), 0 12px 30px rgba(0, 0, 0, 0.62);
+    }
+
+    .title {
+      margin: 0 0 10px;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .context-panel .title,
+    .state-panel .title {
+      font-size: 12px;
+      letter-spacing: .1em;
+    }
+
+    .subsection {
+      margin-bottom: 18px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .subsection:last-child {
+      margin-bottom: 0;
+    }
+
+    .subsection-title {
+      margin: 0 0 8px;
+      font-size: 11px;
+      color: #cbd5e1;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+
+    .subsection-text {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    .subsection-hint {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .focus-active .subsection-title,
+    .focus-active .subsection-text {
+      color: var(--focus);
+    }
+
+    .focus-idle .subsection-text {
+      color: var(--muted);
+    }
+
+    .item {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .item strong {
+      display: block;
+      color: var(--text);
+      font-size: 12px;
+      margin-top: 3px;
+      text-transform: none;
+      letter-spacing: normal;
+    }
+
+    .line {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .line strong { font-weight: 700; }
+    .metric-good strong { color: var(--good); }
+    .metric-limited strong { color: var(--limited); }
+    .metric-poor strong { color: var(--poor); }
+
+    .network-summary {
+      margin-top: 12px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .field {
+      margin-bottom: 10px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .command-group {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .cmd {
+      display: grid;
+      grid-template-columns: 1fr;
+      text-align: left;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .cmd:hover {
+      border-color: rgba(120, 200, 255, 0.45);
+      background: rgba(30, 65, 120, 0.22);
+    }
+
+    .cmd.primary {
+      border: 1px solid rgba(120, 200, 255, 0.6);
+      background: linear-gradient(180deg, rgba(40, 80, 140, 0.35), rgba(10, 20, 40, 0.6));
+      box-shadow: 0 0 12px rgba(120, 200, 255, 0.15);
+    }
+
+    .cmd.primary:hover {
+      box-shadow: 0 0 18px rgba(120, 200, 255, 0.35);
+    }
+
+    .cmd-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .cmd-desc {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .controls > * {
+      flex: 1;
+    }
+
+    select,
+    input,
+    button:not(.cmd) {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 8px;
+      font-size: 12px;
+    }
+
+    .toggle {
+      display: grid;
+      grid-template-columns: 1fr 18px;
+      align-items: center;
+      height: 28px;
+      font-size: 13px;
+      margin: 4px 0;
+      gap: 8px;
+    }
+
+    .toggle input {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+    }
+
+    .toggle span {
+      display: block;
+      line-height: 28px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      margin: 5px 0;
+    }
+
+    .sw {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      display: inline-block;
+    }
+
+    .sw.dot { border-radius: 999px; }
+    .sw.line { width: 18px; height: 2px; border-radius: 2px; margin-top: 4px; }
+    .sw.circle { width: 14px; height: 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.45); }
+
+    #status {
+      display: inline-block;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      border: 1px solid transparent;
+    }
+
+    .badge-good { color: #dcfce7; background: rgba(34, 197, 94, 0.18); border-color: rgba(34, 197, 94, 0.38); }
+    .badge-limited { color: #fef3c7; background: rgba(245, 158, 11, 0.18); border-color: rgba(245, 158, 11, 0.38); }
+    .badge-poor { color: #fee2e2; background: rgba(239, 68, 68, 0.18); border-color: rgba(239, 68, 68, 0.38); }
+
+    .decision-line {
+      margin: 6px 0;
+      font-size: 13px;
+    }
+
+    .decision-line span {
+      color: var(--muted);
+      display: inline-block;
+      width: 72px;
+    }
+
+    #command-feedback {
+      font-size: 11px;
+      color: #7fdcff;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+    }
+
+    .confidence-badge {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+
+    .badge-observed {
+      color: #22c55e;
+    }
+
+    .badge-estimated {
+      color: #f59e0b;
+    }
+
+    .badge-heuristic {
+      color: #94a3b8;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    #command-feedback.running {
+      animation: pulse 1.5s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div id="layout">
+    <header id="top-bar" class="overlay">
+      <div class="item">Context<strong id="context">-</strong></div>
+      <div class="item">Last data<strong id="last-data">-</strong></div>
+      <div class="item">Window<strong id="window">-</strong></div>
+      <div class="item">Stations<strong id="stations">-</strong></div>
+      <div class="item">Analysis mode<strong id="mode">-</strong></div>
+      <div class="item">Command<strong id="command-feedback">Idle</strong></div>
+    </header>
+
+    <aside id="left-panel">
+      <details class="panel overlay setup-panel" open>
+        <summary class="title">Setup</summary>
+        <div class="field">
+          <label for="run-list">Run</label>
+          <select id="run-list"></select>
+        </div>
+        <div class="controls">
+          <div class="field" style="margin:0;">
+            <label for="window-input">Time Window (h)</label>
+            <input id="window-input" type="number" min="1" max="168" value="6" />
+          </div>
+          <div class="field" style="margin:0;">
+            <label for="offset-input">Offset (h)</label>
+            <input id="offset-input" type="number" min="0" max="720" value="0" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="station-input">Reference station</label>
+          <input id="station-input" type="text" value="FK50887" />
+          <div id="station-validation-message" class="subsection-hint" style="margin-top:6px; display:none;"></div>
+        </div>
+        <div class="command-group">
+          <button class="cmd primary" id="btn-load-run">
+            <span class="cmd-label">Load Dataset</span>
+            <span class="cmd-desc">Select RF observation set</span>
+          </button>
+          <button class="cmd primary" id="btn-execute-run">
+            <span class="cmd-label">Run RF Analysis</span>
+            <span class="cmd-desc">Compute signal field and anomalies</span>
+          </button>
+        </div>
+        <div class="command-group">
+          <button class="cmd ghost" id="btn-reset-view">
+            <span class="cmd-label">Reset Spatial View</span>
+            <span class="cmd-desc">Return to full operational context</span>
+          </button>
+          <button class="cmd ghost" id="btn-focus-problem">
+            <span class="cmd-label">Focus Critical Zone</span>
+            <span class="cmd-desc">Center map on highest-risk area</span>
+          </button>
+          <button class="cmd ghost" id="btn-clear-node-focus">
+            <span class="cmd-label">Clear Node Focus</span>
+            <span class="cmd-desc">Return to global node context</span>
+          </button>
+        </div>
+      </details>
+
+      <section class="panel overlay context-panel">
+        <h3 class="title">Analysis Context</h3>
+        <div class="subsection">
+          <h3 class="subsection-title">Dataset</h3>
+          <div class="subsection-text" id="dataset-summary">-</div>
+          <div class="subsection-hint" id="dataset-mode-summary">Analysis mode: -</div>
+          <div class="subsection-hint" id="planning-summary" style="display:none; white-space:pre-line;"></div>
+        </div>
+        <div class="subsection">
+          <h3 class="subsection-title">Reference</h3>
+          <div class="subsection-text" id="reference-station-summary">Station: -</div>
+        </div>
+        <div class="subsection focus-idle" id="focus-section">
+          <h3 class="subsection-title">Current inspection target</h3>
+          <div class="subsection-text" id="focus-node-summary">Focus node: None</div>
+          <div class="subsection-hint">Click a node on the map to inspect it.</div>
+          <div class="subsection-hint">If no node is selected, you are viewing global network behavior.</div>
+        </div>
+      </section>
+
+      <section class="panel overlay state-panel">
+        <h3 class="title">Network State</h3>
+        <div id="kpi-network"></div>
+        <div class="network-summary" id="network-summary-text">Network is partially covered. Several areas lack signal.</div>
+      </section>
+    </aside>
+
+    <main id="map-container">
+      <div id="map"></div>
+      <section id="decision-panel" class="overlay">
+        <h3 class="title">Intelligence <span id="intelligence-confidence"></span></h3>
+        <div id="status" class="badge-limited">LIMITED</div>
+        <div class="decision-line"><span id="issue-label">Issue</span><strong id="issue">-</strong></div>
+        <div class="decision-line"><span id="cause-label">Cause</span><strong id="cause">-</strong></div>
+        <div class="decision-line"><span id="action-label">Action</span><strong id="action">-</strong></div>
+        <div class="decision-line"><span>Severity</span><strong id="severity">-</strong></div>
+      </section>
+      <div id="no-data-banner">NO DATA IN VIEW</div>
+      <div id="mode-warning">NODE NOT APPLICABLE IN CURRENT MODE</div>
+    </main>
+
+    <aside id="right-panel">
+      <section class="panel overlay">
+        <h3 class="title">Field Legend</h3>
+        <div id="field-legend-body"></div>
+      </section>
+
+      <section class="panel overlay">
+        <h3 class="title">Signal Filters</h3>
+        <div id="layer-controls"></div>
+      </section>
+
+      <section class="panel overlay">
+        <h3 class="title">Analysis Modes</h3>
+        <div id="mode-controls" class="command-group"></div>
+      </section>
+
+      <section class="panel overlay" id="messages-panel" style="display:none;">
+        <h3 class="title">Message Stream</h3>
+        <div id="messages-list" style="max-height:220px; overflow:auto; font-size:12px;"></div>
+      </section>
+    </aside>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/deck.gl@9.0.36/dist.min.js"></script>
+  <script type="module" src="./app.js?v=20260326e"></script>
+</body>
+</html>
