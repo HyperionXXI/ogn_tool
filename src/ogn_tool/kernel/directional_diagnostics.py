@@ -4,7 +4,7 @@ from typing import Any
 
 import pandas as pd
 
-from ogn_tool.rf.azimuth import analyze_directional_balance, compute_azimuth_histogram
+from ogn_tool.kernel.rf.azimuth import analyze_directional_balance, compute_azimuth_histogram
 
 
 def _compute_shadow_proxy(grid: pd.DataFrame, packets_threshold: int = 3) -> pd.DataFrame:
@@ -52,3 +52,11 @@ def build_directional_diagnostics(
         "directional_balance": directional_balance,
         "shadow_map": shadow_map,
     }
+
+
+
+def compute_shadow_proxy(grid: pd.DataFrame, packets_threshold: int = 3) -> pd.DataFrame:
+    """
+    Public wrapper for shadow proxy (debug / explanation use).
+    """
+    return _compute_shadow_proxy(grid, packets_threshold=packets_threshold)

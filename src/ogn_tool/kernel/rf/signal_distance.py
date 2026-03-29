@@ -10,26 +10,16 @@ from typing import Any, Dict
 import numpy as np
 import pandas as pd
 
+from .distance import haversine_km_vector as _haversine_km_vector
 
 
-
-def _haversine_km_vector(
+def _legacy_haversine_km_vector(
     station_lat: float,
     station_lon: float,
     lat: np.ndarray,
     lon: np.ndarray,
 ) -> np.ndarray:
-    r = 6371.0
-    lat1_r = np.radians(float(station_lat))
-    lon1_r = np.radians(float(station_lon))
-    lat2_r = np.radians(np.asarray(lat, dtype=float))
-    lon2_r = np.radians(np.asarray(lon, dtype=float))
-    dlat = lat2_r - lat1_r
-    dlon = lon2_r - lon1_r
-    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1_r) * np.cos(lat2_r) * np.sin(dlon / 2.0) ** 2
-    c = 2 * np.arcsin(np.sqrt(a))
-    return r * c
-
+    return _haversine_km_vector(station_lat, station_lon, lat, lon)
 
 
 
@@ -67,7 +57,7 @@ def analyze(
     elif station_lat is not None and station_lon is not None and "lat" in df.columns and "lon" in df.columns:
         lat = pd.to_numeric(df["lat"], errors="coerce").to_numpy()
         lon = pd.to_numeric(df["lon"], errors="coerce").to_numpy()
-        dist = _haversine_km_vector(float(station_lat), float(station_lon), lat, lon)
+        dist = _legacy_haversine_km_vector(float(station_lat), float(station_lon), lat, lon)
     else:
         return {
             "implemented": False,

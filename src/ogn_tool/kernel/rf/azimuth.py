@@ -1,6 +1,10 @@
 """Legacy entry point for azimuth diagnostics.
 
 This module provides a stable import surface for RF analysis code.
+
+# NOTE:
+# This module contains both low-level primitives and light analysis helpers.
+# Higher-level inference must live in intelligence/spatial/.
 """
 
 from __future__ import annotations

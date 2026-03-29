@@ -37,7 +37,7 @@ from ogn_tool.domain.rf_normalization import (
     radio_horizon,
     rf_normalization,
 )
-from ogn_tool.rf import signal_distance, azimuth
+from ogn_tool.kernel.rf import signal_distance, azimuth
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event, state_to_rf_event
 
@@ -346,3 +346,11 @@ __all__ = [
     "build_observations_from_packets_events",
 ]
 
+
+
+
+def build_rf_observations_frame(packet_rows: Iterable[Dict]) -> pd.DataFrame:
+    """
+    Stable inspection frame for observations (QA / UI debug).
+    """
+    return _build_rf_observations_frame(packet_rows)

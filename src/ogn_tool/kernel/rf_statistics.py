@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ogn_tool.rf.geometry import bearing_deg_vector, haversine_km_vector
+from ogn_tool.kernel.rf.geometry import bearing_deg_vector, haversine_km_vector
 
 
 def compute_bearing(lat1: float, lon1: float, lat2: np.ndarray, lon2: np.ndarray) -> np.ndarray:

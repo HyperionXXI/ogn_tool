@@ -5,6 +5,8 @@ from typing import Iterable
 
 import numpy as np
 
+from .distance import haversine_km_vector as _haversine_km_vector
+
 
 def compute_distance_bearing_scalar(
     station_lat: float,
@@ -41,16 +43,7 @@ def haversine_km_vector(
     lon: Iterable[float],
 ) -> np.ndarray:
     """Vectorized haversine distance (km) from a station to many points."""
-    r = 6371.0
-    lat1_r = np.radians(float(station_lat))
-    lon1_r = np.radians(float(station_lon))
-    lat2_r = np.radians(np.asarray(lat, dtype=float))
-    lon2_r = np.radians(np.asarray(lon, dtype=float))
-    dlat = lat2_r - lat1_r
-    dlon = lon2_r - lon1_r
-    a = np.sin(dlat / 2.0) ** 2 + np.cos(lat1_r) * np.cos(lat2_r) * np.sin(dlon / 2.0) ** 2
-    c = 2 * np.arcsin(np.sqrt(a))
-    return r * c
+    return _haversine_km_vector(station_lat, station_lon, lat, lon)
 
 
 def bearing_deg_vector(

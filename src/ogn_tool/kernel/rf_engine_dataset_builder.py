@@ -40,7 +40,7 @@ from ogn_tool.kernel.rf_observation_kernel import (
     compute_packet_distance_km,
     observations_to_rows,
 )
-from ogn_tool.rf import azimuth as azimuth_model
+from ogn_tool.kernel.rf import azimuth as azimuth_model
 from ogn_tool.kernel.network_metrics_kernel import (
     build_network_metrics,
     build_radio_events,
@@ -60,7 +60,7 @@ from ogn_tool.kernel.rf_analysis_facade import (
     evaluate_rf_diagnosis,
 )
 from ogn_tool.kernel.rf_dataset_builder import build_observations
-from ogn_tool.analytics.spatial.directional_analysis import build_directional_diagnostics
+from ogn_tool.kernel.directional_diagnostics import build_directional_diagnostics
 from ogn_tool.kernel.rf_model_runner import run
 from ogn_tool.kernel.rf_models_registry import MODELS
 

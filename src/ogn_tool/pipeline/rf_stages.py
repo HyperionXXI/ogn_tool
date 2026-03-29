@@ -13,7 +13,7 @@ from ogn_tool.kernel.rf_analysis_facade import (
     detect_shadow_sectors,
     estimate_antenna_pattern,
 )
-from ogn_tool.rf import azimuth as analysis_azimuth
+from ogn_tool.kernel.rf import azimuth as analysis_azimuth
 from ogn_tool.kernel.rf_models_registry import MODELS
 
 from .rf_stage import RFAnalysisStage

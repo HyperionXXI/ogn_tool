@@ -22,7 +22,7 @@ def main():
     engine = RFAnalysisEngine(packets, args.station_lat, args.station_lon)
     result = engine.run(RFAnalysisDataset(observations=[]))
 
-    from ogn_tool.analytics.rf.rf_analysis_report import build_rf_analysis_report, export_rf_analysis_report
+    from ogn_tool.reporting.rf_analysis_report import build_rf_analysis_report, export_rf_analysis_report
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     report = build_rf_analysis_report(result)

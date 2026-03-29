@@ -9,7 +9,7 @@ from ogn_tool.kernel.rf_visibility_model import compute_radio_horizon
 from ogn_tool.domain.rf_analysis_dataset import RFAnalysisDataset
 from ogn_tool.models.rf_observation_vector import RFObservationVector
 from ogn_tool.models.rf_types import RFObservationEvent, packet_to_rf_event
-from ogn_tool.rf.geometry import compute_distance_bearing_scalar
+from ogn_tool.kernel.rf.geometry import compute_distance_bearing_scalar
 
 
 def _safe_float(value: Any) -> float | None:

@@ -139,3 +139,11 @@ def compute_visibility_metrics(observations) -> dict:
         "redundancy": redundancy,
         "summary": summary,
     }
+
+
+
+def build_visibility_frame(observations) -> pd.DataFrame:
+    """
+    Stable visibility matrix for audit/debug.
+    """
+    return _observations_to_visibility_frame(observations)
