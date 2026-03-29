@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
-import sqlite3
+import logging
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 
 from ogn_tool.domain.aircraft_observations import (
@@ -14,6 +17,21 @@ from ogn_tool.domain.aircraft_observations import (
     project_aircraft_positions,
 )
 from ogn_tool.reporting.views.dashboard_views import build_dashboard_payload, load_report_from_path
+from ogn_tool.kernel.rf_exploration import (
+    get_blind_zones,
+    get_diagnosis,
+    get_directional,
+    get_rf_field,
+    get_rf_quality,
+    get_timeseries,
+    get_visibility,
+    get_messages,
+    get_messages_v2,
+)
+from ogn_tool.domain.station_registry import get_station_metadata, list_station_registry, load_station_registry
+from ogn_tool.data.packets_repository import make_packets_repository
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -22,13 +40,7 @@ RUNS_DIRS = [
     Path('analysis_runs'),
 ]
 
-# Minimal fallback map for known local stations used in validation runs.
-STATION_COORDS: dict[str, dict[str, float]] = {
-    'FK50887': {'lat': 47.335831, 'lon': 7.273000},
-    'LSPD': {'lat': 47.300000, 'lon': 7.500000},
-    'LSZG': {'lat': 47.181000, 'lon': 7.417000},
-    'SOLOTHURN': {'lat': 47.207000, 'lon': 7.537000},
-}
+STATION_REGISTRY = load_station_registry()
 
 MAX_AIRCRAFT_POINTS = 5000
 
@@ -110,7 +122,7 @@ def _enrich_station_coordinates(payload: dict[str, Any], report_path: Path) -> d
         if isinstance(row.get('lat'), (int, float)) and isinstance(row.get('lon'), (int, float)):
             continue
 
-        coords = STATION_COORDS.get(station_id)
+        coords = STATION_REGISTRY.get(station_id.upper())
 
         if station_id == primary_station_id and primary_lat is not None and primary_lon is not None:
             row['lat'] = primary_lat
@@ -120,6 +132,28 @@ def _enrich_station_coordinates(payload: dict[str, Any], report_path: Path) -> d
             row['lon'] = coords['lon']
 
     return payload
+
+
+def _merge_station_sources(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    payload_rows = payload.get('stations') if isinstance(payload.get('stations'), list) else []
+    merged: dict[str, dict[str, Any]] = {}
+
+    for row in list_station_registry():
+        station_id = row.get('station_id')
+        if isinstance(station_id, str):
+            merged[station_id] = dict(row)
+
+    for row in payload_rows:
+        if not isinstance(row, dict):
+            continue
+        station_id = row.get('station_id')
+        if not isinstance(station_id, str):
+            continue
+        base = dict(merged.get(station_id, {}))
+        base.update(row)
+        merged[station_id] = base
+
+    return [merged[key] for key in sorted(merged.keys())]
 
 
 def _load_packet_rows_for_observations(metadata_doc: dict[str, Any]) -> list[dict[str, Any]]:
@@ -146,63 +180,21 @@ def _load_packet_rows_for_observations(metadata_doc: dict[str, Any]) -> list[dic
         return []
 
     try:
-        con = sqlite3.connect(str(db_path), timeout=10)
-        con.row_factory = sqlite3.Row
+        repo = make_packets_repository(str(db_path))
+        return repo.get_packets_for_station_window(start_epoch, end_epoch, station_id)
     except Exception:
+        logger.exception(
+            'Failed to load packets for station observation window station=%s db_path=%s window=[%s,%s)',
+            station_id,
+            db_path,
+            start_epoch,
+            end_epoch,
+        )
         return []
 
-    try:
-        src_rows = con.execute(
-            """
-            SELECT DISTINCT src
-            FROM packets
-            WHERE ts_epoch >= ?
-              AND ts_epoch < ?
-              AND UPPER(COALESCE(igate, '')) = UPPER(?)
-              AND src IS NOT NULL
-            """,
-            (start_epoch, end_epoch, station_id),
-        ).fetchall()
-        src_values = sorted(str(row['src']) for row in src_rows if row['src'])
 
-        if not src_values:
-            return []
-
-        packets: list[dict[str, Any]] = []
-        chunk_size = 500
-        for idx in range(0, len(src_values), chunk_size):
-            chunk = src_values[idx: idx + chunk_size]
-            placeholders = ','.join(['?'] * len(chunk))
-            query = f"""
-                SELECT src, lat, lon, ts_epoch, igate
-                FROM packets
-                WHERE ts_epoch >= ?
-                  AND ts_epoch < ?
-                  AND src IN ({placeholders})
-                  AND lat IS NOT NULL
-                  AND lon IS NOT NULL
-            """
-            params: list[Any] = [start_epoch, end_epoch, *chunk]
-            for row in con.execute(query, params):
-                packets.append(
-                    {
-                        'src': row['src'],
-                        'lat': row['lat'],
-                        'lon': row['lon'],
-                        'ts_epoch': row['ts_epoch'],
-                        'igate': row['igate'],
-                    }
-                )
-
-        return packets
-    except Exception:
-        return []
-    finally:
-        con.close()
-
-
-def _extract_aircraft_positions(metadata_doc: dict[str, Any]) -> list[dict[str, Any]]:
-    packets = _load_packet_rows_for_observations(metadata_doc)
+def _extract_aircraft_observations(metadata_doc: dict[str, Any], packets: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    packets = packets if packets is not None else _load_packet_rows_for_observations(metadata_doc)
     if not packets:
         return []
 
@@ -211,17 +203,37 @@ def _extract_aircraft_positions(metadata_doc: dict[str, Any]) -> list[dict[str, 
         temporal_threshold_s=10,
         max_cluster_radius_km=20.0,
     )
-    if not observations:
-        return []
-
-    projected = project_aircraft_positions(observations)
-    if len(projected) > MAX_AIRCRAFT_POINTS:
-        return projected[:MAX_AIRCRAFT_POINTS]
-    return projected
+    if len(observations) > MAX_AIRCRAFT_POINTS:
+        return observations[:MAX_AIRCRAFT_POINTS]
+    return observations
 
 
-@app.get('/api/payload')
-def get_payload(run_id: str = Query(..., min_length=1)) -> dict:
+
+
+
+
+def _messages_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    metrics = payload.get('metrics') if isinstance(payload.get('metrics'), dict) else {}
+    observations = metrics.get('aircraft_positions') if isinstance(metrics.get('aircraft_positions'), list) else []
+
+    out: list[dict[str, Any]] = []
+    for idx, obs in enumerate(observations):
+        if not isinstance(obs, dict):
+            continue
+        receivers = obs.get('seen_by') if isinstance(obs.get('seen_by'), list) else []
+        out.append(
+            {
+                'id': obs.get('id') or f'msg_{idx}',
+                'timestamp': obs.get('timestamp') or obs.get('timestamp_epoch'),
+                'aircraft': obs.get('aircraft_id') or obs.get('src'),
+                'type': obs.get('type') or 'RF_OBSERVATION',
+                'receivers': receivers,
+                'lat': obs.get('lat'),
+                'lon': obs.get('lon'),
+            }
+        )
+    return out
+def _build_payload_for_run(run_id: str) -> dict[str, Any]:
     report_path = _resolve_report_path(run_id)
     if report_path is None:
         raise HTTPException(status_code=404, detail='run not found')
@@ -230,27 +242,194 @@ def get_payload(run_id: str = Query(..., min_length=1)) -> dict:
     if report is None:
         raise HTTPException(status_code=500, detail='invalid report')
 
+    metadata_doc = _load_run_metadata(report_path)
+    packet_rows = _load_packet_rows_for_observations(metadata_doc)
+    aircraft_observations = _extract_aircraft_observations(metadata_doc, packets=packet_rows)
+    if aircraft_observations:
+        report = dict(report)
+        report['aircraft_observations'] = aircraft_observations
+
     payload = build_dashboard_payload(report)
     if not isinstance(payload, dict):
         raise HTTPException(status_code=500, detail='invalid payload')
 
     payload = _enrich_station_coordinates(payload, report_path)
+    payload['stations'] = _merge_station_sources(payload)
 
     meta = metadata_doc.get('metadata') if isinstance(metadata_doc.get('metadata'), dict) else {}
     payload['analysis_mode'] = str(meta.get('analysis_mode') or 'observed')
 
-    meta = metadata_doc.get('metadata') if isinstance(metadata_doc.get('metadata'), dict) else {}
-    payload['analysis_mode'] = str(meta.get('analysis_mode') or 'observed')
-
-    metadata_doc = _load_run_metadata(report_path)
-    aircraft_positions = _extract_aircraft_positions(metadata_doc)
     metrics = payload.get('metrics')
     if not isinstance(metrics, dict):
         metrics = {}
         payload['metrics'] = metrics
-    metrics['aircraft_positions'] = aircraft_positions
+    metrics['aircraft_positions'] = project_aircraft_positions(aircraft_observations)
+    metrics['rf_observations'] = packet_rows
 
     return payload
+
+
+def _list_runs() -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for root in RUNS_DIRS:
+        if not root.exists():
+            continue
+        for run_dir in root.iterdir():
+            if not run_dir.is_dir():
+                continue
+            report_path = run_dir / 'report.json'
+            if not report_path.exists():
+                continue
+
+            metadata_doc = _load_run_metadata(report_path)
+            comparability = metadata_doc.get('comparability') if isinstance(metadata_doc.get('comparability'), dict) else {}
+            meta = metadata_doc.get('metadata') if isinstance(metadata_doc.get('metadata'), dict) else {}
+
+            station = meta.get('station_id') if isinstance(meta.get('station_id'), str) else None
+            start = comparability.get('time_window_start') if isinstance(comparability.get('time_window_start'), str) else None
+            end = comparability.get('time_window_end') if isinstance(comparability.get('time_window_end'), str) else None
+
+            records.append(
+                {
+                    'run_id': run_dir.name,
+                    'station': station or 'UNKNOWN',
+                    'time_window_start': start,
+                    'time_window_end': end,
+                    'updated_at': datetime.fromtimestamp(report_path.stat().st_mtime, tz=timezone.utc).isoformat(),
+                }
+            )
+
+    records.sort(key=lambda row: row.get('updated_at') or '', reverse=True)
+    return records
+
+
+class RunExecuteRequest(BaseModel):
+    station: str = Field(default='FK50887')
+    window_hours: int = Field(default=6, ge=1, le=168)
+    end_offset_hours: int = Field(default=0, ge=0, le=720)
+
+
+@app.get('/api/runs')
+def list_runs() -> list[dict[str, Any]]:
+    return _list_runs()
+
+
+@app.get('/api/stations')
+def list_stations() -> list[dict[str, Any]]:
+    return list_station_registry()
+
+
+@app.get('/api/runs/{run_id}')
+def get_run(run_id: str) -> dict[str, Any]:
+    return _build_payload_for_run(run_id)
+
+
+@app.post('/api/runs/execute')
+def execute_run(req: RunExecuteRequest) -> dict[str, Any]:
+    station = req.station.strip().upper()
+    station_meta = get_station_metadata(station)
+    if station_meta is None:
+        raise HTTPException(status_code=400, detail='unknown station_id: not found in station registry')
+
+    cmd = [
+        sys.executable,
+        'scripts/run_fk50887_station.py',
+        '--station-id',
+        station,
+        '--window-hours',
+        str(req.window_hours),
+        '--end-offset-hours',
+        str(req.end_offset_hours),
+    ]
+
+    proc = subprocess.run(cmd, cwd=Path.cwd(), capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                'message': 'run execution failed',
+                'stderr': proc.stderr[-4000:],
+                'stdout': proc.stdout[-4000:],
+            },
+        )
+
+    run_id = None
+    for line in proc.stdout.splitlines():
+        if 'Bundle written to:' in line:
+            try:
+                run_id = Path(line.split('Bundle written to:', 1)[1].strip()).name
+            except Exception:
+                run_id = None
+
+    if not run_id:
+        runs = _list_runs()
+        run_id = runs[0]['run_id'] if runs else None
+
+    if not run_id:
+        raise HTTPException(status_code=500, detail='run execution completed but run_id could not be resolved')
+
+    return {'run_id': run_id, 'station': station, 'window_hours': req.window_hours, 'end_offset_hours': req.end_offset_hours}
+
+
+
+
+@app.get('/analysis/{run_id}/rf-field')
+def analysis_rf_field(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_rf_field(payload)
+
+
+@app.get('/analysis/{run_id}/blind-zones')
+def analysis_blind_zones(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_blind_zones(payload)
+
+
+@app.get('/analysis/{run_id}/directional')
+def analysis_directional(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_directional(payload)
+
+
+@app.get('/analysis/{run_id}/visibility')
+def analysis_visibility(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_visibility(payload)
+
+
+@app.get('/analysis/{run_id}/quality')
+def analysis_quality(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_rf_quality(payload)
+
+
+@app.get('/analysis/{run_id}/timeseries')
+def analysis_timeseries(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_timeseries(payload)
+
+
+@app.get('/analysis/{run_id}/diagnosis')
+def analysis_diagnosis(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_diagnosis(payload)
+
+
+@app.get('/analysis/{run_id}/messages')
+def analysis_messages(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    return get_messages(payload)
+
+
+@app.get('/analysis/{run_id}/messages_v2')
+def analysis_messages_v2(run_id: str) -> dict[str, Any]:
+    payload = _build_payload_for_run(run_id)
+    logger.info('Serving messages_v2 for run_id=%s', run_id)
+    return get_messages_v2(payload)
+
+@app.get('/api/payload')
+def get_payload(run_id: str = Query(..., min_length=1)) -> dict:
+    return _build_payload_for_run(run_id)
 
 
 app.mount('/', StaticFiles(directory='frontend', html=True), name='frontend')
