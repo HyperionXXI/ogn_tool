@@ -1,0 +1,43 @@
+{
+  "network_summary": {
+    "network_status": "DEGRADED",
+    "station_count": 1,
+    "coverage_score": null
+  },
+  "stations": [
+    {
+      "station_id": "FK50887",
+      "lat": 47.335831,
+      "lon": 7.273,
+      "health_status": "CRITICAL"
+    }
+  ],
+  "metrics": {
+    "stations": [
+      { "station_id": "FK50887", "health_status": "CRITICAL" }
+    ],
+    "links": [],
+    "coverage": [],
+    "blind_zones": [],
+    "risk_zones": [],
+    "aircraft_positions": []
+  },
+  "intelligence": {
+    "rf_analysis": {
+      "rf_signature_version": "v1",
+      "rf_signature": {
+        "corridor_center_deg": 295,
+        "dominant_corridor_share": 0.83,
+        "coverage_uniformity_score": 0.37
+      },
+      "rf_directional_gaps": {},
+      "rf_gap_structure": {},
+      "rf_shadow_analysis": {}
+    }
+  },
+  "debug": {
+    "run_id": "fk50887_2026_03_21_121927_6h_offset7h",
+    "packet_count": null
+  },
+  "mode": "RF-only diagnostic"
+}

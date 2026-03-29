@@ -1,0 +1,65 @@
+{
+  "network_summary": {
+    "network_status": "STABLE",
+    "station_count": 4,
+    "coverage_score": 0.71
+  },
+  "stations": [
+    { "station_id": "FK50887", "lat": 47.335831, "lon": 7.273 },
+    { "station_id": "LSPD", "lat": 47.300, "lon": 7.500 },
+    { "station_id": "LSZG", "lat": 47.181, "lon": 7.417 },
+    { "station_id": "SOLOTHURN", "lat": 47.207, "lon": 7.537 }
+  ],
+  "metrics": {
+    "aircraft_positions": [
+      {
+        "src": "DDE3B0",
+        "lat": 47.286,
+        "lon": 7.311,
+        "timestamp": "2026-03-21T12:15:08Z",
+        "seen_by": ["FK50887", "LSPD"]
+      },
+      {
+        "src": "DDF911",
+        "lat": 47.412,
+        "lon": 7.087,
+        "timestamp": "2026-03-21T12:15:11Z",
+        "seen_by": ["FK50887"]
+      }
+    ],
+    "spatial_network_features": {
+      "grid_meta": {
+        "min_lat": 47.05,
+        "max_lat": 47.60,
+        "min_lon": 6.90,
+        "max_lon": 7.80,
+        "cell_size_km": 2,
+        "window_start": "2026-03-21T06:19:27Z",
+        "window_end": "2026-03-21T12:19:27Z"
+      },
+      "coverage_density": [
+        { "lat": 47.30, "lon": 7.30, "value": 0.64 }
+      ],
+      "unique_coverage": [
+        { "lat": 47.40, "lon": 7.08, "value": 0.42 }
+      ],
+      "shared_coverage": [
+        { "lat": 47.28, "lon": 7.31, "value": 0.58 }
+      ],
+      "blind_zones": [
+        { "lat": 47.18, "lon": 7.62, "score": 0.81 }
+      ]
+    }
+  },
+  "intelligence": {
+    "rf_analysis": {
+      "rf_signature_version": "v1",
+      "rf_signature": {
+        "corridor_center_deg": 295,
+        "dominant_corridor_share": 0.79,
+        "coverage_uniformity_score": 0.44
+      }
+    }
+  },
+  "mode": "Network intelligence"
+}
