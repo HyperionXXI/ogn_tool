@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from ogn_tool.analysis.intelligence.coverage_gap_detector import detect_coverage_gaps
+from ogn_tool.intelligence.coverage_gap_detector import detect_coverage_gaps
 
 
 def test_detect_coverage_gaps_basic():

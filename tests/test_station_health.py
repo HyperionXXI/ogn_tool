@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.station_health import compute_station_health
+from ogn_tool.intelligence.station_health import compute_station_health
 
 
 def test_compute_station_health_empty():

@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.station_planner import detect_blind_zones, suggest_station_locations
+from ogn_tool.intelligence.station_planner import detect_blind_zones, suggest_station_locations
 
 
 def test_station_planner_detects_blind_zones():

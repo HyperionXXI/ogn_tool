@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.analysis.intelligence.multi_station_planner import (
+from ogn_tool.intelligence.multi_station_planner import (
     select_stations_greedy,
     select_stations_lazy_greedy,
 )

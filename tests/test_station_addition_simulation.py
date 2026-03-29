@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from ogn_tool.analysis.intelligence.station_addition_simulation import (
+from ogn_tool.intelligence.station_addition_simulation import (
     simulate_station_addition,
 )
 

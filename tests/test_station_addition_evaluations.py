@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from ogn_tool.analysis.intelligence.station_addition_evaluations import (
+from ogn_tool.intelligence.station_addition_evaluations import (
     build_station_addition_evaluations,
 )
 from ogn_tool.models.station_addition_evaluation import StationAdditionEvaluation
@@ -26,7 +26,7 @@ def test_build_station_addition_evaluations_returns_typed_rows(monkeypatch) -> N
         )
 
     monkeypatch.setattr(
-        "ogn_tool.analysis.intelligence.station_addition_evaluations.simulate_station_addition",
+        "ogn_tool.intelligence.station_addition_evaluations.simulate_station_addition",
         fake_simulate_station_addition,
     )
 
@@ -51,7 +51,7 @@ def test_build_station_addition_evaluations_returns_typed_rows(monkeypatch) -> N
 
 def test_build_station_addition_evaluations_reuses_candidate_id_when_present(monkeypatch) -> None:
     monkeypatch.setattr(
-        "ogn_tool.analysis.intelligence.station_addition_evaluations.simulate_station_addition",
+        "ogn_tool.intelligence.station_addition_evaluations.simulate_station_addition",
         lambda candidates, observations: pd.DataFrame(
             [{
                 "lat": 47.31,
@@ -78,7 +78,7 @@ def test_build_station_addition_evaluations_raises_on_missing_output_columns(mon
         return pd.DataFrame([{"lat": 47.31, "lon": 7.28, "coverage_gain": 4}])
 
     monkeypatch.setattr(
-        "ogn_tool.analysis.intelligence.station_addition_evaluations.simulate_station_addition",
+        "ogn_tool.intelligence.station_addition_evaluations.simulate_station_addition",
         fake_simulate_station_addition,
     )
 

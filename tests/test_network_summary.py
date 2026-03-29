@@ -1,4 +1,4 @@
-from ogn_tool.analysis.intelligence.network_summary import compute_network_summary
+from ogn_tool.intelligence.network_summary import compute_network_summary
 
 
 def test_compute_network_summary_good():

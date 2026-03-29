@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.coherence import check_intelligence_coherence
+from ogn_tool.intelligence.coherence import check_intelligence_coherence
 
 
 def test_detects_redundancy_dependency_conflict() -> None:

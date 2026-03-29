@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from ogn_tool.analysis.intelligence.coverage_gap_prioritizer import (
+from ogn_tool.intelligence.coverage_gap_prioritizer import (
     prioritize_coverage_gaps,
 )
 

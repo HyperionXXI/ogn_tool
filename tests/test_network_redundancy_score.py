@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.network_redundancy_score import compute_network_redundancy_score
+from ogn_tool.intelligence.network_redundancy_score import compute_network_redundancy_score
 
 
 def test_network_redundancy_score_fragile_network() -> None:

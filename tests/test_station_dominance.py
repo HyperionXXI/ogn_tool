@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.station_dominance import compute_station_dominance
+from ogn_tool.intelligence.station_dominance import compute_station_dominance
 
 
 def test_compute_station_dominance_counts_unique_and_shared_aircraft() -> None:

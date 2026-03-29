@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from ogn_tool.analysis.intelligence.network_single_point_of_failure_detector import (
+from ogn_tool.intelligence.network_single_point_of_failure_detector import (
     detect_single_points_of_failure,
 )
 

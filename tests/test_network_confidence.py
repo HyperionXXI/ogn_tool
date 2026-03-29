@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.analysis.intelligence.network_confidence import compute_network_confidence
+from ogn_tool.intelligence.network_confidence import compute_network_confidence
 
 
 def test_network_confidence_tiny_dataset_is_low() -> None:

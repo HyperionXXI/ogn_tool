@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ogn_tool.analysis.intelligence.multi_station_coverage import (
+from ogn_tool.intelligence.multi_station_coverage import (
     build_candidate_station_aircraft_sets,
     evaluate_multi_station_coverage,
 )

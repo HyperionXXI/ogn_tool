@@ -1,4 +1,4 @@
-from ogn_tool.analysis.intelligence.station_removal_simulation import simulate_station_removal
+from ogn_tool.intelligence.station_removal_simulation import simulate_station_removal
 
 
 def test_simulate_station_removal_empty():

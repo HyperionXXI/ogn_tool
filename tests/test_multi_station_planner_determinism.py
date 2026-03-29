@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.multi_station_coverage import (
+from ogn_tool.intelligence.multi_station_coverage import (
     build_candidate_station_aircraft_sets,
 )
-from ogn_tool.analysis.intelligence.multi_station_planner import (
+from ogn_tool.intelligence.multi_station_planner import (
     select_stations_greedy,
 )
 

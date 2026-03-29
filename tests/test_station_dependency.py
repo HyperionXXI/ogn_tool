@@ -1,6 +1,6 @@
 import pandas as pd
 
-from ogn_tool.analysis.intelligence.station_dependency import compute_station_dependency
+from ogn_tool.intelligence.station_dependency import compute_station_dependency
 
 
 def test_compute_station_dependency_empty():
