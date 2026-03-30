@@ -21,6 +21,8 @@ This collector stores raw packets and parsed fields useful for analysis.
 from __future__ import annotations
 
 import datetime as dt
+import atexit
+import logging
 import os
 import re
 import socket
@@ -66,6 +68,9 @@ NO_PACKET_LINES = int(os.getenv("OGN_NO_PACKET_LINES", "200"))
 NO_PACKET_SECONDS = int(os.getenv("OGN_NO_PACKET_SECONDS", "60"))
 ROTATE_MINUTES = int(os.getenv("OGN_ROTATE_MINUTES", "20"))
 SCHEMA_VERSION = 1
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 
 # APRS uncompressed position (DDMM.mmN/DDDMM.mmE)
 _POS_RE = re.compile(
@@ -156,9 +161,33 @@ def parse_line(line: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def db_connect(db_path: str) -> sqlite3.Connection:
-    con = sqlite3.connect(db_path, timeout=30)
-    con.execute("PRAGMA journal_mode=WAL;")
+def with_db_retry(fn, retries: int = 5, delay: float = 1.0):
+    last_error = None
+    for attempt in range(retries):
+        try:
+            result = fn()
+            if attempt > 0:
+                logger.info("DB init succeeded after retry")
+            return result
+        except sqlite3.OperationalError as exc:
+            if "database is locked" not in str(exc).lower():
+                raise
+            last_error = exc
+            if attempt == retries - 1:
+                break
+            logger.warning("DB locked, retrying init (%d/%d)...", attempt + 1, retries)
+            time.sleep(delay * (2 ** attempt))
+    if last_error is not None:
+        raise last_error
+
+
+def init_db(con: sqlite3.Connection) -> None:
+    mode_row = con.execute("PRAGMA journal_mode;").fetchone()
+    mode = str(mode_row[0]).lower() if mode_row and mode_row[0] is not None else ""
+    if mode != "wal":
+        logger.info("Switching journal_mode to WAL")
+        con.execute("PRAGMA journal_mode=WAL;")
+
     con.execute("PRAGMA synchronous=NORMAL;")
     con.execute("PRAGMA temp_store=MEMORY;")
     con.execute("PRAGMA foreign_keys=ON;")
@@ -212,6 +241,10 @@ def db_connect(db_path: str) -> sqlite3.Connection:
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_igate ON packets(igate);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_qas   ON packets(qas);")
 
+
+def db_connect(db_path: str) -> sqlite3.Connection:
+    con = sqlite3.connect(db_path, timeout=30)
+    con.execute("PRAGMA busy_timeout = 5000;")
     return con
 
 
@@ -232,122 +265,145 @@ def _login_line() -> str:
     return base + "\r\n"
 
 
+def _cleanup_lock(lock_path: str) -> None:
+    try:
+        os.remove(lock_path)
+    except FileNotFoundError:
+        pass
+
+
 def collect_forever() -> None:
+    lock_path = f"{DB_PATH}.collector.lock"
+    try:
+        fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(f"pid={os.getpid()}\n")
+    except FileExistsError:
+        logger.error("Collector already running, exiting.")
+        return
+
+    atexit.register(lambda: _cleanup_lock(lock_path))
     con = db_connect(DB_PATH)
-    db_path_abs = os.path.abspath(DB_PATH)
-    print(f"[collector] DB path: {db_path_abs}")
-    pending: list[Dict[str, Any]] = []
-    host_index = 0
+    try:
+        with_db_retry(lambda: init_db(con))
+        con.commit()
+        db_path_abs = os.path.abspath(DB_PATH)
+        print(f"[collector] DB path: {db_path_abs}")
+        pending: list[Dict[str, Any]] = []
+        host_index = 0
 
-    inserted_total = 0
-    received_total = 0
-    rejected_total = 0
+        inserted_total = 0
+        received_total = 0
+        rejected_total = 0
 
-    while True:
-        sock: Optional[socket.socket] = None
-        f = None
-        try:
-            host = HOSTS[host_index % len(HOSTS)]
-            print(f"Connecting to {host}:{PORT} ...")
-            sock = socket.create_connection((host, PORT), timeout=SOCKET_TIMEOUT_S)
-            sock.settimeout(SOCKET_TIMEOUT_S)
+        while True:
+            sock: Optional[socket.socket] = None
+            f = None
+            try:
+                host = HOSTS[host_index % len(HOSTS)]
+                print(f"Connecting to {host}:{PORT} ...")
+                sock = socket.create_connection((host, PORT), timeout=SOCKET_TIMEOUT_S)
+                sock.settimeout(SOCKET_TIMEOUT_S)
 
-            sock.sendall(_login_line().encode("ascii", "ignore"))
-            f = sock.makefile("r", encoding="utf-8", newline="\n", errors="replace")
+                sock.sendall(_login_line().encode("ascii", "ignore"))
+                f = sock.makefile("r", encoding="utf-8", newline="\n", errors="replace")
 
-            print("Logging into SQLite... (Ctrl+C to stop)")
-            if DEBUG:
-                print(f"[debug] DB={os.path.abspath(DB_PATH)} HOST={host}")
-                print(f"[debug] FILTER={FILTER!r} COMMIT_EVERY={COMMIT_EVERY}")
+                print("Logging into SQLite... (Ctrl+C to stop)")
+                if DEBUG:
+                    print(f"[debug] DB={os.path.abspath(DB_PATH)} HOST={host}")
+                    print(f"[debug] FILTER={FILTER!r} COMMIT_EVERY={COMMIT_EVERY}")
 
-            packets_seen = 0
-            lines_seen = 0
-            conn_started = time.time()
-            last_packet_ts = time.time()
-            while True:
-                line = f.readline()
-                if not line:
-                    raise ConnectionError("socket closed")
-
-                lines_seen += 1
-                received_total += 1
-                if line.startswith("#"):
-                    if (time.time() - last_packet_ts) >= NO_PACKET_SECONDS:
-                        raise ConnectionError("no packets received (time threshold)")
-                    if packets_seen == 0 and lines_seen >= NO_PACKET_LINES:
-                        raise ConnectionError("no packets received (comments only)")
-                    continue
-                pkt = parse_line(line)
-                if not pkt:
-                    rejected_total += 1
-                    continue
-
-                packets_seen += 1
+                packets_seen = 0
+                lines_seen = 0
+                conn_started = time.time()
                 last_packet_ts = time.time()
+                while True:
+                    line = f.readline()
+                    if not line:
+                        raise ConnectionError("socket closed")
 
-                now = dt.datetime.now(dt.timezone.utc)
-                pkt["ts_utc"] = now.isoformat()
-                pkt["ts_epoch"] = int(now.timestamp())
-                pkt["ts_ns"] = time.time_ns()
-                pending.append(pkt)
+                    lines_seen += 1
+                    received_total += 1
+                    if line.startswith("#"):
+                        if (time.time() - last_packet_ts) >= NO_PACKET_SECONDS:
+                            raise ConnectionError("no packets received (time threshold)")
+                        if packets_seen == 0 and lines_seen >= NO_PACKET_LINES:
+                            raise ConnectionError("no packets received (comments only)")
+                        continue
+                    pkt = parse_line(line)
+                    if not pkt:
+                        rejected_total += 1
+                        continue
 
-                if DEBUG and received_total % 250 == 0:
-                    print(f"[debug] raw: {pkt['raw']}")
+                    packets_seen += 1
+                    last_packet_ts = time.time()
 
-                if len(pending) >= COMMIT_EVERY:
-                    try:
+                    now = dt.datetime.now(dt.timezone.utc)
+                    pkt["ts_utc"] = now.isoformat()
+                    pkt["ts_epoch"] = int(now.timestamp())
+                    pkt["ts_ns"] = time.time_ns()
+                    pending.append(pkt)
+
+                    if DEBUG and received_total % 250 == 0:
+                        print(f"[debug] raw: {pkt['raw']}")
+
+                    if len(pending) >= COMMIT_EVERY:
+                        try:
+                            insert_many(con, pending)
+                            con.commit()
+                        except Exception as e:
+                            print(f"[collector] insert error: {e!r}")
+                            raise
+                        inserted_total += len(pending)
+                        pending.clear()
+
+                        if DEBUG:
+                            print(
+                                f"[debug] inserted_total={inserted_total} received_total={received_total} rejected_total={rejected_total}"
+                            )
+
+                    if (time.time() - conn_started) >= (ROTATE_MINUTES * 60):
+                        raise ConnectionError("rotate server (time-based)")
+
+            except KeyboardInterrupt:
+                print("\nStopping collector (Ctrl+C).")
+                break
+            except Exception as e:
+                try:
+                    if pending:
                         insert_many(con, pending)
                         con.commit()
-                    except Exception as e:
-                        print(f"[collector] insert error: {e!r}")
-                        raise
-                    inserted_total += len(pending)
-                    pending.clear()
+                        inserted_total += len(pending)
+                        pending.clear()
+                except Exception:
+                    pass
 
-                    if DEBUG:
-                        print(
-                            f"[debug] inserted_total={inserted_total} received_total={received_total} rejected_total={rejected_total}"
-                        )
+                print(f"[collector] ERROR: {e!r} -> reconnect in 3s")
+                host_index += 1
+                try:
+                    time.sleep(3)
+                except Exception:
+                    pass
+            finally:
+                try:
+                    if f:
+                        f.close()
+                except Exception:
+                    pass
+                try:
+                    if sock:
+                        sock.close()
+                except Exception:
+                    pass
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+        _cleanup_lock(lock_path)
 
-                if (time.time() - conn_started) >= (ROTATE_MINUTES * 60):
-                    raise ConnectionError("rotate server (time-based)")
-
-        except KeyboardInterrupt:
-            print("\nStopping collector (Ctrl+C).")
-            break
-        except Exception as e:
-            try:
-                if pending:
-                    insert_many(con, pending)
-                    con.commit()
-                    inserted_total += len(pending)
-                    pending.clear()
-            except Exception:
-                pass
-
-            print(f"[collector] ERROR: {e!r} -> reconnect in 3s")
-            host_index += 1
-            try:
-                time.sleep(3)
-            except Exception:
-                pass
-        finally:
-            try:
-                if f:
-                    f.close()
-            except Exception:
-                pass
-            try:
-                if sock:
-                    sock.close()
-            except Exception:
-                pass
-
-    try:
-        con.close()
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":
     collect_forever()
+

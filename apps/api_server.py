@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -34,6 +36,10 @@ from ogn_tool.data.packets_repository import make_packets_repository
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+collector_process = None
+
+DB_PATH = 'ogn_log.sqlite3'
+LOCK_PATH = f"{DB_PATH}.collector.lock"
 
 RUNS_DIRS = [
     Path('data/runs/analysis_runs'),
@@ -43,6 +49,100 @@ RUNS_DIRS = [
 STATION_REGISTRY = load_station_registry()
 
 MAX_AIRCRAFT_POINTS = 5000
+
+
+def _pid_is_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _get_lock_pid() -> int | None:
+    try:
+        with open(LOCK_PATH, 'r', encoding='utf-8') as f:
+            content = f.read()
+            if content.startswith('pid='):
+                return int(content.split('=', 1)[1].strip())
+    except Exception:
+        return None
+    return None
+
+
+def _is_collector_locked() -> bool:
+    path = Path(LOCK_PATH)
+
+    if not path.exists():
+        return False
+
+    pid = _get_lock_pid()
+
+    if pid is None:
+        return True
+
+    if _pid_is_alive(pid):
+        return True
+
+    try:
+        path.unlink()
+    except Exception:
+        pass
+
+    return False
+
+
+def start_collector() -> dict[str, Any]:
+    global collector_process
+
+    if _is_collector_locked():
+        return {'status': 'already_running', 'reason': 'lock_file_present'}
+
+    collector_process = subprocess.Popen(
+        [sys.executable, 'scripts/collector.py'],
+        cwd=Path.cwd(),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    time.sleep(0.2)
+
+    if collector_process.poll() is not None:
+        return {'status': 'failed_to_start'}
+
+    return {'status': 'started', 'pid': collector_process.pid}
+
+
+def stop_collector() -> dict[str, Any]:
+    global collector_process
+
+    if not _is_collector_locked():
+        return {'status': 'not_running'}
+
+    if collector_process and collector_process.poll() is None:
+        collector_process.terminate()
+        return {'status': 'stopped', 'mode': 'local_process'}
+
+    return {'status': 'running', 'mode': 'external_process'}
+
+
+def collector_status() -> dict[str, Any]:
+    if not _is_collector_locked():
+        return {'running': False}
+
+    pid = _get_lock_pid()
+
+    return {
+        'running': True,
+        'pid': pid,
+        'source': 'lock_file',
+    }
+
+
+@app.on_event('startup')
+def startup_event() -> None:
+    if not _is_collector_locked():
+        start_collector()
 
 
 def _resolve_report_path(run_id: str) -> Path | None:
@@ -426,6 +526,21 @@ def analysis_messages_v2(run_id: str) -> dict[str, Any]:
     payload = _build_payload_for_run(run_id)
     logger.info('Serving messages_v2 for run_id=%s', run_id)
     return get_messages_v2(payload)
+
+@app.get('/collector/status')
+def api_collector_status() -> dict[str, Any]:
+    return collector_status()
+
+
+@app.post('/collector/start')
+def api_collector_start() -> dict[str, Any]:
+    return start_collector()
+
+
+@app.post('/collector/stop')
+def api_collector_stop() -> dict[str, Any]:
+    return stop_collector()
+
 
 @app.get('/api/payload')
 def get_payload(run_id: str = Query(..., min_length=1)) -> dict:
