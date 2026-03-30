@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 collector_process = None
 
-DB_PATH = 'ogn_log.sqlite3'
+DB_PATH = os.getenv('OGN_DB_PATH') or os.getenv('OGN_DB') or 'ogn_log.sqlite3'
 LOCK_PATH = f"{DB_PATH}.collector.lock"
 
 RUNS_DIRS = [
