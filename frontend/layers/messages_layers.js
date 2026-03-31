@@ -1,3 +1,104 @@
+const PROTOCOL_STYLE = {
+  FLARM: [255, 80, 80],
+  FANET: [80, 255, 160],
+  'ADS-B': [80, 160, 255],
+  ADSB: [80, 160, 255],
+  OCAP: [255, 200, 0],
+  UNKNOWN: [160, 160, 160],
+};
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function scale(value, inMin, inMax, outMin, outMax) {
+  if (!Number.isFinite(value) || inMin === inMax) return outMin;
+  const ratio = (value - inMin) / (inMax - inMin);
+  return outMin + ratio * (outMax - outMin);
+}
+
+function quantile(arr, q) {
+  if (!Array.isArray(arr) || !arr.length) return null;
+  const pos = (arr.length - 1) * q;
+  const base = Math.floor(pos);
+  const rest = pos - base;
+  if (arr[base + 1] !== undefined) {
+    return arr[base] + rest * (arr[base + 1] - arr[base]);
+  }
+  return arr[base];
+}
+
+function computeSnrRange(edges) {
+  const snrValues = (Array.isArray(edges) ? edges : [])
+    .map((edge) => Number(edge?.avg_snr))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+
+  if (snrValues.length < 10) {
+    return { minSnr: 0, maxSnr: 20 };
+  }
+
+  const q10 = quantile(snrValues, 0.1);
+  const q90 = quantile(snrValues, 0.9);
+
+  if (!Number.isFinite(q10) || !Number.isFinite(q90) || q10 >= q90) {
+    return { minSnr: 0, maxSnr: 20 };
+  }
+
+  const span = q90 - q10;
+  if (span < 1e-3) {
+    return { minSnr: 0, maxSnr: 20 };
+  }
+
+  return { minSnr: q10, maxSnr: q90 };
+}
+
+function widthFromSnr(snr, minSnr, maxSnr) {
+  if (!Number.isFinite(snr)) return 2;
+
+  const range = maxSnr - minSnr;
+  if (range <= 0) return 2;
+
+  const clamped = Math.max(minSnr, Math.min(maxSnr, snr));
+  const t = (clamped - minSnr) / range;
+
+  return 1 + t * 5;
+}
+
+function alphaFromSnr(snr, minSnr, maxSnr) {
+  if (!Number.isFinite(snr)) return 120;
+
+  const range = maxSnr - minSnr;
+  if (range <= 0) return 120;
+
+  const clamped = Math.max(minSnr, Math.min(maxSnr, snr));
+  const t = (clamped - minSnr) / range;
+
+  return Math.round(80 + t * (255 - 80));
+}
+
+function protocolColor(protocol) {
+  if (typeof protocol !== 'string' || !protocol) return PROTOCOL_STYLE.UNKNOWN;
+  return PROTOCOL_STYLE[protocol] || PROTOCOL_STYLE.UNKNOWN;
+}
+
+function edgeAlpha(edge, snrRange, isFocused, target = false) {
+  const snr = Number(edge?.avg_snr);
+  const inferredRatio = clamp(Number(edge?.inferred_ratio || 0), 0, 1);
+  let alpha = alphaFromSnr(snr, snrRange.minSnr, snrRange.maxSnr);
+  if (isFocused) alpha = Math.max(alpha, target ? 140 : 220);
+  alpha = Math.round(alpha * (1 - inferredRatio * 0.35));
+  if (target) alpha = Math.max(36, Math.round(alpha * 0.55));
+  return alpha;
+}
+
+function edgeWidth(edge, snrRange, isFocused) {
+  const snr = Number(edge?.avg_snr);
+  let width = widthFromSnr(snr, snrRange.minSnr, snrRange.maxSnr);
+  if (isFocused) width *= 1.35;
+  return width;
+}
+
 const FOCUS_DIM_ALPHA = 26;
 const FOCUS_NEIGHBOR_ALPHA = 204;
 const FOCUS_SELECTED_ALPHA = 255;
@@ -230,6 +331,7 @@ export function createNetworkEdgesLayer(graph, { enabled = false, maxEdges = 30,
   const edges = [...allEdges]
     .sort((a, b) => Number(b?.message_count || 0) - Number(a?.message_count || 0))
     .slice(0, maxEdges);
+  const snrRange = computeSnrRange(edges);
 
   return new deck.ArcLayer({
     id: 'messages-network-edges',
@@ -240,23 +342,19 @@ export function createNetworkEdgesLayer(graph, { enabled = false, maxEdges = 30,
     getSourceColor: (d) => {
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
-      const inferredRatio = Math.max(0, Math.min(1, Number(d?.inferred_ratio || 0)));
-      const alpha = isFocused ? 230 : Math.round(190 - inferredRatio * 90);
-      return [180, 220, 255, alpha];
+      const [r, g, b] = protocolColor(d?.protocol);
+      return [r, g, b, edgeAlpha(d, snrRange, isFocused, false)];
     },
     getTargetColor: (d) => {
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
-      const inferredRatio = Math.max(0, Math.min(1, Number(d?.inferred_ratio || 0)));
-      const alpha = isFocused ? 110 : Math.round(88 - inferredRatio * 44);
-      return [180, 220, 255, Math.max(28, alpha)];
+      const [r, g, b] = protocolColor(d?.protocol);
+      return [r, g, b, edgeAlpha(d, snrRange, isFocused, true)];
     },
     getWidth: (d) => {
-      const c = Number(d?.message_count || 1);
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
-      const base = Math.max(1.1, Math.log1p(c) * 0.78);
-      return isFocused ? base * 1.45 : base;
+      return edgeWidth(d, snrRange, isFocused);
     },
   });
 }

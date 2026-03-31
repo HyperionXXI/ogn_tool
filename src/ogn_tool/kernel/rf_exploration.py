@@ -19,8 +19,17 @@ from ogn_tool.kernel.rf_analysis_facade import (
     evaluate_rf_diagnosis,
 )
 from ogn_tool.kernel.visibility_metrics import compute_visibility_metrics
+from ogn_tool.rf.protocols.types import PROTOCOLS
 
 logger = logging.getLogger(__name__)
+
+PROTOCOL_BAND = {
+    'FLARM': '868MHz',
+    'FANET': '868MHz',
+    'ADS-B': '1090MHz',
+    'OCAP': None,
+    'UNKNOWN': None,
+}
 
 
 def _as_frame(result: Any) -> pd.DataFrame:
@@ -115,13 +124,30 @@ def _parse_aprs_raw(raw: str | None) -> dict[str, Any]:
     if snr_match:
         out['snr'] = _to_optional_float(snr_match.group(1))
 
+    db_matches = re.findall(r'(-?\d+(?:\.\d+)?)\s*dB', raw)
+    db_values = [_to_optional_float(value) for value in db_matches]
+    db_values = [value for value in db_values if value is not None]
+    if db_values:
+        if out.get('snr') is None:
+            out['snr'] = db_values[-1]
+        if len(db_values) >= 2 and out.get('rssi') is None:
+            out['rssi'] = db_values[-2]
+
     return out
+
+
+def detect_ocap(row: dict[str, Any]) -> str | None:
+    return None
 
 
 def _detect_protocol(row: dict[str, Any]) -> str | None:
     parsed = _parse_aprs_raw(row.get('raw'))
-    if parsed.get('protocol'):
+    if parsed.get('protocol') in PROTOCOLS:
         return parsed['protocol']
+
+    ocap = detect_ocap(row)
+    if ocap in PROTOCOLS:
+        return ocap
 
     src = row.get('emitter_id') or row.get('src') or ''
     if isinstance(src, str):
@@ -402,7 +428,7 @@ def get_messages_v2(result: Any) -> Dict[str, Any]:
                     "transport": {
                         "protocol": protocol,
                         "network": "OGN",
-                        "band": "868MHz" if protocol in ("FLARM", "FANET") else None,
+                        "band": PROTOCOL_BAND.get(protocol or 'UNKNOWN'),
                     },
                     "signal": {
                         "rssi": rssi,

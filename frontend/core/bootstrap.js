@@ -55,6 +55,24 @@ function confidenceBadge(type) {
   return `<span class="confidence-badge badge-${type}">${String(type).toUpperCase()}</span>`;
 }
 
+function rfDataBadge(modePayload) {
+  const messages = Array.isArray(modePayload?.messages) ? modePayload.messages : [];
+  if (!messages.length) return '';
+
+  let rfCount = 0;
+  for (const message of messages) {
+    const signal = message?.signal && typeof message.signal === 'object' ? message.signal : null;
+    const rssi = signal?.rssi;
+    const snr = signal?.snr;
+    if (rssi != null || snr != null) rfCount += 1;
+  }
+
+  const ratio = messages.length > 0 ? rfCount / messages.length : 0;
+  if (ratio > 0.8) return '<span class="confidence-badge badge-rf-available">RF: AVAILABLE</span>';
+  if (ratio >= 0.2) return '<span class="confidence-badge badge-rf-partial">RF: PARTIAL</span>';
+  return '<span class="confidence-badge badge-rf-missing">RF: MISSING</span>';
+}
+
 function getEffectiveAnalysisMode(state, payload) {
   if (state.mode === MODES.PLANNING) return 'planning';
   if (payload?.analysis_mode === 'predicted') return 'predicted';
@@ -232,7 +250,8 @@ function updateAnalysisMode(payload) {
 
   const mode = getEffectiveAnalysisMode(state, payload);
   const { label, badge, color, title } = getModeDisplay(mode);
-  modeEl.innerHTML = `${label} ${confidenceBadge(badge)}`;
+  const rfBadge = state.mode === MODES.MESSAGES ? rfDataBadge(state.modePayload) : '';
+  modeEl.innerHTML = `${label} ${confidenceBadge(badge)}${rfBadge ? ` ${rfBadge}` : ''}`;
   modeEl.style.color = color;
   modeEl.title = title;
 }
@@ -363,7 +382,7 @@ function renderLegend() {
     if (state.filters.showNetworkEdges) {
       rows.push('<div class="legend-row"><span class="sw line" style="background:#cbd5e1"></span>Message path</div>');
     }
-    rows.push('<div class="legend-row" style="color: var(--muted);">Protocol: unknown when API metadata is absent.</div>');
+    rows.push('<div class="legend-row" style="color: var(--muted);">RF strength based on SNR</div>');
   } else {
     rows.push('<div class="legend-row"><span class="sw dot" style="background:#22c55e"></span>Station</div>');
     if (state.filters.showCoverage) rows.push('<div class="legend-row"><span class="sw circle" style="background:rgba(125,211,252,0.35)"></span>Signal coverage radius</div>');
@@ -479,17 +498,26 @@ function getTooltip({ object, layer }) {
   }
 
   if (layer?.id === 'messages-network-edges') {
-    const inferredRatio = Number(object.inferred_ratio || 0);
-    const inferredPercent = Math.round(inferredRatio * 100);
-    return {
-      text:
-        `Message path\n` +
-        `Direction: ${object.emitter_id} -> ${object.receiver_id}\n` +
-        `Messages: ${object.message_count}\n` +
-        `Receiver position inferred: ${inferredPercent > 0 ? `${inferredPercent}%` : 'no'}\n` +
-        `Protocol: unknown`,
-    };
-  }
+      const inferredRatio = Number(object.inferred_ratio || 0);
+      const inferredPercent = Math.round(inferredRatio * 100);
+      const protocol = (object.protocol || 'unknown').toUpperCase();
+      const snrValue = Number(object.avg_snr);
+      const snr = Number.isFinite(snrValue) ? `${snrValue.toFixed(1)} dB` : 'n/a';
+      return {
+        text:
+          `Message path
+` +
+          `Direction: ${object.emitter_id} -> ${object.receiver_id}
+` +
+          `Messages: ${object.message_count}
+` +
+          `Receiver position inferred: ${inferredPercent > 0 ? `${inferredPercent}%` : 'no'}
+` +
+          `Protocol: ${protocol}
+` +
+          `Avg SNR: ${snr}`,
+      };
+    }
 
   if (layer?.id === 'rf-coverage') {
     return {

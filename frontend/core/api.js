@@ -15,7 +15,7 @@ export async function fetchModePayload(runId, mode) {
     rf: 'rf-field',
     diagnostics: 'directional',
     network: 'visibility',
-    messages: 'messages',
+    messages: 'messages_v2',
     planning: null,
   };
 

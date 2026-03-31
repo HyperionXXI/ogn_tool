@@ -150,6 +150,17 @@ def parse_line(line: str) -> Optional[Dict[str, Any]]:
     qas, igate = parse_path(path)
     lat, lon = parse_position(body)
 
+    snr = None
+    db_matches = re.findall(r'(-?\d+(?:\.\d+)?)\s*dB', body)
+    values = []
+    for value in db_matches:
+        try:
+            values.append(float(value))
+        except (TypeError, ValueError):
+            continue
+    if values:
+        snr = values[-1]
+
     return {
         "src": src,
         "dst": dst,
@@ -157,6 +168,7 @@ def parse_line(line: str) -> Optional[Dict[str, Any]]:
         "qas": qas,
         "lat": lat,
         "lon": lon,
+        "snr": snr,
         "raw": line,
     }
 
@@ -232,6 +244,8 @@ def init_db(con: sqlite3.Connection) -> None:
         con.execute("ALTER TABLE packets ADD COLUMN ts_epoch INTEGER;")
     if "ts_ns" not in cols:
         con.execute("ALTER TABLE packets ADD COLUMN ts_ns INTEGER;")
+    if "snr" not in cols:
+        con.execute("ALTER TABLE packets ADD COLUMN snr REAL;")
 
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_ts    ON packets(ts_utc);")
     con.execute("CREATE INDEX IF NOT EXISTS idx_packets_epoch ON packets(ts_epoch DESC);")
@@ -251,8 +265,8 @@ def db_connect(db_path: str) -> sqlite3.Connection:
 def insert_many(con: sqlite3.Connection, rows: Iterable[Dict[str, Any]]) -> None:
     con.executemany(
         """
-        INSERT INTO packets (ts_utc, ts_epoch, ts_ns, src, dst, igate, qas, lat, lon, raw)
-        VALUES (:ts_utc, :ts_epoch, :ts_ns, :src, :dst, :igate, :qas, :lat, :lon, :raw)
+        INSERT INTO packets (ts_utc, ts_epoch, ts_ns, src, dst, igate, qas, lat, lon, snr, raw)
+        VALUES (:ts_utc, :ts_epoch, :ts_ns, :src, :dst, :igate, :qas, :lat, :lon, :snr, :raw)
         """,
         rows,
     )

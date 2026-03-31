@@ -4,8 +4,35 @@ function toMessages(modePayload) {
   return Array.isArray(modePayload?.messages) ? modePayload.messages : [];
 }
 
+function normalizeMessage(message) {
+  if (!message || typeof message !== 'object') return null;
+
+  const emitter = message.emitter && typeof message.emitter === 'object' ? message.emitter : {};
+  const receiver = message.receiver && typeof message.receiver === 'object' ? message.receiver : {};
+  const transport = message.transport && typeof message.transport === 'object' ? message.transport : {};
+  const signal = message.signal && typeof message.signal === 'object' ? message.signal : {};
+
+  const normalized = {
+    emitter_id: typeof message.emitter_id === 'string' ? message.emitter_id : emitter.id,
+    receiver_id: typeof message.receiver_id === 'string' ? message.receiver_id : receiver.id,
+    emitter_lat: message.emitter_lat ?? emitter.lat,
+    emitter_lon: message.emitter_lon ?? emitter.lon,
+    receiver_lat: message.receiver_lat ?? receiver.lat,
+    receiver_lon: message.receiver_lon ?? receiver.lon,
+    receiver_is_inferred: typeof message.receiver_is_inferred === 'boolean' ? message.receiver_is_inferred : receiver.source === 'inferred',
+    protocol: transport.protocol ?? null,
+    network: transport.network ?? null,
+    band: transport.band ?? null,
+    rssi: signal.rssi ?? null,
+    snr: signal.snr ?? null,
+  };
+
+  if (!normalized.emitter_id || !normalized.receiver_id) return null;
+  return normalized;
+}
+
 export function interpretNode(selection, payload) {
-  const messages = toMessages(payload);
+  const messages = toMessages(payload).map(normalizeMessage).filter(Boolean);
 
   if (!selection?.nodeId) {
     return { supported: true, reason: null, focusData: null };
@@ -30,9 +57,21 @@ export function interpretNode(selection, payload) {
   return { supported: false, reason: 'Messages mode supports receiver or emitter nodes only.', focusData: null };
 }
 
+function dominantValue(counterMap) {
+  if (!(counterMap instanceof Map) || !counterMap.size) return null;
+  let bestKey = null;
+  let bestCount = -1;
+  for (const [key, count] of counterMap.entries()) {
+    if (count > bestCount) {
+      bestKey = key;
+      bestCount = count;
+    }
+  }
+  return bestKey;
+}
+
 function buildMessageGraph(modePayload) {
-  const messages = toMessages(modePayload);
-  console.log('MESSAGES RAW', messages.length, messages.length ? messages[0] : null);
+  const messages = toMessages(modePayload).map(normalizeMessage).filter(Boolean);
 
   const nodeMap = new Map();
   const edgeMap = new Map();
@@ -79,12 +118,36 @@ function buildMessageGraph(modePayload) {
           target: [rLon, rLat],
           message_count: 0,
           inferred_message_count: 0,
+          rssi_sum: 0,
+          rssi_count: 0,
+          snr_sum: 0,
+          snr_count: 0,
+          protocol_counts: new Map(),
+          network_counts: new Map(),
+          band_counts: new Map(),
           layerType: 'network_edge',
         };
         edgeMap.set(edgeKey, edge);
       }
       edge.message_count += 1;
       if (m.receiver_is_inferred) edge.inferred_message_count += 1;
+      if (Number.isFinite(Number(m.rssi))) {
+        edge.rssi_sum += Number(m.rssi);
+        edge.rssi_count += 1;
+      }
+      if (Number.isFinite(Number(m.snr))) {
+        edge.snr_sum += Number(m.snr);
+        edge.snr_count += 1;
+      }
+      if (typeof m.protocol === 'string' && m.protocol) {
+        edge.protocol_counts.set(m.protocol, (edge.protocol_counts.get(m.protocol) || 0) + 1);
+      }
+      if (typeof m.network === 'string' && m.network) {
+        edge.network_counts.set(m.network, (edge.network_counts.get(m.network) || 0) + 1);
+      }
+      if (typeof m.band === 'string' && m.band) {
+        edge.band_counts.set(m.band, (edge.band_counts.get(m.band) || 0) + 1);
+      }
     }
   }
 
@@ -107,14 +170,27 @@ function buildMessageGraph(modePayload) {
     const inferredCount = Number(edge.inferred_message_count || 0);
     const total = Number(edge.message_count || 0);
     const inferredRatio = total > 0 ? inferredCount / total : 0;
+    const avgRssi = edge.rssi_count > 0 ? edge.rssi_sum / edge.rssi_count : null;
+    const avgSnr = edge.snr_count > 0 ? edge.snr_sum / edge.snr_count : null;
     return {
-      ...edge,
+      emitter_id: edge.emitter_id,
+      receiver_id: edge.receiver_id,
+      source: edge.source,
+      target: edge.target,
+      message_count: total,
       inferred_message_count: inferredCount,
       inferred_ratio: Number(inferredRatio.toFixed(3)),
       receiver_is_mostly_inferred: inferredRatio >= 0.5,
+      protocol: dominantValue(edge.protocol_counts),
+      network: dominantValue(edge.network_counts),
+      band: dominantValue(edge.band_counts),
+      avg_rssi: avgRssi != null ? Number(avgRssi.toFixed(1)) : null,
+      avg_snr: avgSnr != null ? Number(avgSnr.toFixed(1)) : null,
+      has_rssi: edge.rssi_count > 0,
+      has_snr: edge.snr_count > 0,
+      layerType: edge.layerType,
     };
   });
-  console.log('NODES', nodes.length);
 
   return { nodes, edges, raw_messages_count: messages.length };
 }
