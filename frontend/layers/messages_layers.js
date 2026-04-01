@@ -95,21 +95,23 @@ function anomalyTint(protocol, edge) {
   return [r, g, b];
 }
 
-function edgeAlpha(edge, snrRange, isFocused, target = false) {
+function edgeAlpha(edge, snrRange, isFocused, target = false, isSelected = false) {
   const snr = Number(edge?.avg_snr);
   const inferredRatio = clamp(Number(edge?.inferred_ratio || 0), 0, 1);
   let alpha = alphaFromSnr(snr, snrRange.minSnr, snrRange.maxSnr);
   if (isFocused) alpha = Math.max(alpha, target ? 140 : 220);
+  if (isSelected) alpha = Math.max(alpha, target ? 180 : 255);
   alpha = Math.round(alpha * (1 - inferredRatio * 0.35));
   if (target) alpha = Math.max(36, Math.round(alpha * 0.55));
   return alpha;
 }
 
-function edgeWidth(edge, snrRange, isFocused) {
+function edgeWidth(edge, snrRange, isFocused, isSelected = false) {
   const snr = Number(edge?.avg_snr);
   let width = widthFromSnr(snr, snrRange.minSnr, snrRange.maxSnr);
   if (isAnomalous(edge)) width *= 0.85;
   if (isFocused) width *= 1.35;
+  if (isSelected) width *= 1.45;
   return width;
 }
 
@@ -161,7 +163,12 @@ function buildFocusState(graph, selection, stations = []) {
     neighborReceiverIds: new Set(),
     neighborEmitterIds: new Set(),
     associatedEdgeKeys: new Set(),
+    selectedEdgeKeys: new Set(),
   };
+
+  if (selection?.edgeKey) {
+    state.selectedEdgeKeys.add(selection.edgeKey);
+  }
 
   if (!selection?.nodeId) return state;
 
@@ -356,19 +363,22 @@ export function createNetworkEdgesLayer(graph, { enabled = false, maxEdges = 30,
     getSourceColor: (d) => {
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
+      const isSelected = focusState.selectedEdgeKeys?.has(key);
       const [r, g, b] = anomalyTint(d?.protocol, d);
-      return [r, g, b, edgeAlpha(d, snrRange, isFocused, false)];
+      return [r, g, b, edgeAlpha(d, snrRange, isFocused, false, isSelected)];
     },
     getTargetColor: (d) => {
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
+      const isSelected = focusState.selectedEdgeKeys?.has(key);
       const [r, g, b] = anomalyTint(d?.protocol, d);
-      return [r, g, b, edgeAlpha(d, snrRange, isFocused, true)];
+      return [r, g, b, edgeAlpha(d, snrRange, isFocused, true, isSelected)];
     },
     getWidth: (d) => {
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
-      return edgeWidth(d, snrRange, isFocused);
+      const isSelected = focusState.selectedEdgeKeys?.has(key);
+      return edgeWidth(d, snrRange, isFocused, isSelected);
     },
   });
 }

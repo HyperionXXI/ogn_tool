@@ -253,6 +253,25 @@ function validateStationInput() {
 function updateSelectedNodeDisplay() {
   const el = $('focus-node-summary');
   if (!el) return;
+
+  if (state.selectedEdgeMeta && state.selection.edgeKey) {
+    const edge = state.selectedEdgeMeta;
+    const protocol = (edge.protocol || 'unknown').toUpperCase();
+    const snrValue = Number(edge.avg_snr);
+    const snr = Number.isFinite(snrValue) ? `${snrValue.toFixed(1)} dB` : 'n/a';
+    const anomaly = Number(edge.anomaly_score || 0) > 0 ? 'yes' : 'no';
+    const anomalies = Array.isArray(edge.anomalies) && edge.anomalies.length ? edge.anomalies.join(', ') : 'none';
+    el.innerHTML = [
+      `Edge: ${edge.emitter_id} -> ${edge.receiver_id}`,
+      `Protocol: ${protocol}`,
+      `Messages: ${edge.message_count || 0}`,
+      `Avg SNR: ${snr}`,
+      `RF anomaly: ${anomaly}`,
+      `Anomalies: ${anomalies}`,
+    ].join('<br>');
+    return;
+  }
+
   if (!state.selection.nodeId) {
     el.textContent = 'Focus node: None';
     return;
@@ -350,9 +369,11 @@ function resetStateForNewRun() {
 
   state.selection.nodeId = null;
   state.selection.nodeType = null;
+  state.selection.edgeKey = null;
   state.selection.focusLocked = false;
 
   state.referenceStation = null;
+  state.selectedEdgeMeta = null;
 
   if (deckInstance) {
     deckInstance.setProps({ layers: [] });
@@ -484,17 +505,39 @@ function setSelectedNode(nodeId, nodeType, nodeMeta = null) {
   refreshView();
 }
 
+function setSelectedEdge(edge) {
+  if (!edge) return;
+  state.selection.nodeId = null;
+  state.selection.nodeType = null;
+  state.selection.edgeKey = `${edge.emitter_id}->${edge.receiver_id}`;
+  state.selection.focusLocked = true;
+  state.selectedNodeMeta = null;
+  state.selectedEdgeMeta = { ...edge };
+  updateSelectedNodeDisplay();
+  refreshView();
+}
+
 function clearSelectedNode() {
   state.selection.nodeId = null;
   state.selection.nodeType = null;
+  state.selection.edgeKey = null;
   state.selection.focusLocked = false;
   state.selectedNodeMeta = null;
+  state.selectedEdgeMeta = null;
   updateSelectedNodeDisplay();
   refreshView();
 }
 
 function handleMapClick({ object, layer }) {
-  if (!object || !layer?.id) return;
+  if (!object || !layer?.id) {
+    clearSelectedNode();
+    return;
+  }
+
+  if (layer.id === 'messages-network-edges' && object.emitter_id && object.receiver_id) {
+    setSelectedEdge(object);
+    return;
+  }
 
   if ((layer.id === 'rf-stations' || layer.id === 'messages-stations') && object.station_id) {
     setSelectedNode(object.station_id, 'station', { lat: Number(object.lat), lon: Number(object.lon ?? object.lng) });
@@ -516,7 +559,10 @@ function handleMapClick({ object, layer }) {
     && Number.isFinite(Number(object.lon))) {
     const nodeId = `${Number(object.lat).toFixed(6)}|${Number(object.lon).toFixed(6)}`;
     setSelectedNode(nodeId, 'zone', { lat: Number(object.lat), lon: Number(object.lon) });
+    return;
   }
+
+  clearSelectedNode();
 }
 
 function getTooltip({ object, layer }) {

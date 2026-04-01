@@ -26,9 +26,11 @@ export const state = {
     mode: MODES.NETWORK,
     nodeId: null,
     nodeType: null, // 'station' | 'receiver' | 'zone' | null
+    edgeKey: null,
     focusLocked: false,
   },
   selectedNodeMeta: null,
+  selectedEdgeMeta: null,
   lastModeError: null,
   stationRegistry: [],
 };
