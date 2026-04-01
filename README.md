@@ -207,26 +207,9 @@ Install the project:
 pip install -e .
 ```
 
-Run the current dashboard UI:
-
-```bash
-streamlit run apps/dashboard.py
-```
-
-Open:
-
-```text
-http://localhost:8501
-```
-
-Optional: run the packet collector:
-
-```bash
-python .\scripts\collector.py
-```
+Then follow the local startup command in the `Run locally` section below.
 
 ---
-
 ## Configuration
 
 Example `.env`:
@@ -294,3 +277,17 @@ not to grow the UI aggressively.
 ## License
 
 MIT License
+
+## Run locally
+
+```bash
+python -m uvicorn apps.api_server:app --host 127.0.0.1 --port 8000
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+The API is the only supported local entrypoint. It manages collector startup automatically.

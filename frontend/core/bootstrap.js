@@ -8,6 +8,7 @@ import { buildPlanningView } from '../views/planning_view.js';
 
 const BASEMAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 let deckInstance = null;
+let deckUnavailable = false;
 let runsCache = [];
 
 function $(id) {
@@ -19,6 +20,49 @@ function setFeedback(message, running = false) {
   if (!el) return;
   el.textContent = message;
   el.classList.toggle('running', !!running);
+}
+
+function setStatusBanner(message) {
+  showNoData(true, message);
+}
+
+function setWarning(message) {
+  showModeWarning(true, message);
+}
+
+function clearWarning() {
+  showModeWarning(false);
+}
+
+function setReadyFeedback({ webglAvailable }) {
+  if (!webglAvailable) {
+    setFeedback('WebGL unavailable');
+    setStatusBanner('MAP UNAVAILABLE: WebGL could not be initialized');
+    setWarning('Map rendering unavailable on this device/browser');
+    return;
+  }
+
+  setFeedback('Idle');
+  clearWarning();
+  if (state.payload) {
+    showNoData(false);
+  } else {
+    setStatusBanner('NO DATA IN VIEW');
+  }
+}
+
+function setLoading(isLoading, message = 'Loading dataset...') {
+  if (isLoading) {
+    setFeedback(message, true);
+    return;
+  }
+  setReadyFeedback({ webglAvailable: !deckUnavailable });
+}
+
+function setErrorState(error, banner = 'FAILED TO LOAD RUN') {
+  console.error('[LOAD] failed', error);
+  setStatusBanner(banner);
+  setFeedback('Load failed');
 }
 
 function showNoData(show, text = 'NO DATA IN VIEW') {
@@ -33,6 +77,11 @@ function showModeWarning(show, text = '') {
   if (!el) return;
   el.textContent = text;
   el.style.display = show ? 'block' : 'none';
+}
+
+function showWebGLUnavailable(error) {
+  if (error) console.error('WebGL initialization failed', error);
+  setReadyFeedback({ webglAvailable: false });
 }
 
 function setStationValidationMessage(message = '', level = 'muted') {
@@ -282,8 +331,12 @@ function resetStateForNewRun() {
     deckInstance.setProps({ layers: [] });
   }
 
-  showNoData(false);
-  showModeWarning(false);
+  if (deckUnavailable) {
+    showWebGLUnavailable();
+  } else {
+    showNoData(false);
+    clearWarning();
+  }
 }
 
 function resolveViewResult() {
@@ -563,31 +616,41 @@ function getTooltip({ object, layer }) {
 }
 
 function ensureDeck() {
-  if (deckInstance) return;
-  if (typeof deck === 'undefined') throw new Error('deck.gl not loaded');
+  if (deckInstance) return true;
+  if (deckUnavailable) return false;
 
-  const DeckCtor = deck.DeckGL || deck.Deck;
-  if (!DeckCtor) throw new Error('Deck constructor unavailable');
+  try {
+    if (typeof deck === 'undefined') throw new Error('deck.gl not loaded');
 
-  const config = {
-    container: 'map',
-    views: [new deck.MapView({ repeat: true })],
-    mapStyle: BASEMAP_STYLE,
-    mapLib: typeof maplibregl !== 'undefined' ? maplibregl : undefined,
-    initialViewState: state.viewState,
-    controller: true,
-    layers: [],
-    getTooltip,
-    onClick: handleMapClick,
-  };
+    const DeckCtor = deck.DeckGL || deck.Deck;
+    if (!DeckCtor) throw new Error('Deck constructor unavailable');
 
-  deckInstance = DeckCtor === deck.DeckGL
-    ? new DeckCtor(config)
-    : new DeckCtor({ ...config, parent: $('map') });
+    const config = {
+      container: 'map',
+      views: [new deck.MapView({ repeat: true })],
+      mapStyle: BASEMAP_STYLE,
+      mapLib: typeof maplibregl !== 'undefined' ? maplibregl : undefined,
+      initialViewState: state.viewState,
+      controller: true,
+      layers: [],
+      getTooltip,
+      onClick: handleMapClick,
+    };
+
+    deckInstance = DeckCtor === deck.DeckGL
+      ? new DeckCtor(config)
+      : new DeckCtor({ ...config, parent: $('map') });
+
+    return true;
+  } catch (error) {
+    deckUnavailable = true;
+    showWebGLUnavailable(error);
+    return false;
+  }
 }
 
 function refreshView() {
-  ensureDeck();
+  const hasDeck = ensureDeck();
 
   const viewResult = resolveViewResult() || {
     layers: [],
@@ -603,7 +666,11 @@ function refreshView() {
     : '';
   const modeBanner = unsupportedText || (limitedNetworkView ? 'Network view limited (single-station dataset)' : '');
 
-  showModeWarning(Boolean(modeBanner), modeBanner);
+  if (deckUnavailable) {
+    showWebGLUnavailable();
+  } else {
+    showModeWarning(Boolean(modeBanner), modeBanner);
+  }
 
   console.log('[STATE]', {
     loadToken: state.loadToken,
@@ -615,8 +682,16 @@ function refreshView() {
     selectedNode: state.selection.nodeId,
   });
 
-  deckInstance.setProps({ layers, initialViewState: state.viewState });
-  showNoData(!state.payload, 'NO DATA IN VIEW');
+  if (hasDeck && deckInstance) {
+    deckInstance.setProps({ layers, initialViewState: state.viewState });
+  }
+  if (deckUnavailable) {
+    setReadyFeedback({ webglAvailable: false });
+  } else if (!state.payload) {
+    setStatusBanner('NO DATA IN VIEW');
+  } else {
+    showNoData(false);
+  }
 
   if (state.payload) {
     const effectiveMode = getEffectiveAnalysisMode(state, state.payload);
@@ -644,25 +719,31 @@ async function loadRun(runId) {
   state.runId = runId;
   state.selection.runId = runId;
 
-  setFeedback('Loading dataset...', true);
-  const payload = await fetchRunPayload(runId);
-  if (token !== state.loadToken) return;
+  console.log('[LOAD] start', { runId, mode });
+  setLoading(true, 'Loading dataset...');
 
-  const modePayload = await fetchModePayload(runId, mode);
-  if (token !== state.loadToken) return;
-  if (mode !== state.mode) return;
+  try {
+    const payload = await fetchRunPayload(runId);
+    if (token !== state.loadToken) return;
 
-  state.payload = payload;
-  state.modePayload = modePayload;
+    const modePayload = await fetchModePayload(runId, mode);
+    if (token !== state.loadToken) return;
+    if (mode !== state.mode) return;
 
-  // IMPORTANT:
-  // referenceStation MUST be derived ONLY from the loaded run payload.
-  // Never read from DOM input here to avoid UI/state desynchronization.
-  state.referenceStation = payload?.reference_station_id || null;
+    state.payload = payload;
+    state.modePayload = modePayload;
 
-  setFeedback('Idle');
+    state.referenceStation = payload?.reference_station_id || null;
 
-  refreshView();
+    refreshView();
+    console.log('[LOAD] done', { runId, mode });
+  } catch (error) {
+    if (token !== state.loadToken) return;
+    setErrorState(error, 'FAILED TO LOAD RUN');
+    refreshView();
+  } finally {
+    if (token === state.loadToken) setLoading(false);
+  }
 }
 
 async function setMode(mode) {
@@ -673,23 +754,27 @@ async function setMode(mode) {
   bindModeControls();
   renderLegend();
 
-  if (state.runId) {
-    const token = ++state.loadToken;
-    setFeedback(`Loading ${mode}...`, true);
-    try {
+  const token = ++state.loadToken;
+  console.log('[LOAD] start', { runId: state.runId, mode });
+  setLoading(true, `Loading ${mode}...`);
+
+  try {
+    if (state.runId) {
       const modePayload = await fetchModePayload(state.runId, state.mode);
       if (token !== state.loadToken) return;
       state.modePayload = modePayload;
-    } catch (error) {
-      console.error(error);
-      if (token !== state.loadToken) return;
-      state.modePayload = null;
-      showNoData(true, 'MODE PAYLOAD UNAVAILABLE');
     }
-  }
 
-  setFeedback('Idle');
-  refreshView();
+    refreshView();
+    console.log('[LOAD] done', { runId: state.runId, mode });
+  } catch (error) {
+    if (token !== state.loadToken) return;
+    state.modePayload = null;
+    setErrorState(error, 'MODE PAYLOAD UNAVAILABLE');
+    refreshView();
+  } finally {
+    if (token === state.loadToken) setLoading(false);
+  }
 }
 
 function selectedRunId() {
@@ -798,8 +883,10 @@ function bindActions() {
       return;
     }
 
+    console.log('[LOAD] start', { station: stationCheck.stationId, mode: 'execute-run' });
+    setLoading(true, 'Running RF analysis...');
+
     try {
-      setFeedback('Running RF analysis...', true);
       const result = await executeRun({
         station: stationCheck.stationId,
         windowHours: Number($('window-input')?.value || 6),
@@ -811,9 +898,10 @@ function bindActions() {
         $('run-list').value = result.run_id;
         await loadRun(result.run_id);
       }
+      console.log('[LOAD] done', { station: stationCheck.stationId, mode: 'execute-run' });
     } catch (error) {
-      console.error(error);
       const message = 'This station is not available in the station registry. Dataset stations and registered external stations can be analyzed.';
+      setErrorState(error, 'RUN UNAVAILABLE');
       showModeWarning(true, message);
       setStationValidationMessage(
         `${message} If you want to analyze a new station, add it to the station registry first.`,
@@ -821,7 +909,7 @@ function bindActions() {
       );
       setFeedback('Run unavailable');
     } finally {
-      setFeedback('Idle');
+      setLoading(false);
     }
   });
 

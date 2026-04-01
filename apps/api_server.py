@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -35,6 +36,22 @@ from ogn_tool.data.packets_repository import make_packets_repository
 
 logger = logging.getLogger(__name__)
 
+HOST = "127.0.0.1"
+PORT = 8000
+
+
+def _is_port_in_use(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host, port)) == 0
+
+
+if _is_port_in_use(HOST, PORT):
+    print(f"[ERROR] Port {PORT} already in use on {HOST}.")
+    print("Another instance of the API is likely already running.")
+    print("Stop it or restart your environment, then run again.")
+    sys.exit(1)
+
 app = FastAPI()
 collector_process = None
 
@@ -52,11 +69,26 @@ MAX_AIRCRAFT_POINTS = 5000
 
 
 def _pid_is_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
+    if pid is None or pid <= 0:
         return False
+
+    if sys.platform == 'win32':
+        try:
+            result = subprocess.run(
+                ['tasklist', '/FI', f'PID eq {pid}'],
+                capture_output=True,
+                text=True,
+                timeout=1,
+            )
+            return f" {pid} " in result.stdout or result.stdout.strip().endswith(str(pid))
+        except Exception:
+            return False
+    else:
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
 
 
 def _get_lock_pid() -> int | None:
@@ -141,8 +173,11 @@ def collector_status() -> dict[str, Any]:
 
 @app.on_event('startup')
 def startup_event() -> None:
-    if not _is_collector_locked():
-        start_collector()
+    try:
+        if not _is_collector_locked():
+            start_collector()
+    except Exception:
+        pass
 
 
 def _resolve_report_path(run_id: str) -> Path | None:
