@@ -19,6 +19,7 @@ from ogn_tool.kernel.rf_analysis_facade import (
     evaluate_rf_diagnosis,
 )
 from ogn_tool.kernel.visibility_metrics import compute_visibility_metrics
+from ogn_tool.rf.anomalies import detect_rf_anomalies
 from ogn_tool.rf.protocols.types import PROTOCOLS
 
 logger = logging.getLogger(__name__)
@@ -202,6 +203,66 @@ def _normalize_message_rows(result: Any) -> list[dict[str, Any]]:
     return rows
 
 
+def _build_message_graph_edges(messages_v2: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    aggregates: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for message in messages_v2:
+        emitter = message.get("emitter") if isinstance(message.get("emitter"), dict) else {}
+        receiver = message.get("receiver") if isinstance(message.get("receiver"), dict) else {}
+        signal = message.get("signal") if isinstance(message.get("signal"), dict) else {}
+        transport = message.get("transport") if isinstance(message.get("transport"), dict) else {}
+
+        emitter_id = str(emitter.get("id") or "")
+        receiver_id = str(receiver.get("id") or "")
+        if not emitter_id or not receiver_id:
+            continue
+
+        key = (emitter_id, receiver_id)
+        row = aggregates.setdefault(
+            key,
+            {
+                "emitter_id": emitter_id,
+                "receiver_id": receiver_id,
+                "message_count": 0,
+                "inferred_count": 0,
+                "snr_values": [],
+                "protocol_counts": {},
+            },
+        )
+
+        row["message_count"] += 1
+        if receiver.get("source") == "inferred":
+            row["inferred_count"] += 1
+
+        snr = _to_optional_float(signal.get("snr"))
+        if snr is not None:
+            row["snr_values"].append(snr)
+
+        protocol = transport.get("protocol") or "UNKNOWN"
+        row["protocol_counts"][protocol] = row["protocol_counts"].get(protocol, 0) + 1
+
+    edges: list[dict[str, Any]] = []
+
+    for row in aggregates.values():
+        protocol_counts = row["protocol_counts"]
+        protocol = max(protocol_counts, key=protocol_counts.get) if protocol_counts else "UNKNOWN"
+        snr_values = row["snr_values"]
+        message_count = row["message_count"]
+
+        edges.append(
+            {
+                "emitter_id": row["emitter_id"],
+                "receiver_id": row["receiver_id"],
+                "message_count": message_count,
+                "avg_snr": (sum(snr_values) / len(snr_values)) if snr_values else None,
+                "inferred_ratio": (row["inferred_count"] / message_count) if message_count else 0.0,
+                "protocol": protocol,
+            }
+        )
+
+    return edges
+
+
 # --- PUBLIC EXPLORATION API ---
 
 def get_rf_field(result) -> Dict[str, Any]:
@@ -299,7 +360,7 @@ def get_diagnosis(result) -> Dict[str, Any]:
 def get_messages(result: Any) -> Dict[str, Any]:
     normalized = _normalize_message_rows(result)
     if not normalized:
-        return {"messages": []}
+        return {"messages": [], "graph": {"edges": []}}
 
     station_map: dict[str, tuple[float, float]] = {}
     if isinstance(result, dict):
@@ -368,7 +429,7 @@ def get_messages_v2(result: Any) -> Dict[str, Any]:
 
     normalized = _normalize_message_rows(result)
     if not normalized:
-        return {"messages": []}
+        return {"messages": [], "graph": {"edges": []}}
 
     station_map: dict[str, tuple[float, float]] = {}
 
@@ -447,6 +508,14 @@ def get_messages_v2(result: Any) -> Dict[str, Any]:
         reverse=True,
     )
 
-    logger.info("messages_v2 count: %s", len(messages_v2))
+    edges = detect_rf_anomalies(_build_message_graph_edges(messages_v2))
 
-    return {"messages": messages_v2}
+    logger.info("messages_v2 count: %s", len(messages_v2))
+    logger.info("message graph edges: %s", len(edges))
+
+    return {
+        "messages": messages_v2,
+        "graph": {
+            "edges": edges,
+        },
+    }
