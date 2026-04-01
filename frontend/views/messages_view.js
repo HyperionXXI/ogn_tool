@@ -70,8 +70,27 @@ function dominantValue(counterMap) {
   return bestKey;
 }
 
+function buildAnomalyLookup(modePayload) {
+  const edges = Array.isArray(modePayload?.graph?.edges) ? modePayload.graph.edges : [];
+  const lookup = new Map();
+
+  for (const edge of edges) {
+    const emitterId = typeof edge?.emitter_id === 'string' ? edge.emitter_id : null;
+    const receiverId = typeof edge?.receiver_id === 'string' ? edge.receiver_id : null;
+    if (!emitterId || !receiverId) continue;
+
+    lookup.set(`${emitterId}->${receiverId}`, {
+      anomalies: Array.isArray(edge?.anomalies) ? edge.anomalies.filter((value) => typeof value === 'string' && value) : [],
+      anomaly_score: Number.isFinite(Number(edge?.anomaly_score)) ? Number(edge.anomaly_score) : 0,
+    });
+  }
+
+  return lookup;
+}
+
 function buildMessageGraph(modePayload) {
   const messages = toMessages(modePayload).map(normalizeMessage).filter(Boolean);
+  const anomalyLookup = buildAnomalyLookup(modePayload);
 
   const nodeMap = new Map();
   const edgeMap = new Map();
@@ -172,6 +191,7 @@ function buildMessageGraph(modePayload) {
     const inferredRatio = total > 0 ? inferredCount / total : 0;
     const avgRssi = edge.rssi_count > 0 ? edge.rssi_sum / edge.rssi_count : null;
     const avgSnr = edge.snr_count > 0 ? edge.snr_sum / edge.snr_count : null;
+    const anomaly = anomalyLookup.get(`${edge.emitter_id}->${edge.receiver_id}`) || { anomalies: [], anomaly_score: 0 };
     return {
       emitter_id: edge.emitter_id,
       receiver_id: edge.receiver_id,
@@ -188,6 +208,8 @@ function buildMessageGraph(modePayload) {
       avg_snr: avgSnr != null ? Number(avgSnr.toFixed(1)) : null,
       has_rssi: edge.rssi_count > 0,
       has_snr: edge.snr_count > 0,
+      anomalies: anomaly.anomalies,
+      anomaly_score: anomaly.anomaly_score,
       layerType: edge.layerType,
     };
   });

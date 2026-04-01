@@ -82,6 +82,19 @@ function protocolColor(protocol) {
   return PROTOCOL_STYLE[protocol] || PROTOCOL_STYLE.UNKNOWN;
 }
 
+function isAnomalous(edge) {
+  return Number(edge?.anomaly_score || 0) > 0;
+}
+
+function anomalyTint(protocol, edge) {
+  let [r, g, b] = protocolColor(protocol);
+  if (!isAnomalous(edge)) return [r, g, b];
+  r = Math.min(255, r + 80);
+  g = Math.max(0, g - 60);
+  b = Math.max(0, b - 60);
+  return [r, g, b];
+}
+
 function edgeAlpha(edge, snrRange, isFocused, target = false) {
   const snr = Number(edge?.avg_snr);
   const inferredRatio = clamp(Number(edge?.inferred_ratio || 0), 0, 1);
@@ -95,6 +108,7 @@ function edgeAlpha(edge, snrRange, isFocused, target = false) {
 function edgeWidth(edge, snrRange, isFocused) {
   const snr = Number(edge?.avg_snr);
   let width = widthFromSnr(snr, snrRange.minSnr, snrRange.maxSnr);
+  if (isAnomalous(edge)) width *= 0.85;
   if (isFocused) width *= 1.35;
   return width;
 }
@@ -342,13 +356,13 @@ export function createNetworkEdgesLayer(graph, { enabled = false, maxEdges = 30,
     getSourceColor: (d) => {
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
-      const [r, g, b] = protocolColor(d?.protocol);
+      const [r, g, b] = anomalyTint(d?.protocol, d);
       return [r, g, b, edgeAlpha(d, snrRange, isFocused, false)];
     },
     getTargetColor: (d) => {
       const key = `${d?.emitter_id}->${d?.receiver_id}`;
       const isFocused = focusState.associatedEdgeKeys?.has(key);
-      const [r, g, b] = protocolColor(d?.protocol);
+      const [r, g, b] = anomalyTint(d?.protocol, d);
       return [r, g, b, edgeAlpha(d, snrRange, isFocused, true)];
     },
     getWidth: (d) => {

@@ -436,6 +436,7 @@ function renderLegend() {
       rows.push('<div class="legend-row"><span class="sw line" style="background:#cbd5e1"></span>Message path</div>');
     }
     rows.push('<div class="legend-row" style="color: var(--muted);">RF strength based on SNR</div>');
+    rows.push('<div class="legend-row" style="color: var(--muted);">Low-quality RF links highlighted</div>');
   } else {
     rows.push('<div class="legend-row"><span class="sw dot" style="background:#22c55e"></span>Station</div>');
     if (state.filters.showCoverage) rows.push('<div class="legend-row"><span class="sw circle" style="background:rgba(125,211,252,0.35)"></span>Signal coverage radius</div>');
@@ -556,6 +557,9 @@ function getTooltip({ object, layer }) {
       const protocol = (object.protocol || 'unknown').toUpperCase();
       const snrValue = Number(object.avg_snr);
       const snr = Number.isFinite(snrValue) ? `${snrValue.toFixed(1)} dB` : 'n/a';
+      const anomalyScore = Number(object.anomaly_score || 0);
+      const anomaly = anomalyScore > 0;
+      const anomalyList = Array.isArray(object.anomalies) && object.anomalies.length ? object.anomalies.join(', ') : 'none';
       return {
         text:
           `Message path
@@ -568,7 +572,11 @@ function getTooltip({ object, layer }) {
 ` +
           `Protocol: ${protocol}
 ` +
-          `Avg SNR: ${snr}`,
+          `Avg SNR: ${snr}
+` +
+          `RF anomaly: ${anomaly ? 'yes' : 'no'}
+` +
+          `Anomalies: ${anomalyList}`,
       };
     }
 
