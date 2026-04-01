@@ -10,6 +10,33 @@ const BASEMAP_STYLE = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/sty
 let deckInstance = null;
 let deckUnavailable = false;
 let runsCache = [];
+let webglRejectionHandlerInstalled = false;
+
+function isWebGLInitError(error) {
+  const message = typeof error?.message === 'string' ? error.message : '';
+  const statusMessage = typeof error?.statusMessage === 'string' ? error.statusMessage : '';
+  return (
+    message.includes('Failed to initialize WebGL') ||
+    message.includes('WebGL creation failed') ||
+    statusMessage.includes('WebGL creation failed')
+  );
+}
+
+function installWebGLRejectionHandler() {
+  if (webglRejectionHandlerInstalled || typeof window === 'undefined') return;
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason;
+    if (!isWebGLInitError(reason)) return;
+
+    event.preventDefault();
+    console.warn('[WebGL] Deck initialization failed (handled)', reason);
+    deckUnavailable = true;
+    showWebGLUnavailable(reason);
+  });
+
+  webglRejectionHandlerInstalled = true;
+}
 
 function $(id) {
   return document.getElementById(id);
@@ -643,11 +670,19 @@ function ensureDeck() {
       layers: [],
       getTooltip,
       onClick: handleMapClick,
+      onError: (error) => {
+        console.warn('[Deck] runtime error', error);
+      },
     };
 
-    deckInstance = DeckCtor === deck.DeckGL
-      ? new DeckCtor(config)
-      : new DeckCtor({ ...config, parent: $('map') });
+    try {
+      deckInstance = DeckCtor === deck.DeckGL
+        ? new DeckCtor(config)
+        : new DeckCtor({ ...config, parent: $('map') });
+    } catch (error) {
+      console.warn('[WebGL] Deck constructor failed', error);
+      throw error;
+    }
 
     return true;
   } catch (error) {
@@ -942,7 +977,13 @@ function bindActions() {
 
 export async function bootstrap() {
   setFeedback('Initializing...', true);
-  ensureDeck();
+  installWebGLRejectionHandler();
+  try {
+    ensureDeck();
+  } catch (error) {
+    console.warn('[WebGL] Deck initialization failed (handled)', error);
+    showWebGLUnavailable(error);
+  }
   bindActions();
   bindModeControls();
   bindLayerControls();
