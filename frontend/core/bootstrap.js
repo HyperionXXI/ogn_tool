@@ -1,5 +1,5 @@
 import { state, MODES } from './state.js';
-import { executeRun, fetchModePayload, fetchRunPayload, fetchRuns, fetchStations } from './api.js';
+import { executeRun, fetchModePayload, fetchRunPayload, fetchRuns, fetchRuntimeStatus, fetchStations } from './api.js';
 import { buildRFViewLayers } from '../views/rf_view.js';
 import { buildDiagnosticsLayers } from '../views/diagnostics_view.js';
 import { buildNetworkViewLayers } from '../views/network_view.js';
@@ -11,6 +11,7 @@ let deckInstance = null;
 let deckUnavailable = false;
 let runsCache = [];
 let webglRejectionHandlerInstalled = false;
+let runtimeRefreshHandle = null;
 
 function isWebGLInitError(error) {
   const message = typeof error?.message === 'string' ? error.message : '';
@@ -109,6 +110,75 @@ function showModeWarning(show, text = '') {
 function showWebGLUnavailable(error) {
   if (error) console.error('WebGL initialization failed', error);
   setReadyFeedback({ webglAvailable: false });
+}
+
+function formatRuntimeTimestamp(value) {
+  if (value == null) return 'n/a';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const dt = new Date(value * 1000);
+    return Number.isNaN(dt.getTime()) ? String(value) : dt.toISOString().replace('T', ' ').replace('.000Z', ' UTC');
+  }
+  return String(value);
+}
+
+function updateRuntimeStatusPanel(status) {
+  const summaryEl = $('runtime-summary');
+  const hintEl = $('runtime-hint');
+  if (!summaryEl) return;
+
+  if (!status || typeof status !== 'object') {
+    summaryEl.innerHTML = 'Runtime status unavailable';
+    if (hintEl) hintEl.textContent = 'Unable to load runtime status.';
+    return;
+  }
+
+  const collectorRunning = status.collector?.running === true ? 'yes' : status.collector?.running === false ? 'no' : 'unknown';
+  const collectorPid = status.collector?.pid ?? 'n/a';
+  const collectorUser = status.collector?.user || 'n/a';
+  const collectorFilter = status.collector?.filter || 'none';
+  const dbPath = status.db?.path || 'n/a';
+  const sizeMb = status.db?.size_mb ?? 'n/a';
+  const mode = status.db?.mode || 'unknown';
+  const lastTs = formatRuntimeTimestamp(status.packets?.last_ts);
+  const last5 = status.packets?.last_5min ?? 'n/a';
+  const last1h = status.packets?.last_1h ?? 'n/a';
+
+  summaryEl.innerHTML = [
+    `Collector: ${collectorRunning} (pid ${collectorPid})`,
+    `User: ${collectorUser}`,
+    `Filter: ${collectorFilter}`,
+    `DB: ${dbPath}`,
+    `Size: ${sizeMb} MB`,
+    `Mode: ${mode}`,
+    `Last packet: ${lastTs}`,
+    `Packets (5 min): ${last5}`,
+    `Packets (1h): ${last1h}`,
+  ].join('<br>');
+
+  if (!hintEl) return;
+  if (status.error) {
+    hintEl.textContent = `Runtime status error: ${status.error}`;
+    return;
+  }
+
+  if (typeof status.packets?.last_5min === 'number' && status.packets.last_5min > 0) {
+    hintEl.textContent = 'Ingestion active in the last 5 minutes.';
+  } else if (typeof status.packets?.last_1h === 'number' && status.packets.last_1h > 0) {
+    hintEl.textContent = 'No packets in the last 5 minutes. Ingestion may be slow or intermittent.';
+  } else {
+    hintEl.textContent = 'No packets observed in the last hour. Ingestion may be inactive.';
+  }
+}
+
+async function loadRuntimeStatus() {
+  try {
+    const status = await fetchRuntimeStatus();
+    updateRuntimeStatusPanel(status);
+  } catch (error) {
+    updateRuntimeStatusPanel(null);
+    const hintEl = $('runtime-hint');
+    if (hintEl) hintEl.textContent = 'Error loading runtime status';
+  }
 }
 
 function setStationValidationMessage(message = '', level = 'muted') {
@@ -1036,6 +1106,10 @@ export async function bootstrap() {
   updateDatasetSummary();
   updateReferenceSummary();
   updateSelectedNodeDisplay();
+  await loadRuntimeStatus();
+  if (runtimeRefreshHandle == null) {
+    runtimeRefreshHandle = window.setInterval(loadRuntimeStatus, 10000);
+  }
 
   try {
     state.stationRegistry = await fetchStations();

@@ -22,12 +22,14 @@ from __future__ import annotations
 
 import datetime as dt
 import atexit
+import json
 import logging
 import os
 import re
 import socket
 import sqlite3
 import time
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 try:
@@ -38,6 +40,33 @@ except Exception:  # pragma: no cover
 # Load local .env if present (non-fatal)
 if load_dotenv:
     load_dotenv()
+
+CONFIG_PATH = Path('config/runtime.json')
+DEFAULT_RUNTIME_CONFIG = {
+    'ogn_user': 'NOCALL',
+    'ogn_pass': '-1',
+    'ogn_filter': '',
+    'db_path': 'ogn_log.sqlite3',
+}
+
+
+def load_runtime_config() -> dict[str, Any]:
+    cfg = dict(DEFAULT_RUNTIME_CONFIG)
+    if not CONFIG_PATH.exists():
+        return cfg
+
+    try:
+        with CONFIG_PATH.open('r', encoding='utf-8') as handle:
+            data = json.load(handle)
+    except Exception:
+        return cfg
+
+    if isinstance(data, dict):
+        cfg.update({k: v for k, v in data.items() if v is not None})
+    return cfg
+
+
+RUNTIME_CONFIG = load_runtime_config()
 
 _HOST_ENV = os.getenv("OGN_HOST", "").strip()
 _HOSTS_ENV = os.getenv("OGN_HOSTS", "").strip()
@@ -54,13 +83,13 @@ elif _HOST_ENV:
 else:
     HOSTS = DEFAULT_HOSTS[:]
 PORT = int(os.getenv("OGN_PORT", "14580"))
-DB_PATH = os.getenv("OGN_DB_PATH") or os.getenv("OGN_DB") or "ogn_log.sqlite3"
-FILTER = os.getenv("OGN_FILTER", "")
+DB_PATH = str(RUNTIME_CONFIG.get('db_path') or 'ogn_log.sqlite3')
+FILTER = str(RUNTIME_CONFIG.get('ogn_filter') or '')
 DEBUG = os.getenv("OGN_DEBUG", "0") not in ("0", "", "false", "False")
 
 # Collector identity for APRS-IS login.
-CALLSIGN = os.getenv("OGN_USER", "NOCALL")
-PASSCODE = os.getenv("OGN_PASS", "-1")
+CALLSIGN = str(RUNTIME_CONFIG.get('ogn_user') or 'NOCALL')
+PASSCODE = str(RUNTIME_CONFIG.get('ogn_pass') or '-1')
 
 SOCKET_TIMEOUT_S = 60
 COMMIT_EVERY = int(os.getenv("OGN_COMMIT_EVERY", "250"))

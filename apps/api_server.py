@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
@@ -32,7 +33,7 @@ from ogn_tool.kernel.rf_exploration import (
     get_messages_v2,
 )
 from ogn_tool.domain.station_registry import get_station_metadata, list_station_registry, load_station_registry
-from ogn_tool.data.packets_repository import make_packets_repository
+from ogn_tool.data.packets_repository import make_packets_repository, resolve_db_files
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,152 @@ if _is_port_in_use(HOST, PORT):
 app = FastAPI()
 collector_process = None
 
-DB_PATH = os.getenv('OGN_DB_PATH') or os.getenv('OGN_DB') or 'ogn_log.sqlite3'
-LOCK_PATH = f"{DB_PATH}.collector.lock"
+CONFIG_PATH = Path('config/runtime.json')
+DEFAULT_RUNTIME_CONFIG = {
+    'ogn_user': 'NOCALL',
+    'ogn_pass': '-1',
+    'ogn_filter': '',
+    'db_path': 'ogn_log.sqlite3',
+}
+
+
+def load_runtime_config() -> dict[str, Any]:
+    cfg = dict(DEFAULT_RUNTIME_CONFIG)
+    if not CONFIG_PATH.exists():
+        return cfg
+
+    try:
+        with CONFIG_PATH.open('r', encoding='utf-8') as handle:
+            data = json.load(handle)
+    except Exception:
+        return cfg
+
+    if isinstance(data, dict):
+        cfg.update({k: v for k, v in data.items() if v is not None})
+    return cfg
+
+
+def resolve_db_path() -> str:
+    cfg = load_runtime_config()
+    return str(cfg.get('db_path') or DEFAULT_RUNTIME_CONFIG['db_path'])
+
+
+def _lock_path() -> Path:
+    return Path(f"{resolve_db_path()}.collector.lock")
+
+
+def detect_timestamp_column(cursor: sqlite3.Cursor) -> tuple[str | None, str | None]:
+    cursor.execute('PRAGMA table_info(packets)')
+    cols = [row[1] for row in cursor.fetchall()]
+    if 'ts_epoch' in cols:
+        return 'ts_epoch', 'epoch'
+    if 'timestamp' in cols:
+        return 'timestamp', 'datetime'
+    return None, None
+
+
+def detect_storage_mode(db_path: Path) -> str:
+    if db_path.is_dir():
+        return 'partitioned'
+    if db_path.is_file():
+        return 'monolithic'
+    return 'unknown'
+
+
+def compute_db_size_mb(db_path: Path) -> float:
+    if db_path.is_file():
+        return round(db_path.stat().st_size / (1024 * 1024), 1)
+
+    if db_path.is_dir():
+        total_size = sum(p.stat().st_size for p in db_path.rglob('*.sqlite3') if p.is_file())
+        return round(total_size / (1024 * 1024), 1)
+
+    return 0.0
+
+
+def _query_packets_window_stats(cursor: sqlite3.Cursor, column: str, column_type: str) -> dict[str, Any]:
+    cursor.execute(f'SELECT MAX({column}) FROM packets')
+    last_ts = cursor.fetchone()[0]
+
+    if column_type == 'epoch':
+        now_epoch = int(datetime.now(timezone.utc).timestamp())
+        t5 = now_epoch - 300
+        t1h = now_epoch - 3600
+
+        cursor.execute(f'SELECT COUNT(*) FROM packets WHERE {column} > ?', (t5,))
+        last_5min = cursor.fetchone()[0]
+
+        cursor.execute(f'SELECT COUNT(*) FROM packets WHERE {column} > ?', (t1h,))
+        last_1h = cursor.fetchone()[0]
+    else:
+        cursor.execute(f"SELECT COUNT(*) FROM packets WHERE {column} > datetime('now', '-5 minutes')")
+        last_5min = cursor.fetchone()[0]
+
+        cursor.execute(f"SELECT COUNT(*) FROM packets WHERE {column} > datetime('now', '-1 hour')")
+        last_1h = cursor.fetchone()[0]
+
+    return {
+        'last_ts': last_ts,
+        'last_5min': last_5min,
+        'last_1h': last_1h,
+    }
+
+
+def _runtime_packet_stats(db_path: Path) -> dict[str, Any]:
+    result = {
+        'last_ts': None,
+        'last_5min': None,
+        'last_1h': None,
+    }
+
+    if not db_path.exists():
+        return result
+
+    if db_path.is_file():
+        conn = sqlite3.connect(str(db_path), timeout=10)
+        try:
+            cur = conn.cursor()
+            col, col_type = detect_timestamp_column(cur)
+            if not col:
+                return result
+            return _query_packets_window_stats(cur, col, col_type)
+        finally:
+            conn.close()
+
+    if db_path.is_dir():
+        now_epoch = int(datetime.now(timezone.utc).timestamp())
+        start_epoch = now_epoch - 3600
+        db_files = resolve_db_files(str(db_path), start_epoch, now_epoch)
+        if not db_files:
+            return result
+
+        total_5min = 0
+        total_1h = 0
+        last_ts = None
+
+        for db_file in db_files:
+            conn = sqlite3.connect(str(db_file), timeout=10)
+            try:
+                cur = conn.cursor()
+                col, col_type = detect_timestamp_column(cur)
+                if not col:
+                    continue
+                stats = _query_packets_window_stats(cur, col, col_type)
+                if stats['last_5min'] is not None:
+                    total_5min += int(stats['last_5min'])
+                if stats['last_1h'] is not None:
+                    total_1h += int(stats['last_1h'])
+                candidate = stats['last_ts']
+                if candidate is not None and (last_ts is None or candidate > last_ts):
+                    last_ts = candidate
+            finally:
+                conn.close()
+
+        result['last_ts'] = last_ts
+        result['last_5min'] = total_5min
+        result['last_1h'] = total_1h
+
+    return result
 
 RUNS_DIRS = [
     Path('data/runs/analysis_runs'),
@@ -93,7 +238,7 @@ def _pid_is_alive(pid: int) -> bool:
 
 def _get_lock_pid() -> int | None:
     try:
-        with open(LOCK_PATH, 'r', encoding='utf-8') as f:
+        with _lock_path().open('r', encoding='utf-8') as f:
             content = f.read()
             if content.startswith('pid='):
                 return int(content.split('=', 1)[1].strip())
@@ -103,7 +248,7 @@ def _get_lock_pid() -> int | None:
 
 
 def _is_collector_locked() -> bool:
-    path = Path(LOCK_PATH)
+    path = _lock_path()
 
     if not path.exists():
         return False
@@ -561,6 +706,48 @@ def analysis_messages_v2(run_id: str) -> dict[str, Any]:
     payload = _build_payload_for_run(run_id)
     logger.info('Serving messages_v2 for run_id=%s', run_id)
     return get_messages_v2(payload)
+
+@app.get('/api/runtime/status')
+def api_runtime_status() -> dict[str, Any]:
+    db_path_value = resolve_db_path()
+    db_path = Path(db_path_value)
+
+    cfg = load_runtime_config()
+
+    result = {
+        'collector': {
+            'running': False,
+            'pid': None,
+            'user': cfg.get('ogn_user'),
+            'filter': cfg.get('ogn_filter') or '',
+        },
+        'db': {
+            'path': str(db_path),
+            'exists': db_path.exists(),
+            'size_mb': compute_db_size_mb(db_path),
+            'mode': detect_storage_mode(db_path),
+        },
+        'packets': {
+            'last_ts': None,
+            'last_5min': None,
+            'last_1h': None,
+        },
+    }
+
+    collector = collector_status()
+    result['collector']['running'] = bool(collector.get('running'))
+    result['collector']['pid'] = collector.get('pid')
+
+    if not db_path.exists():
+        return result
+
+    try:
+        result['packets'] = _runtime_packet_stats(db_path)
+    except Exception as exc:
+        result['error'] = str(exc)
+
+    return result
+
 
 @app.get('/collector/status')
 def api_collector_status() -> dict[str, Any]:

@@ -61,3 +61,4 @@ data/*
 data/runs/analysis_runs/
 *.cache
 console.log*
+config/runtime.json

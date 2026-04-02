@@ -50,3 +50,9 @@ export async function fetchStations() {
   if (!res.ok) throw new Error(`Failed to fetch stations (${res.status})`);
   return res.json();
 }
+
+export async function fetchRuntimeStatus() {
+  const res = await fetch('/api/runtime/status');
+  if (!res.ok) throw new Error(`Failed to fetch runtime status (${res.status})`);
+  return res.json();
+}
