@@ -181,6 +181,48 @@ async function loadRuntimeStatus() {
   }
 }
 
+function deriveRunExecuteErrorMessage(error) {
+  const raw = typeof error?.message === 'string' ? error.message : '';
+
+  const detailIndex = raw.indexOf(': ');
+  const detailText = detailIndex >= 0 ? raw.slice(detailIndex + 2) : raw;
+
+  try {
+    const parsed = JSON.parse(detailText);
+    const detail = Array.isArray(parsed) ? parsed : parsed?.detail;
+
+    if (Array.isArray(detail)) {
+      for (const item of detail) {
+        const loc = Array.isArray(item?.loc) ? item.loc.join('.') : '';
+        if (loc.includes('window_hours')) {
+          return 'Invalid time window: maximum allowed is 168 hours';
+        }
+      }
+    }
+
+    if (typeof detail === 'string' && detail.trim()) {
+      return detail.trim();
+    }
+  } catch (_) {
+    // Keep fallback parsing below when detail is not JSON.
+  }
+
+  if (detailText.includes('window_hours')) {
+    return 'Invalid time window: maximum allowed is 168 hours';
+  }
+
+  if (detailText && detailText !== raw) {
+    return detailText;
+  }
+
+  return 'Run failed';
+}
+
+function getObservedDataHint(mode) {
+  if (mode !== 'predicted') return '';
+  return 'No observed data: this station has no igate receptions in the selected time window.';
+}
+
 function setStationValidationMessage(message = '', level = 'muted') {
   const el = $('station-validation-message');
   if (!el) return;
@@ -364,6 +406,7 @@ function updateDatasetSummary() {
   }
   const payload = state.payload;
   const generatedAt = payload?.meta?.generated_at || 'unknown time';
+  const planningHintEl = $('planning-summary');
   el.textContent = `Run ID: ${state.runId} · ${generatedAt}`;
 
   if (!modeEl) return;
@@ -372,6 +415,17 @@ function updateDatasetSummary() {
   const { label, badge, color } = getModeDisplay(mode);
   modeEl.innerHTML = `Analysis mode: ${label} ${confidenceBadge(badge)}`;
   modeEl.style.color = color;
+
+  if (planningHintEl) {
+    const observedDataHint = getObservedDataHint(mode);
+    if (observedDataHint) {
+      planningHintEl.textContent = observedDataHint;
+      planningHintEl.style.display = 'block';
+    } else if (state.mode !== MODES.PLANNING) {
+      planningHintEl.textContent = '';
+      planningHintEl.style.display = 'none';
+    }
+  }
 }
 
 function updateReferenceSummary() {
@@ -384,6 +438,13 @@ function updateReferenceSummary() {
 function updatePlanningSummary(summary) {
   const el = $('planning-summary');
   if (!el) return;
+
+  const observedDataHint = getObservedDataHint(getEffectiveAnalysisMode(state, state.payload));
+  if (observedDataHint) {
+    el.textContent = observedDataHint;
+    el.style.display = 'block';
+    return;
+  }
 
   if (state.mode !== MODES.PLANNING || !summary) {
     el.textContent = '';
@@ -455,6 +516,8 @@ function resetStateForNewRun() {
     showNoData(false);
     clearWarning();
   }
+
+  setStationValidationMessage('');
 }
 
 function resolveViewResult() {
@@ -1059,13 +1122,10 @@ function bindActions() {
       }
       console.log('[LOAD] done', { station: stationCheck.stationId, mode: 'execute-run' });
     } catch (error) {
-      const message = 'This station is not available in the station registry. Dataset stations and registered external stations can be analyzed.';
+      const message = deriveRunExecuteErrorMessage(error);
       setErrorState(error, 'RUN UNAVAILABLE');
       showModeWarning(true, message);
-      setStationValidationMessage(
-        `${message} If you want to analyze a new station, add it to the station registry first.`,
-        'error',
-      );
+      setStationValidationMessage(message, 'error');
       setFeedback('Run unavailable');
     } finally {
       setLoading(false);
